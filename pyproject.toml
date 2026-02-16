@@ -1,0 +1,44 @@
+[project]
+name = "Quizzer"
+version = "0.1.0"
+description = "Backend-authoritative AI-powered quiz and assessment platform"
+requires-python = ">=3.11"
+
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    # Database
+    "sqlalchemy>=2.0",
+    "asyncpg",
+    "psycopg[binary]",
+    "alembic",
+    # Settings
+    "pydantic>=2.0",
+    "pydantic-settings",
+    "pydantic[email]",
+    # Auth
+    "python-jose",
+    "argon2-cffi",
+    # Redis
+    "redis",
+    # Celery
+    "celery[redis]",
+    # AI Stack
+    "langchain-core",
+    "langchain-openai",
+    "langgraph",
+    # File Processing
+    "pdfplumber",
+    "pymupdf",
+    "python-docx",
+    "python-pptx",
+    "pytesseract",
+    "Pillow",
+    "openpyxl",
+    "python-multipart>=0.0.22",
+]
+
+[tool.uv]
+dev-dependencies = [
+    "pytest",
+]
