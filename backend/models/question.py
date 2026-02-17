@@ -5,17 +5,32 @@ from sqlalchemy.dialects.postgresql import UUID
 from backend.core.database import Base
 from backend.models.base import UUIDMixin, TimestampMixin
 
-class Question(Base,UUIDMixin,TimestampMixin):
+
+class Question(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "questions"
 
-    section_id:Mapped[uuid.UUID] = mapped_column(
+    section_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("quiz_sections.id",ondelete="CASCADE"),
+        ForeignKey("quiz_sections.id", ondelete="CASCADE"),
     )
 
-    question_type : Mapped[str] = mapped_column(String)
-    question_type:Mapped[str] = mapped_column(String(50))
+    # Question type (MCQ, SHORT_ANSWER, etc.)
+    question_type: Mapped[str] = mapped_column(String(50))
 
-    options:Mapped[dict| None] = mapped_column(JSON,nullable=True)
-    correct_answer:Mapped[str | None] = mapped_column(String,nullable=True)
-    marks:Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(
+        String(50),
+        default="DRAFT",
+        nullable=False,
+    )
+
+    options: Mapped[dict | None] = mapped_column(
+        JSON,
+        nullable=True
+    )
+
+    correct_answer: Mapped[str | None] = mapped_column(
+        String,
+        nullable=True
+    )
+
+    marks: Mapped[int] = mapped_column(Integer)
