@@ -2,6 +2,7 @@ import uuid
 from sqlalchemy import String, Integer, ForeignKey, JSON
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID
+
 from backend.core.database import Base
 from backend.models.base import UUIDMixin, TimestampMixin
 
@@ -12,6 +13,12 @@ class Question(Base, UUIDMixin, TimestampMixin):
     section_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("quiz_sections.id", ondelete="CASCADE"),
+    )
+
+    # 🔥 ADD THIS FIELD
+    question_text: Mapped[str] = mapped_column(
+        String,
+        nullable=False,
     )
 
     # Question type (MCQ, SHORT_ANSWER, etc.)
