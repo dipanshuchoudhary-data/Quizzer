@@ -1,54 +1,65 @@
 from datetime import datetime, timedelta
-from jose import jwt
-from argon2 import PasswordHasher
-from argon2.exceptions import VerifyMismatchError
+from jose import JWTError, jwt
+from passlib.context import CryptContext
+from fastapi import HTTPException, status
 from backend.core.config import settings
-
-
-ph = PasswordHasher()
 
 
 # --------------------------------------------------
 # Password Hashing (Argon2)
 # --------------------------------------------------
 
+pwd_context = CryptContext(
+    schemes=["argon2"],
+    deprecated="auto",
+)
+
+
 def hash_password(password: str) -> str:
-    return ph.hash(password)
+    return pwd_context.hash(password)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    try:
-        return ph.verify(hashed_password, plain_password)
-    except VerifyMismatchError:
-        return False
+    return pwd_context.verify(plain_password, hashed_password)
 
 
 # --------------------------------------------------
-# JWT
+# JWT Token Handling
 # --------------------------------------------------
 
-def create_access_token(user_id: str) -> str:
-    expire = datetime.utcnow() + timedelta(hours=8)
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 1 day
 
-    payload = {
-        "sub": user_id,
-        "exp": expire,
-    }
 
-    return jwt.encode(
-        payload,
-        settings.JWT_SECRET_KEY,
-        algorithm="HS256",
+def create_access_token(data: dict) -> str:
+    to_encode = data.copy()
+
+    expire = datetime.utcnow() + timedelta(
+        minutes=ACCESS_TOKEN_EXPIRE_MINUTES
     )
 
+    to_encode.update({"exp": expire})
 
-def decode_access_token(token: str) -> str | None:
+    encoded_jwt = jwt.encode(
+        to_encode,
+        settings.JWT_SECRET_KEY,
+        algorithm=ALGORITHM,
+    )
+
+    return encoded_jwt
+
+
+def decode_access_token(token: str) -> dict:
     try:
         payload = jwt.decode(
             token,
             settings.JWT_SECRET_KEY,
-            algorithms=["HS256"],
+            algorithms=[ALGORITHM],
         )
-        return payload.get("sub")
-    except Exception:
-        return None
+        return payload
+
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+        )
