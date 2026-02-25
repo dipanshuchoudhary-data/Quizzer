@@ -1,32 +1,32 @@
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-
 from backend.core.database import get_db
 from backend.core.security import decode_access_token
 from backend.models.user import User
 
 
-bearer_scheme = HTTPBearer()
-
-
-# --------------------------------------------------
-# Get Current User (JWT Required)
-# --------------------------------------------------
-
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    request: Request,
     db: AsyncSession = Depends(get_db),
-) -> User:
+):
 
-    token = credentials.credentials
-    user_id = decode_access_token(token)
+    token = request.cookies.get("access_token")
+
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+
+    payload = decode_access_token(token)
+
+    user_id = payload.get("sub")
 
     if not user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
+            detail="Invalid token",
         )
 
     result = await db.execute(
@@ -41,27 +41,13 @@ async def get_current_user(
             detail="User not found",
         )
 
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Inactive user",
-        )
-
     return user
 
 
-# --------------------------------------------------
-# Professor Only Access
-# --------------------------------------------------
-
-async def require_staff(
-    current_user: User = Depends(get_current_user),
-) -> User:
-
-    if not current_user.is_staff:
+async def require_staff(user: User = Depends(get_current_user)):
+    if user.role not in ["ADMIN", "STAFF"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Staff access required",
+            detail="Insufficient permissions",
         )
-
-    return current_user
+    return user
