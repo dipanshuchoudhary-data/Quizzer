@@ -8,6 +8,7 @@ class EnhancedPrompt(BaseModel):
 
 async def enhance_prompt(
     summary: str,
+    source_excerpt: str,
     blueprint: dict,
     professor_note: str | None,
 ):
@@ -36,6 +37,9 @@ INPUTS:
 --- CONTENT SUMMARY ---
 {summary}
 
+--- SOURCE EXCERPT (VERBATIM) ---
+{source_excerpt}
+
 --- EXAM BLUEPRINT (JSON) ---
 {blueprint}
 
@@ -60,6 +64,7 @@ The improved prompt MUST:
 3. Replace ambiguous phrases with precise directives.
 4. Specify formatting expectations for the final output.
 5. Prevent hallucination by explicitly restricting content to the summary.
+6. Prefer direct factual grounding from SOURCE EXCERPT whenever available.
 
 STRUCTURE THE OUTPUT USING SECTIONS:
 
