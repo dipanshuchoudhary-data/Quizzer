@@ -1,3 +1,5 @@
+import asyncio
+import sys
 from logging.config import fileConfig
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
@@ -6,6 +8,10 @@ from alembic import context
 
 from backend.core.config import settings
 from backend.core.database import Base
+
+# psycopg async on Windows requires selector policy.
+if sys.platform.startswith("win"):
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 # Import all models here so Alembic can detect them
 from backend.models import (
@@ -19,7 +25,8 @@ from backend.models import (
     violation,
     result,
     ai_job,
-    student_profile
+    student_profile,
+    auth_otp,
 )
 
 # Alembic Config object
