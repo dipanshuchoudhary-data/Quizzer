@@ -44,6 +44,7 @@ async def enhance_node(state: QuizGraphState):
 
     enhanced = await enhance_prompt(
         summary=summary_obj.summary,  # Access attribute directly
+        source_excerpt=state["extracted_text"][:12000],
         blueprint=state["blueprint"],
         professor_note=state.get("professor_note"),
     )
@@ -91,7 +92,12 @@ def needs_answer_key(state: QuizGraphState):
     questions = state.get("questions") or []
 
     for q in questions:
-        if getattr(q, "correct_answer", None) is None:
+        qtype = str(getattr(q, "question_type", "") or "").strip().upper().replace("-", "_").replace(" ", "_")
+        if qtype in {"SHORT_ANSWER", "LONG_ANSWER"}:
+            continue
+        answer = getattr(q, "correct_answer", None)
+        normalized = str(answer or "").strip().lower()
+        if normalized in {"", "answer_unavailable", "null", "none"}:
             return "answer_key"
 
     return END
