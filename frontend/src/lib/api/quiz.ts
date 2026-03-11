@@ -1,4 +1,5 @@
 import { api } from "@/lib/api/client"
+import { env } from "@/lib/env"
 import type { Quiz } from "@/types/quiz"
 
 export interface CreateQuizPayload {
@@ -11,6 +12,19 @@ export interface GenerateQuizPayload {
   extracted_text: string
   blueprint: Record<string, unknown>
   professor_note?: string
+}
+
+export interface InitStreamQuizResponse {
+  message: string
+  job_id: string
+}
+
+export interface SourceReference {
+  type: string
+  label: string
+  url?: string
+  content?: string
+  note?: string
 }
 
 function normalizeLifecycle(quiz: Quiz): Quiz {
@@ -70,5 +84,20 @@ export const quizApi = {
   async generate(id: string, payload: GenerateQuizPayload): Promise<{ message: string; job_id?: string }> {
     const { data } = await api.post<{ message: string; job_id?: string }>(`/quizzes/${id}/generate`, payload)
     return data
+  },
+
+  async initStream(id: string, payload: GenerateQuizPayload): Promise<InitStreamQuizResponse> {
+    const { data } = await api.post<InitStreamQuizResponse>(`/quizzes/${id}/generate-stream/init`, payload)
+    return data
+  },
+
+  streamUrl(id: string, jobId: string): string {
+    const params = new URLSearchParams({ job_id: jobId })
+    return `${env.apiUrl}/quizzes/${id}/generate-stream?${params.toString()}`
+  },
+
+  async getSourceReferences(id: string): Promise<SourceReference[]> {
+    const { data } = await api.get<{ items: SourceReference[] }>(`/quizzes/${id}/source-references`)
+    return data.items ?? []
   },
 }
