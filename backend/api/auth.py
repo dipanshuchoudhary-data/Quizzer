@@ -1,192 +1,161 @@
-from fastapi import APIRouter, Depends, HTTPException, Response, status, Request
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.api.deps import get_current_user
+from backend.core.config import settings
 from backend.core.database import get_db
 from backend.core.security import (
-    verify_password,
-    hash_password,
     create_access_token,
     decode_access_token,
+    hash_password,
+    verify_password,
 )
-from backend.schemas.auth import RegisterRequest, LoginRequest
 from backend.models.user import User
-from backend.api.deps import get_current_user
+from backend.schemas.auth import (
+    LoginRequest,
+    RegisterRequest,
+)
 
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
-# =========================
-# REGISTER
-# =========================
-@router.post("/register", response_model=dict)
-async def register(
-    payload: RegisterRequest,
-    db: AsyncSession = Depends(get_db),
-):
-    result = await db.execute(
-        select(User).where(User.email == payload.email)
-    )
-    existing_user = result.scalar_one_or_none()
+def set_auth_cookies(response: Response, user_id: str) -> None:
+    access_token = create_access_token({"sub": user_id})
+    refresh_token = create_access_token({"sub": user_id})
 
-    if existing_user:
-        raise HTTPException(
-            status_code=400,
-            detail="Email already registered",
-        )
+    secure_cookie = settings.COOKIE_SECURE
+    samesite_policy = settings.COOKIE_SAMESITE.lower()
+    cookie_domain = settings.COOKIE_DOMAIN
 
-    user = User(
-        email=payload.email,
-        hashed_password=hash_password(payload.password),
-        is_active=True,
-        is_staff=False,
-    )
-
-    db.add(user)
-    await db.commit()
-
-    return {"message": "User registered successfully"}
-
-
-# =========================
-# LOGIN
-# =========================
-@router.post("/login")
-async def login(
-    payload: LoginRequest,
-    response: Response,
-    db: AsyncSession = Depends(get_db),
-):
-    result = await db.execute(
-        select(User).where(User.email == payload.email)
-    )
-    user = result.scalar_one_or_none()
-
-    if not user or not verify_password(payload.password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials",
-        )
-
-    # Access Token (short-lived)
-    access_token = create_access_token(
-        {"sub": str(user.id)}
-    )
-
-    # Refresh Token (long-lived)
-    refresh_token = create_access_token(
-        {"sub": str(user.id)}
-    )
-
-    # Set Access Cookie
     response.set_cookie(
         key="access_token",
         value=access_token,
         httponly=True,
-        secure=False,  # TRUE in production (HTTPS)
-        samesite="lax",
+        secure=secure_cookie,
+        samesite=samesite_policy,
+        domain=cookie_domain,
         path="/",
-        max_age=60 * 60,  # 1 hour
+        max_age=60 * 60,
     )
-
-    # Set Refresh Cookie
     response.set_cookie(
         key="refresh_token",
         value=refresh_token,
         httponly=True,
-        secure=False,  # TRUE in production
-        samesite="lax",
+        secure=secure_cookie,
+        samesite=samesite_policy,
+        domain=cookie_domain,
         path="/",
-        max_age=60 * 60 * 24 * 7,  # 7 days
+        max_age=60 * 60 * 24 * 7,
     )
 
-    return {"success": True}
 
-
-# =========================
-# LOGOUT
-# =========================
-@router.post("/logout")
-async def logout(response: Response):
-    """
-    Explicitly remove authentication cookies.
-    """
-
-    response.delete_cookie(
-        key="access_token",
-        path="/",
-    )
-
-    response.delete_cookie(
-        key="refresh_token",
-        path="/",
-    )
-
-    return {"message": "Logged out successfully"}
-
-
-# =========================
-# CURRENT USER
-# =========================
-@router.get("/me")
-async def get_me(
-    current_user: User = Depends(get_current_user),
-):
+def serialize_user(user: User) -> dict:
     return {
-        "id": current_user.id,
-        "email": current_user.email,
-        "is_staff": current_user.is_staff,
-        "is_active": current_user.is_active,
+        "id": user.id,
+        "email": user.email,
+        "full_name": user.full_name,
+        "phone_number": user.phone_number,
+        "institution": user.institution,
+        "country": user.country,
+        "timezone": user.timezone,
+        "subject_area": user.subject_area,
+        "courses_taught": user.courses_taught,
+        "teaching_experience": user.teaching_experience,
+        "avatar_url": user.avatar_url,
+        "is_verified": user.is_verified,
+        "onboarding_completed": user.onboarding_completed,
+        "is_staff": user.is_staff,
+        "is_active": user.is_active,
+        "role": user.role,
     }
 
 
-# =========================
-# REFRESH TOKEN
-# =========================
-@router.post("/refresh")
-async def refresh_token(
-    request: Request,
-    response: Response,
-):
-    refresh_token = request.cookies.get("refresh_token")
+@router.post("/register", response_model=dict)
+async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).where(User.email == payload.email))
+    existing_user = result.scalar_one_or_none()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
 
-    if not refresh_token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="No refresh token",
-        )
+    if payload.phone_number:
+        phone_result = await db.execute(select(User).where(User.phone_number == payload.phone_number))
+        if phone_result.scalar_one_or_none():
+            raise HTTPException(status_code=400, detail="Phone number already in use")
 
-    payload = decode_access_token(refresh_token)
-
-    if not payload:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token",
-        )
-
-    user_id = payload.get("sub")
-
-    new_access_token = create_access_token(
-        {"sub": str(user_id)}
+    user = User(
+        full_name=payload.full_name.strip(),
+        email=payload.email,
+        hashed_password=hash_password(payload.password),
+        is_active=True,
+        is_staff=False,
+        is_verified=True,
+        phone_number=payload.phone_number,
+        institution=payload.institution,
+        country=payload.country,
+        timezone=payload.timezone,
+        email_verification_token_hash=None,
+        email_verification_expires_at=None,
     )
+    db.add(user)
+    await db.commit()
+
+    return {"message": "Registration successful"}
+
+
+@router.post("/login")
+async def login(payload: LoginRequest, response: Response, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).where(User.email == payload.email))
+    user = result.scalar_one_or_none()
+
+    if not user or not verify_password(payload.password, user.hashed_password):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    set_auth_cookies(response, str(user.id))
+    return {"success": True, "onboarding_completed": user.onboarding_completed}
+
+
+@router.post("/logout")
+async def logout(response: Response):
+    response.delete_cookie(key="access_token", path="/", domain=settings.COOKIE_DOMAIN)
+    response.delete_cookie(key="refresh_token", path="/", domain=settings.COOKIE_DOMAIN)
+    return {"message": "Logged out successfully"}
+
+
+@router.get("/me")
+async def get_me(current_user: User = Depends(get_current_user)):
+    return serialize_user(current_user)
+
+
+@router.post("/refresh")
+async def refresh_token(request: Request, response: Response):
+    refresh_token_value = request.cookies.get("refresh_token")
+    if not refresh_token_value:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No refresh token")
+
+    payload = decode_access_token(refresh_token_value)
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+
+    secure_cookie = settings.COOKIE_SECURE
+    samesite_policy = settings.COOKIE_SAMESITE.lower()
+    cookie_domain = settings.COOKIE_DOMAIN
 
     response.set_cookie(
         key="access_token",
-        value=new_access_token,
+        value=create_access_token({"sub": str(user_id)}),
         httponly=True,
-        secure=False,  # TRUE in production
-        samesite="lax",
+        secure=secure_cookie,
+        samesite=samesite_policy,
+        domain=cookie_domain,
         path="/",
         max_age=60 * 60,
     )
-
     return {"message": "Token refreshed"}
 
 
-# =========================
-# CHANGE PASSWORD
-# =========================
 @router.post("/change-password")
 async def change_password(
     current_password: str,
@@ -195,14 +164,9 @@ async def change_password(
     db: AsyncSession = Depends(get_db),
 ):
     if not verify_password(current_password, current_user.hashed_password):
-        raise HTTPException(
-            status_code=400,
-            detail="Current password is incorrect",
-        )
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
 
     current_user.hashed_password = hash_password(new_password)
-
     db.add(current_user)
     await db.commit()
-
     return {"message": "Password updated successfully"}
