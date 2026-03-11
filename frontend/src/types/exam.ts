@@ -38,6 +38,8 @@ export interface StartAttemptResponse {
   questions?: ExamQuestion[];
   academic_type?: ExamMode;
   quiz_title?: string;
+  start_time?: string;
+  end_time?: string;
 }
 
 export interface SaveAnswerPayload {
