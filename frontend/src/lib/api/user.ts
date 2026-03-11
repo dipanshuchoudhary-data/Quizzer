@@ -1,27 +1,50 @@
 import { api } from "@/lib/api/client"
 import type { User } from "@/types/user"
-import { clearAccessToken, setAccessToken } from "@/lib/auth"
 
-type LoginResponse = {
-  access_token?: string
-  token_type?: string
-  success?: boolean
+type SessionResponse = { success: boolean; onboarding_completed: boolean }
+type RegisterPayload = {
+  full_name: string
+  email: string
+  password: string
+  institution?: string
+  country?: string
+  timezone?: string
 }
 
+type RegisterResponse = {
+  message: string
+}
+
+type UpdateProfilePayload = Partial<{
+  full_name: string
+  email: string
+  phone_number: string
+  institution: string
+  country: string
+  timezone: string
+  subject_area: string
+  courses_taught: string
+  teaching_experience: string
+  avatar_url: string
+  onboarding_completed: boolean
+}>
+
 export const userApi = {
-  async login(email: string, password: string): Promise<LoginResponse> {
-    const { data } = await api.post<LoginResponse>(
+  async register(payload: RegisterPayload): Promise<RegisterResponse> {
+    const { data } = await api.post<RegisterResponse>(
+      "/auth/register",
+      payload,
+      { skipAuth: true } as never
+    )
+    return data
+  },
+
+  async login(email: string, password: string): Promise<SessionResponse> {
+    const { data } = await api.post<SessionResponse>(
       "/auth/login",
       { email, password },
       { skipAuth: true } as never
     )
-
-    if (data.access_token) {
-      setAccessToken(data.access_token)
-    } else if (data.success) {
-      setAccessToken("cookie-session")
-    }
-
     return data
   },
 
@@ -30,11 +53,12 @@ export const userApi = {
     return data
   },
 
+  async updateProfile(payload: UpdateProfilePayload): Promise<User> {
+    const { data } = await api.put<User>("/users/profile", payload)
+    return data
+  },
+
   async logout(): Promise<void> {
-    try {
-      await api.post("/auth/logout")
-    } finally {
-      clearAccessToken()
-    }
+    await api.post("/auth/logout")
   },
 }
