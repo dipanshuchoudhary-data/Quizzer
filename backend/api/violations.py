@@ -1,5 +1,5 @@
 import uuid
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -12,6 +12,14 @@ from backend.core.redis import increment_violation
 router = APIRouter(prefix="/violations", tags=["Violations"])
 
 
+def _validate_attempt_token(attempt: Attempt, provided_token: str | None) -> None:
+    if not provided_token or provided_token != attempt.attempt_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid attempt token",
+        )
+
+
 # --------------------------------------------------
 # Report Violation (Student Runtime)
 # --------------------------------------------------
@@ -20,6 +28,7 @@ router = APIRouter(prefix="/violations", tags=["Violations"])
 async def report_violation(
     attempt_id: uuid.UUID,
     payload: dict,
+    x_attempt_token: str | None = Header(default=None, alias="X-Attempt-Token"),
     db: AsyncSession = Depends(get_db),
 ):
 
@@ -42,6 +51,10 @@ async def report_violation(
             status_code=404,
             detail="Attempt not found",
         )
+    _validate_attempt_token(attempt, x_attempt_token)
+
+    if attempt.submitted_at:
+        raise HTTPException(status_code=409, detail="Attempt already submitted")
 
     # Persist violation
     violation = Violation(
