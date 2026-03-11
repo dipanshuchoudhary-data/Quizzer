@@ -19,6 +19,10 @@ class StartAttemptRequest(BaseModel):
     class_section: str | None = None
 
 
+class StartPublicAttemptRequest(BaseModel):
+    public_exam_id: str
+
+
 class AttemptQuestionSnapshot(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -33,9 +37,12 @@ class StartAttemptResponse(BaseModel):
     attempt_id: UUID
     attempt_token: str
     duration_seconds: int
+    duration: int
     questions: list[AttemptQuestionSnapshot]
     academic_type: str
     quiz_title: str
+    start_time: datetime
+    end_time: datetime
 
 
 class SubmitAttemptResponse(BaseModel):

@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -10,6 +10,7 @@ from backend.models.attempt import Attempt
 from backend.models.question import Question
 from backend.models.student_profile import StudentProfile
 from backend.schemas.attempt import (
+    StartPublicAttemptRequest,
     StartAttemptRequest,
     StartAttemptResponse,
     SubmitAttemptResponse,
@@ -27,6 +28,81 @@ from backend.workers.result_processing_task import process_result
 router = APIRouter(prefix="/attempts", tags=["Attempts"])
 
 DEFAULT_DURATION_SECONDS = 3600
+
+
+async def _load_attempt_questions(db: AsyncSession, quiz_id: uuid.UUID) -> list[Question]:
+    questions_result = await db.execute(
+        select(Question)
+        .where(Question.quiz_id == quiz_id, Question.status == "APPROVED")
+        .order_by(Question.created_at.asc())
+    )
+    return questions_result.scalars().all()
+
+
+async def _create_attempt(
+    *,
+    db: AsyncSession,
+    quiz: Quiz,
+    student_name: str,
+    enrollment_number: str,
+    course: str | None = None,
+    section: str | None = None,
+    batch: str | None = None,
+    semester: str | None = None,
+    class_name: str | None = None,
+    class_section: str | None = None,
+) -> StartAttemptResponse:
+    questions = await _load_attempt_questions(db, quiz.id)
+    if not questions:
+        raise HTTPException(status_code=410, detail="Exam has ended")
+
+    attempt_token = str(uuid.uuid4())
+    started_at = datetime.utcnow()
+    expires_at = started_at + timedelta(seconds=DEFAULT_DURATION_SECONDS)
+
+    attempt = Attempt(
+        quiz_id=quiz.id,
+        attempt_token=attempt_token,
+    )
+
+    db.add(attempt)
+    await db.flush()
+
+    profile = StudentProfile(
+        attempt_id=attempt.id,
+        student_name=student_name,
+        enrollment_number=enrollment_number,
+        course=course,
+        section=section,
+        batch=batch,
+        semester=semester,
+        class_name=class_name,
+        class_section=class_section,
+    )
+
+    db.add(profile)
+    await db.commit()
+    await db.refresh(attempt)
+
+    locked = await lock_attempt_session(str(attempt.id))
+    if not locked:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Multiple sessions detected",
+        )
+
+    await start_exam_timer(str(attempt.id), DEFAULT_DURATION_SECONDS)
+    return StartAttemptResponse(
+        attempt_id=attempt.id,
+        attempt_token=attempt_token,
+        duration_seconds=DEFAULT_DURATION_SECONDS,
+        duration=DEFAULT_DURATION_SECONDS,
+        questions=questions,
+        academic_type=quiz.academic_type,
+        quiz_title=quiz.title,
+        start_time=started_at,
+        end_time=expires_at,
+    )
 
 
 def _validate_attempt_token(attempt: Attempt, provided_token: str | None) -> None:
@@ -65,18 +141,9 @@ async def start_attempt(
                 detail="Class name required for school",
             )
 
-    attempt_token = str(uuid.uuid4())
-
-    attempt = Attempt(
-        quiz_id=quiz_id,
-        attempt_token=attempt_token,
-    )
-
-    db.add(attempt)
-    await db.flush()
-
-    profile = StudentProfile(
-        attempt_id=attempt.id,
+    return await _create_attempt(
+        db=db,
+        quiz=quiz,
         student_name=payload.student_name,
         enrollment_number=payload.enrollment_number,
         course=payload.course,
@@ -87,32 +154,34 @@ async def start_attempt(
         class_section=payload.class_section,
     )
 
-    db.add(profile)
-    await db.commit()
-    await db.refresh(attempt)
 
-    locked = await lock_attempt_session(str(attempt.id))
-    if not locked:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Multiple sessions detected",
-        )
+@router.post("/start", response_model=StartAttemptResponse)
+async def start_public_attempt(
+    payload: StartPublicAttemptRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Quiz).where(Quiz.public_slug == payload.public_exam_id))
+    quiz = result.scalar_one_or_none()
 
-    await start_exam_timer(str(attempt.id), DEFAULT_DURATION_SECONDS)
-    questions_result = await db.execute(
-        select(Question)
-        .where(Question.quiz_id == quiz_id, Question.status == "APPROVED")
-        .order_by(Question.created_at.asc())
-    )
-    questions = questions_result.scalars().all()
+    if not quiz:
+        raise HTTPException(status_code=404, detail="Quiz not found")
 
-    return StartAttemptResponse(
-        attempt_id=attempt.id,
-        attempt_token=attempt_token,
-        duration_seconds=DEFAULT_DURATION_SECONDS,
-        questions=questions,
-        academic_type=quiz.academic_type,
-        quiz_title=quiz.title,
+    if not quiz.is_published:
+        raise HTTPException(status_code=403, detail="Quiz not published")
+
+    if str(quiz.ai_generation_status or "").upper() == "CLOSED":
+        raise HTTPException(status_code=410, detail="Exam has ended")
+
+    questions = await _load_attempt_questions(db, quiz.id)
+    if not questions:
+        raise HTTPException(status_code=410, detail="Exam has ended")
+
+    guest_suffix = payload.public_exam_id[:8].upper()
+    return await _create_attempt(
+        db=db,
+        quiz=quiz,
+        student_name="Guest Student",
+        enrollment_number=f"PUBLIC-{guest_suffix}",
     )
 
 
