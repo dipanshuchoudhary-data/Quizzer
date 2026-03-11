@@ -12,11 +12,12 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { StatusBadge } from "@/components/common/StatusBadge"
 import { useSelectionStore } from "@/stores/useSelectionStore"
+import { formatQuestionForDisplay, normalizeMathText } from "@/lib/question-format"
 
 function normalizeOptions(options: Question["options"]): string[] {
   if (!options) return []
-  if (Array.isArray(options)) return options
-  return Object.values(options)
+  if (Array.isArray(options)) return options.map((option) => normalizeMathText(String(option)))
+  return Object.values(options).map((option) => normalizeMathText(String(option)))
 }
 
 export function QuestionCard({
@@ -39,6 +40,8 @@ export function QuestionCard({
   const selectedIds = useSelectionStore((state) => state.selectedIds)
   const toggle = useSelectionStore((state) => state.toggle)
   const options = useMemo(() => normalizeOptions(question.options), [question.options])
+  const questionPreview = useMemo(() => formatQuestionForDisplay(question.question_text), [question.question_text])
+  const normalizedCorrectAnswer = useMemo(() => normalizeMathText(question.correct_answer), [question.correct_answer])
   const isSelected = selectedIds.includes(question.id)
 
   return (
@@ -66,10 +69,11 @@ export function QuestionCard({
         </div>
 
         <Textarea
-          value={question.question_text}
-          onChange={(event) => onPatch(question.id, { question_text: event.target.value })}
+          value={normalizeMathText(question.question_text)}
+          onChange={(event) => onPatch(question.id, { question_text: normalizeMathText(event.target.value) })}
           className="min-h-24"
         />
+        <p className="text-sm text-muted-foreground">{questionPreview}</p>
 
         <div className="grid gap-2 md:grid-cols-2">
           <Input
@@ -98,12 +102,17 @@ export function QuestionCard({
                 value={option}
                 onChange={(event) => {
                   const nextOptions = [...options]
-                  nextOptions[index] = event.target.value
+                  nextOptions[index] = normalizeMathText(event.target.value)
                   onPatch(question.id, { options: nextOptions })
                 }}
               />
               <Button
-                variant={question.correct_answer === option ? "secondary" : "outline"}
+                variant={normalizedCorrectAnswer === option ? "default" : "outline"}
+                className={
+                  normalizedCorrectAnswer === option
+                    ? "border-green-600 bg-green-600 text-white hover:bg-green-700 hover:border-green-700"
+                    : ""
+                }
                 onClick={() => onPatch(question.id, { correct_answer: option })}
               >
                 Correct

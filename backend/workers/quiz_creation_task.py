@@ -272,8 +272,8 @@ def parse_questions_from_source(extracted_text: str) -> list[SimpleNamespace]:
     if not starts:
         return []
 
-    option_line = re.compile(r"(?im)^\s*(?:[a-d]|[1-4])\s*[\).:-]\s*(.+)$")
-    inline_option = re.compile(r"(?is)(?:^|\s)[\(\[]?\s*([a-d])\s*[\)\].:-]\s*(.+?)(?=(?:\s[\(\[]?\s*[a-d]\s*[\)\].:-]\s*)|$)")
+    option_line = re.compile(r"(?im)^\s*(?:[\(\[]?\s*[a-d]\s*[\)\].:-]|[1-4][\).:-])\s*(.+)$")
+    inline_option = re.compile(r"(?is)(?:^|\s)(?:[\(\[]?\s*([a-d])\s*[\)\].:-]|([1-4])[\).:-])\s*(.+?)(?=(?:\s(?:[\(\[]?\s*[a-d]\s*[\)\].:-]|[1-4][\).:-])\s*)|$)")
     answer_line = re.compile(r"(?im)\b(?:answer|ans|correct\s*answer)\s*[:\-]\s*([^\n]+)")
     answer_token = re.compile(r"(?im)\b(?:answer|ans|correct\s*answer|correct\s*option)\s*[:\-]?\s*(?:option\s*)?[\(\[]?\s*([a-d]|[1-4]|true|false)\s*[\)\]]?")
     answer_marker = re.compile(r"(?im)\b(?:answer|ans|correct\s*answer|correct\s*option)\b")
@@ -289,12 +289,12 @@ def parse_questions_from_source(extracted_text: str) -> list[SimpleNamespace]:
 
         # Remove leading numbering token.
         question_text = re.sub(r"(?im)^(?:q(?:uestion)?\s*\d+\s*[\).:-]?|[0-9]{1,3}\s*[\).:-])\s*", "", block, count=1).strip()
+        question_body = answer_marker.split(question_text, maxsplit=1)[0]
 
-        question_body = answer_marker.split(block, maxsplit=1)[0]
-
-        options = [match.group(1).strip() for match in option_line.finditer(question_body)]
+        option_matches = list(option_line.finditer(question_body))
+        options = [match.group(1).strip() for match in option_matches]
         if len(options) < 2:
-            options = [match.group(2).strip(" .;") for match in inline_option.finditer(question_body)]
+            options = [match.group(3).strip(" .;") for match in inline_option.finditer(question_body)]
         if options:
             options = [re.sub(r"(?i)\s*(?:\(|\[)?\s*[0-9]{1,2}\s*marks?\s*(?:\)|\])?\s*$", "", opt).strip() for opt in options]
 
@@ -323,9 +323,12 @@ def parse_questions_from_source(extracted_text: str) -> list[SimpleNamespace]:
         mark_match = marks_line.search(block)
         marks = int(mark_match.group(1)) if mark_match else None
 
-        # Clean question text by stripping options/answers if they are inline in the same block.
-        question_text = option_line.split(question_text)[0].strip()
-        question_text = re.split(r"(?is)\s[\(\[]?\s*a\s*[\)\].:-]\s*", question_text, maxsplit=1)[0].strip()
+        # Keep only the stem before the first option marker.
+        if option_matches:
+            question_text = question_body[:option_matches[0].start()].strip()
+        else:
+            question_text = option_line.split(question_text)[0].strip()
+            question_text = re.split(r"(?is)\s(?:[\(\[]?\s*a\s*[\)\].:-]|1[\).:-])\s*", question_text, maxsplit=1)[0].strip()
         question_text = re.sub(r"(?im)\b(?:answer|ans|correct\s*answer)\s*[:\-].*$", "", question_text).strip()
         if not question_text:
             continue
