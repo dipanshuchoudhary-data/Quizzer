@@ -1,6 +1,5 @@
 import { create } from "zustand"
 import { userApi } from "@/lib/api/user"
-import { clearAccessToken, hasAccessToken } from "@/lib/auth"
 import type { User } from "@/types/user"
 
 interface AuthState {
@@ -9,7 +8,8 @@ interface AuthState {
   isLoading: boolean
   setUser: (user: User | null) => void
   bootstrap: () => Promise<void>
-  login: (email: string, password: string) => Promise<void>
+  login: (email: string, password: string) => Promise<User>
+  refreshMe: () => Promise<User>
   logout: () => Promise<void>
 }
 
@@ -27,29 +27,25 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   bootstrap: async () => {
-    if (!hasAccessToken()) {
-      set({ user: null, isAuthenticated: false, isLoading: false })
-      return
-    }
-
     try {
       const me = await userApi.me()
       set({ user: me, isAuthenticated: true, isLoading: false })
     } catch {
-      clearAccessToken()
       set({ user: null, isAuthenticated: false, isLoading: false })
     }
   },
 
   login: async (email, password) => {
-    const response = await userApi.login(email, password)
-
-    if (!response.access_token && !response.success) {
-      throw new Error("Missing access token")
-    }
-
+    await userApi.login(email, password)
     const me = await userApi.me()
     set({ user: me, isAuthenticated: true, isLoading: false })
+    return me
+  },
+
+  refreshMe: async () => {
+    const me = await userApi.me()
+    set({ user: me, isAuthenticated: true, isLoading: false })
+    return me
   },
 
   logout: async () => {
@@ -57,4 +53,3 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ user: null, isAuthenticated: false, isLoading: false })
   },
 }))
-
