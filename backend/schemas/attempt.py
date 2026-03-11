@@ -1,6 +1,7 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from uuid import UUID
 from datetime import datetime
+from typing import Any
 
 
 class StartAttemptRequest(BaseModel):
@@ -18,10 +19,23 @@ class StartAttemptRequest(BaseModel):
     class_section: str | None = None
 
 
+class AttemptQuestionSnapshot(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    question_text: str
+    question_type: str
+    options: dict[str, Any] | list[str] | None = None
+    marks: int
+
+
 class StartAttemptResponse(BaseModel):
     attempt_id: UUID
     attempt_token: str
     duration_seconds: int
+    questions: list[AttemptQuestionSnapshot]
+    academic_type: str
+    quiz_title: str
 
 
 class SubmitAttemptResponse(BaseModel):
