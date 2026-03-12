@@ -9,6 +9,7 @@ from backend.models.attempt import Attempt
 from backend.models.quiz import Quiz
 from backend.models.user import User
 from backend.models.violation import Violation
+from backend.models.student_profile import StudentProfile
 
 
 router = APIRouter(prefix="/monitoring", tags=["Monitoring"])
@@ -31,6 +32,10 @@ async def list_quiz_attempts(
         select(Attempt).where(Attempt.quiz_id == quiz_id).order_by(Attempt.created_at.desc())
     )
     attempts = attempts_result.scalars().all()
+    attempt_ids = [attempt.id for attempt in attempts]
+
+    profiles_result = await db.execute(select(StudentProfile).where(StudentProfile.attempt_id.in_(attempt_ids)))
+    profile_map = {str(item.attempt_id): item for item in profiles_result.scalars().all()}
 
     violation_result = await db.execute(
         select(Violation.attempt_id, func.count(Violation.id)).group_by(Violation.attempt_id)
@@ -40,15 +45,20 @@ async def list_quiz_attempts(
     data = []
     for attempt in attempts:
         violation_count = int(violation_map.get(str(attempt.id), 0))
+        profile = profile_map.get(str(attempt.id))
         data.append(
             {
                 "id": str(attempt.id),
                 "quiz_id": str(attempt.quiz_id),
                 "attempt_token": attempt.attempt_token,
+                "student_name": profile.student_name if profile else None,
+                "enrollment_number": profile.enrollment_number if profile else None,
+                "institution_type": profile.institution_type if profile else None,
                 "submitted_at": attempt.submitted_at,
                 "violation_count": violation_count,
-                "integrity_flag": violation_count > 0,
-                "status": "SUBMITTED" if attempt.submitted_at else "PENDING",
+                "integrity_flag": violation_count > 3,
+                "status": getattr(attempt, "status", "IN_PROGRESS"),
+                "final_score": getattr(attempt, "final_score", 0),
             }
         )
 
