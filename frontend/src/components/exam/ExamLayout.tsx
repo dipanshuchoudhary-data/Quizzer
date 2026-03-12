@@ -20,6 +20,8 @@ import { ContextMenuGuard } from "@/security/ContextMenuGuard";
 import { FullscreenGuard } from "@/security/FullscreenGuard";
 import { PasteDetector } from "@/security/PasteDetector";
 import { TabSwitchDetector } from "@/security/TabSwitchDetector";
+import { WindowBlurDetector } from "@/security/WindowBlurDetector";
+import { useViolationReporter } from "@/hooks/useViolationReporter";
 
 interface ExamLayoutProps {
   quizId: string;
@@ -38,6 +40,7 @@ export function ExamLayout({ quizId }: ExamLayoutProps) {
   const remainingTime = useExamStore((state) => state.remainingTime);
   const connectionLost = useExamStore((state) => state.connectionLost);
   const violationWarning = useExamStore((state) => state.violationWarning);
+  const violationCount = useExamStore((state) => state.violationCount);
   const dirtyQuestionIds = useExamStore((state) => state.dirtyQuestionIds);
   const isSubmitted = useExamStore((state) => state.isSubmitted);
 
@@ -45,6 +48,7 @@ export function ExamLayout({ quizId }: ExamLayoutProps) {
   const toggleFlag = useExamStore((state) => state.toggleFlag);
   const markSubmitted = useExamStore((state) => state.markSubmitted);
   const clearViolationWarning = useExamStore((state) => state.clearViolationWarning);
+  const { reportViolation } = useViolationReporter();
 
   const [submitOpen, setSubmitOpen] = useState(false);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
@@ -68,6 +72,26 @@ export function ExamLayout({ quizId }: ExamLayoutProps) {
     () => questions.find((q) => q.id === currentQuestionId) ?? null,
     [questions, currentQuestionId]
   );
+
+  const gotoQuestionByOffset = (offset: number) => {
+    if (!questions.length) {
+      return;
+    }
+    const nextIndex = currentQuestionIndex < 0 ? 0 : Math.min(Math.max(currentQuestionIndex + offset, 0), questions.length - 1);
+    const nextQuestion = questions[nextIndex];
+    if (nextQuestion) {
+      setCurrentQuestion(nextQuestion.id);
+    }
+  };
+
+  const skipQuestion = () => {
+    const startIndex = Math.max(currentQuestionIndex, 0) + 1;
+    const fallbackIndex = Math.min(startIndex, Math.max(questions.length - 1, 0));
+    const nextUnvisited = questions.slice(startIndex).find((question) => !visited.has(question.id)) ?? questions[fallbackIndex];
+    if (nextUnvisited) {
+      setCurrentQuestion(nextUnvisited.id);
+    }
+  };
 
   const handleLockedAttempt = (reason: "expired" | "submitted") => {
     markSubmitted();
@@ -130,11 +154,32 @@ export function ExamLayout({ quizId }: ExamLayoutProps) {
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
       event.preventDefault();
       event.returnValue = "";
+      void reportViolation("WINDOW_BLUR");
     };
 
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, [identity.attemptId]);
+  }, [identity.attemptId, reportViolation]);
+
+  useEffect(() => {
+    if (!identity.attemptId) {
+      return;
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        gotoQuestionByOffset(1);
+      }
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        gotoQuestionByOffset(-1);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [identity.attemptId, currentQuestionIndex, questions]);
 
   useHeartbeat(Boolean(identity.attemptId), handleLockedAttempt);
   useExamTimer({
@@ -164,6 +209,7 @@ export function ExamLayout({ quizId }: ExamLayoutProps) {
     <>
       <FullscreenGuard enabled={!submitMutation.isPending} />
       <TabSwitchDetector enabled={!submitMutation.isPending} />
+      <WindowBlurDetector enabled={!submitMutation.isPending} />
       <PasteDetector enabled={!submitMutation.isPending} />
       <ContextMenuGuard enabled={!submitMutation.isPending} />
 
@@ -251,12 +297,57 @@ export function ExamLayout({ quizId }: ExamLayoutProps) {
                   queueAutosave(currentQuestion.id, value);
                 }}
               />
+
+              <div className="grid grid-cols-2 gap-3 rounded-[1.5rem] border border-white/10 bg-white/5 p-4 text-sm backdrop-blur md:grid-cols-4">
+                <button
+                  type="button"
+                  onClick={() => gotoQuestionByOffset(-1)}
+                  className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 font-medium text-slate-100 transition duration-150 hover:brightness-110 hover:scale-[1.03] active:scale-[0.96]"
+                >
+                  Previous Question
+                </button>
+                <button
+                  type="button"
+                  onClick={() => gotoQuestionByOffset(1)}
+                  className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 font-medium text-slate-100 transition duration-150 hover:brightness-110 hover:scale-[1.03] active:scale-[0.96]"
+                >
+                  Next Question
+                </button>
+                <button
+                  type="button"
+                  onClick={skipQuestion}
+                  className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 font-medium text-slate-100 transition duration-150 hover:brightness-110 hover:scale-[1.03] active:scale-[0.96]"
+                >
+                  Skip Question
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!currentQuestion) return;
+                    queueAutosave(currentQuestion.id, "");
+                  }}
+                  className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 font-medium text-slate-100 transition duration-150 hover:brightness-110 hover:scale-[1.03] active:scale-[0.96]"
+                >
+                  Clear Answer
+                </button>
+              </div>
             </section>
 
             <ExamTimer
               remainingTime={remainingTime}
+              savedCount={answeredIds.size}
+              totalQuestions={questions.length}
+              pendingSyncCount={dirtyQuestionIds.size}
+              violationCount={violationCount}
               onSubmit={() => {
                 setSubmitOpen(true);
+              }}
+              onPrevious={() => gotoQuestionByOffset(-1)}
+              onNext={() => gotoQuestionByOffset(1)}
+              onSkip={skipQuestion}
+              onClearAnswer={() => {
+                if (!currentQuestion) return;
+                queueAutosave(currentQuestion.id, "");
               }}
               onFlag={() => {
                 if (currentQuestionId) {
