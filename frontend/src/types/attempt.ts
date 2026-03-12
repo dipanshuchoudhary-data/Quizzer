@@ -7,4 +7,7 @@ export interface Attempt {
   status?: string
   violation_count?: number
   student_name?: string
+  enrollment_number?: string
+  institution_type?: string
+  final_score?: number
 }
