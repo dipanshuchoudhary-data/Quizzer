@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useMutation, useQuery } from "@tanstack/react-query"
+import { motion, AnimatePresence } from "framer-motion"
 import { toast } from "sonner"
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts"
 import { resultsApi } from "@/lib/api/results"
@@ -14,11 +15,19 @@ function ScoreTooltip({ active, payload }: { active?: boolean; payload?: Array<{
   const point = payload[0]?.payload
   if (!point) return null
   return (
-    <div className="rounded-xl border border-slate-500/40 bg-slate-950/95 px-3 py-2 text-sm text-slate-50 shadow-xl">
-      <p className="font-semibold">Student: {point.student_name ?? "-"}</p>
-      <p>Score: {point.final_score}</p>
-      <p>Violations: {point.violation_count}</p>
-    </div>
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96, y: 4 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.96, y: 4 }}
+        transition={{ duration: 0.12, ease: "easeOut" }}
+        className="rounded-xl border border-slate-500/40 bg-slate-950/95 px-3 py-2 text-sm text-slate-50 shadow-xl"
+      >
+        <p className="font-semibold">Student: {point.student_name ?? "-"}</p>
+        <p>Score: {point.final_score}</p>
+        <p>Violations: {point.violation_count}</p>
+      </motion.div>
+    </AnimatePresence>
   )
 }
 
@@ -118,7 +127,17 @@ export function ResultsPage({ quizId }: { quizId: string }) {
               <XAxis dataKey="student_name" tick={{ fill: "#cbd5e1", fontSize: 12 }} axisLine={{ stroke: "#64748b" }} tickLine={{ stroke: "#64748b" }} />
               <YAxis tick={{ fill: "#cbd5e1", fontSize: 12 }} axisLine={{ stroke: "#64748b" }} tickLine={{ stroke: "#64748b" }} />
               <Tooltip content={<ScoreTooltip />} />
-              <Line dataKey="final_score" type="monotone" stroke="#38bdf8" strokeWidth={2.5} dot={{ r: 3, fill: "#38bdf8" }} activeDot={{ r: 5 }} />
+              <Line
+                dataKey="final_score"
+                type="monotone"
+                stroke="#38bdf8"
+                strokeWidth={2.5}
+                isAnimationActive
+                animationDuration={300}
+                animationEasing="ease-out"
+                dot={{ r: 3, fill: "#38bdf8", strokeWidth: 0 }}
+                activeDot={{ r: 6, fill: "#7dd3fc", stroke: "#e0f2fe", strokeWidth: 2 }}
+              />
             </LineChart>
           </ResponsiveContainer>
         </CardContent>
