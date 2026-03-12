@@ -9,6 +9,7 @@ interface Props {
   onSearchChange: (value: string) => void
   onExportCsv: () => void
   onExportExcel: () => void
+  exportBusy?: boolean
   status: string
   onStatusChange: (value: string) => void
 }
@@ -18,6 +19,7 @@ export function ResultsFilters({
   onSearchChange,
   onExportCsv,
   onExportExcel,
+  exportBusy = false,
   status,
   onStatusChange,
 }: Props) {
@@ -35,13 +37,12 @@ export function ResultsFilters({
           <SelectItem value="FAILED">Failed</SelectItem>
         </SelectContent>
       </Select>
-      <Button variant="outline" onClick={onExportCsv}>
+      <Button variant="outline" onClick={onExportCsv} disabled={exportBusy}>
         Export CSV
       </Button>
-      <Button variant="outline" onClick={onExportExcel}>
+      <Button variant="outline" onClick={onExportExcel} disabled={exportBusy}>
         Export Excel
       </Button>
     </div>
   )
 }
-
