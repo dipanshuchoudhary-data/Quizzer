@@ -13,7 +13,7 @@ if sys.platform.startswith("win"):
 
 
 @celery_app.task(name="export_results")
-def export_results(quiz_id: str, format_type: str, owner_id: str):
+def export_results(quiz_id: str, format_type: str, owner_id: str | None = None):
 
     async def _run():
 
@@ -24,7 +24,12 @@ def export_results(quiz_id: str, format_type: str, owner_id: str):
             if not data:
                 return None
 
-            export_file = create_export_file(data, quiz_id=quiz_id, owner_id=owner_id, format_type=format_type)
+            export_file = create_export_file(
+                data,
+                quiz_id=quiz_id,
+                owner_id=str(owner_id or ""),
+                format_type=format_type,
+            )
             return export_file.__dict__
 
     return asyncio.run(_run())
