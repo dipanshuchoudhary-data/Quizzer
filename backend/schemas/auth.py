@@ -14,3 +14,7 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+
+
+class VerifyEmailRequest(BaseModel):
+    token: str = Field(min_length=8)
