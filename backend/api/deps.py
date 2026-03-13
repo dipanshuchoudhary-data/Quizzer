@@ -10,6 +10,7 @@ async def get_current_user(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
+    allowed_unverified_paths = {"/auth/verify-email", "/auth/logout"}
 
     token = request.cookies.get("access_token")
 
@@ -39,6 +40,11 @@ async def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",
+        )
+    if not user.is_verified and request.url.path not in allowed_unverified_paths:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Email not verified",
         )
 
     return user
