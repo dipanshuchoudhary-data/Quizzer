@@ -7,20 +7,25 @@ from typing import Any
 class StartAttemptRequest(BaseModel):
     student_name: str
     enrollment_number: str
+    institution_type: str
 
-    # College fields
-    course: str | None = None
-    section: str | None = None
-    batch: str | None = None
-    semester: str | None = None
-
-    # School fields
+    course: str
+    section: str
+    batch: str
+    semester: str
     class_name: str | None = None
     class_section: str | None = None
 
 
 class StartPublicAttemptRequest(BaseModel):
     public_exam_id: str
+    student_name: str
+    enrollment_number: str
+    institution_type: str
+    course: str
+    section: str
+    batch: str
+    semester: str
 
 
 class AttemptQuestionSnapshot(BaseModel):
