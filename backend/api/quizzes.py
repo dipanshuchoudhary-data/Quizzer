@@ -8,12 +8,13 @@ from collections.abc import AsyncIterator
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from backend.core.database import get_db
 from backend.api.deps import get_current_user
 from backend.models.quiz import Quiz
 from backend.models.quiz_section import QuizSection
+from backend.models.quiz_settings import QuizSettings
 from backend.models.question import Question
 from backend.models.ai_job import AIJob
 from backend.models.user import User
@@ -30,6 +31,7 @@ from backend.ai.agents.summarization_agent import summarize_document
 from backend.ai.agents.prompt_enchancer_agent import enhance_prompt
 from backend.ai.agents.quiz_generator_agent import generate_single_question
 from backend.core.config import settings
+from backend.core.redis import cache_delete
 from backend.services.question_quality import sanitize_question_candidate
 
 
@@ -38,6 +40,23 @@ router = APIRouter(
     tags=["Quizzes"],
 )
 logger = logging.getLogger(__name__)
+
+DEFAULT_QUIZ_SETTINGS = {
+    "duration": 60,
+    "default_marks": 1,
+    "shuffle_questions": False,
+    "shuffle_options": False,
+    "require_fullscreen": True,
+    "block_tab_switch": True,
+    "block_copy_paste": True,
+    "violation_limit": 3,
+    "negative_marking": False,
+    "penalty_wrong": 0,
+    "violation_penalty": 0,
+    "attempts_allowed": 1,
+    "allow_resume": False,
+    "prevent_duplicate": True,
+}
 
 
 def _normalize_question_type(value: str | None) -> str:
@@ -76,6 +95,106 @@ def _sse_event(event: str, payload: dict) -> str:
     return f"event: {event}\ndata: {data}\n\n"
 
 
+def _coerce_bool(value, default: bool) -> bool:
+    if value is None:
+        return default
+    return bool(value)
+
+
+def _coerce_int(value, default: int, minimum: int = 0) -> int:
+    try:
+        return max(minimum, int(value))
+    except (TypeError, ValueError):
+        return default
+
+
+def _normalize_quiz_settings_payload(raw_settings: dict | None, duration_minutes: int | None = None) -> dict:
+    incoming = raw_settings if isinstance(raw_settings, dict) else {}
+    return {
+        "duration": _coerce_int(incoming.get("duration"), duration_minutes or 60, minimum=5),
+        "default_marks": _coerce_int(incoming.get("default_marks"), 1, minimum=1),
+        "shuffle_questions": _coerce_bool(incoming.get("shuffle_questions"), False),
+        "shuffle_options": _coerce_bool(incoming.get("shuffle_options"), False),
+        "require_fullscreen": _coerce_bool(incoming.get("require_fullscreen"), True),
+        "block_tab_switch": _coerce_bool(incoming.get("block_tab_switch"), True),
+        "block_copy_paste": _coerce_bool(incoming.get("block_copy_paste"), True),
+        "violation_limit": _coerce_int(incoming.get("violation_limit"), 3, minimum=1),
+        "negative_marking": _coerce_bool(incoming.get("negative_marking"), False),
+        "penalty_wrong": _coerce_int(incoming.get("penalty_wrong"), 0, minimum=0),
+        "violation_penalty": _coerce_int(incoming.get("violation_penalty"), 0, minimum=0),
+        "attempts_allowed": _coerce_int(incoming.get("attempts_allowed"), 1, minimum=1),
+        "allow_resume": _coerce_bool(incoming.get("allow_resume"), False),
+        "prevent_duplicate": _coerce_bool(incoming.get("prevent_duplicate"), True),
+    }
+
+
+def _serialize_quiz_settings(settings_obj: QuizSettings | None, duration_minutes: int) -> dict:
+    if not settings_obj:
+        return {
+            **DEFAULT_QUIZ_SETTINGS,
+            "duration": duration_minutes,
+        }
+    return {
+        "duration": settings_obj.duration,
+        "default_marks": settings_obj.default_marks,
+        "shuffle_questions": settings_obj.shuffle_questions,
+        "shuffle_options": settings_obj.shuffle_options,
+        "require_fullscreen": settings_obj.require_fullscreen,
+        "block_tab_switch": settings_obj.block_tab_switch,
+        "block_copy_paste": settings_obj.block_copy_paste,
+        "violation_limit": settings_obj.violation_limit,
+        "negative_marking": settings_obj.negative_marking,
+        "penalty_wrong": settings_obj.penalty_wrong,
+        "violation_penalty": settings_obj.violation_penalty,
+        "attempts_allowed": settings_obj.attempts_allowed,
+        "allow_resume": settings_obj.allow_resume,
+        "prevent_duplicate": settings_obj.prevent_duplicate,
+    }
+
+
+async def _get_owned_quiz(quiz_id: uuid.UUID, db: AsyncSession, current_user: User) -> Quiz:
+    quiz = await db.get(Quiz, quiz_id)
+    if not quiz:
+        raise HTTPException(status_code=404, detail="Quiz not found")
+    if quiz.created_by != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this quiz")
+    return quiz
+
+
+async def _get_quiz_settings_record(db: AsyncSession, quiz_id: uuid.UUID, owner_user_id: uuid.UUID) -> QuizSettings | None:
+    result = await db.execute(
+        select(QuizSettings).where(
+            QuizSettings.quiz_id == quiz_id,
+            QuizSettings.owner_user_id == owner_user_id,
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def _invalidate_dashboard_cache(user_id: uuid.UUID) -> None:
+    await cache_delete(f"dashboard:summary:{user_id}")
+    await cache_delete(f"dashboard:live_exams:{user_id}")
+    await cache_delete(f"dashboard:analytics:{user_id}")
+
+
+def _serialize_quiz(quiz: Quiz, question_count: int | None = None) -> dict:
+    return {
+        "id": str(quiz.id),
+        "title": quiz.title,
+        "description": quiz.description,
+        "public_slug": quiz.public_slug,
+        "duration_minutes": quiz.duration_minutes,
+        "academic_type": quiz.academic_type,
+        "ai_generation_status": quiz.ai_generation_status,
+        "is_published": quiz.is_published,
+        "is_archived": quiz.is_archived,
+        "created_by": str(quiz.created_by),
+        "created_at": quiz.created_at,
+        "updated_at": quiz.updated_at,
+        "question_count": question_count,
+    }
+
+
 # --------------------------------------------------
 # Create Quiz
 # --------------------------------------------------
@@ -100,12 +219,15 @@ async def create_quiz(
         title=payload.get("title"),
         description=payload.get("description"),
         academic_type=academic_type,
+        duration_minutes=max(5, int(payload.get("duration_minutes") or 60)),
+        is_archived=False,
         created_by=current_user.id,
     )
 
     db.add(quiz)
     await db.commit()
     await db.refresh(quiz)
+    await _invalidate_dashboard_cache(current_user.id)
 
     return quiz
 
@@ -122,12 +244,14 @@ async def list_quizzes(
 ):
 
     result = await db.execute(
-        select(Quiz).where(Quiz.created_by == current_user.id)
+        select(Quiz, func.count(Question.id).label("question_count"))
+        .outerjoin(Question, Question.quiz_id == Quiz.id)
+        .where(Quiz.created_by == current_user.id)
+        .group_by(Quiz.id)
+        .order_by(Quiz.updated_at.desc())
     )
 
-    quizzes = result.scalars().all()
-
-    return quizzes
+    return [_serialize_quiz(quiz, int(question_count or 0)) for quiz, question_count in result.all()]
 
 
 # --------------------------------------------------
@@ -140,19 +264,107 @@ async def get_quiz(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    quiz = await _get_owned_quiz(quiz_id, db, current_user)
+    question_count = int(
+        (
+            await db.execute(
+                select(func.count(Question.id)).where(Question.quiz_id == quiz_id)
+            )
+        ).scalar()
+        or 0
+    )
+    return _serialize_quiz(quiz, question_count=question_count)
 
-    quiz = await db.get(Quiz, quiz_id)
 
-    if not quiz:
-        raise HTTPException(status_code=404, detail="Quiz not found")
+@router.get("/{quiz_id}/settings")
+async def get_quiz_settings(
+    quiz_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    quiz = await _get_owned_quiz(quiz_id, db, current_user)
+    settings_record = await _get_quiz_settings_record(db, quiz_id, current_user.id)
+    return _serialize_quiz_settings(settings_record, quiz.duration_minutes)
 
-    if quiz.created_by != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to access this quiz",
+
+@router.patch("/{quiz_id}/settings")
+async def update_quiz_settings(
+    quiz_id: uuid.UUID,
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    quiz = await _get_owned_quiz(quiz_id, db, current_user)
+    normalized = _normalize_quiz_settings_payload(payload, quiz.duration_minutes)
+    settings_record = await _get_quiz_settings_record(db, quiz_id, current_user.id)
+
+    if not settings_record:
+        settings_record = QuizSettings(
+            quiz_id=quiz_id,
+            owner_user_id=current_user.id,
         )
+        db.add(settings_record)
 
-    return quiz
+    settings_record.duration = normalized["duration"]
+    settings_record.default_marks = normalized["default_marks"]
+    settings_record.shuffle_questions = normalized["shuffle_questions"]
+    settings_record.shuffle_options = normalized["shuffle_options"]
+    settings_record.require_fullscreen = normalized["require_fullscreen"]
+    settings_record.block_tab_switch = normalized["block_tab_switch"]
+    settings_record.block_copy_paste = normalized["block_copy_paste"]
+    settings_record.violation_limit = normalized["violation_limit"]
+    settings_record.negative_marking = normalized["negative_marking"]
+    settings_record.penalty_wrong = normalized["penalty_wrong"]
+    settings_record.violation_penalty = normalized["violation_penalty"]
+    settings_record.attempts_allowed = normalized["attempts_allowed"]
+    settings_record.allow_resume = normalized["allow_resume"]
+    settings_record.prevent_duplicate = normalized["prevent_duplicate"]
+
+    quiz.duration_minutes = normalized["duration"]
+
+    await db.commit()
+    await db.refresh(settings_record)
+    await db.refresh(quiz)
+    return _serialize_quiz_settings(settings_record, quiz.duration_minutes)
+
+
+@router.patch("/{quiz_id}")
+async def update_quiz(
+    quiz_id: uuid.UUID,
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    quiz = await _get_owned_quiz(quiz_id, db, current_user)
+
+    if "title" in payload:
+        quiz.title = str(payload.get("title") or quiz.title).strip() or quiz.title
+    if "description" in payload:
+        quiz.description = payload.get("description")
+    if "duration_minutes" in payload:
+        try:
+            quiz.duration_minutes = max(5, int(payload.get("duration_minutes") or 60))
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail="duration_minutes must be a valid number") from exc
+    if "is_archived" in payload:
+        quiz.is_archived = bool(payload.get("is_archived"))
+        if quiz.is_archived:
+            quiz.is_published = False
+            if quiz.ai_generation_status == "PUBLISHED":
+                quiz.ai_generation_status = "APPROVED"
+
+    await db.commit()
+    await db.refresh(quiz)
+    await _invalidate_dashboard_cache(current_user.id)
+    question_count = int(
+        (
+            await db.execute(
+                select(func.count(Question.id)).where(Question.quiz_id == quiz_id)
+            )
+        ).scalar()
+        or 0
+    )
+    return _serialize_quiz(quiz, question_count=question_count)
 
 
 # --------------------------------------------------
@@ -179,6 +391,7 @@ async def delete_quiz(
 
     await db.delete(quiz)
     await db.commit()
+    await _invalidate_dashboard_cache(current_user.id)
 
     return {"message": "Quiz deleted successfully"}
 
@@ -318,6 +531,8 @@ async def generate_ai_quiz(
             status_code=400,
             detail="AI generation already in progress",
         )
+    if quiz.is_archived:
+        raise HTTPException(status_code=400, detail="Archived quizzes cannot run AI generation")
 
     extracted_text = payload.get("extracted_text")
     blueprint = payload.get("blueprint")
@@ -329,19 +544,31 @@ async def generate_ai_quiz(
             detail="extracted_text and blueprint required",
         )
 
-    # Move status immediately so frontend polling is deterministic even
-    # when worker startup is delayed.
+    job = AIJob(
+        quiz_id=quiz_id,
+        job_type="QUIZ_CREATION",
+        status="PENDING",
+        meta={
+            "stage": "queued",
+            "progress": 0,
+            "estimated_seconds": 20,
+        },
+    )
+    db.add(job)
     quiz.ai_generation_status = "PROCESSING"
     await db.commit()
+    await db.refresh(job)
+    await _invalidate_dashboard_cache(current_user.id)
 
     create_quiz_ai.delay(
+        str(job.id),
         str(quiz_id),
         extracted_text,
         blueprint,
         professor_note,
     )
 
-    return {"message": "AI generation started"}
+    return {"message": "AI generation started", "job_id": str(job.id)}
 
 
 @router.post("/{quiz_id}/generate-stream/init")
@@ -920,6 +1147,8 @@ async def publish_quiz(
             status_code=400,
             detail="All questions must be approved before publishing",
         )
+    if quiz.is_archived:
+        raise HTTPException(status_code=400, detail="Archived quizzes cannot be published")
 
     if not quiz.public_slug:
         quiz.public_slug = secrets.token_urlsafe(9).replace("-", "").replace("_", "")
@@ -928,12 +1157,42 @@ async def publish_quiz(
     quiz.ai_generation_status = "PUBLISHED"
 
     await db.commit()
+    await _invalidate_dashboard_cache(current_user.id)
 
     return {
         "message": "Quiz published successfully",
         "public_slug": quiz.public_slug,
         "public_url": f"/quiz/{quiz.public_slug}",
     }
+
+
+@router.post("/{quiz_id}/archive")
+async def archive_quiz(
+    quiz_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    quiz = await _get_owned_quiz(quiz_id, db, current_user)
+    quiz.is_archived = True
+    quiz.is_published = False
+    if quiz.ai_generation_status == "PUBLISHED":
+        quiz.ai_generation_status = "APPROVED"
+    await db.commit()
+    await _invalidate_dashboard_cache(current_user.id)
+    return {"message": "Quiz archived successfully"}
+
+
+@router.post("/{quiz_id}/unarchive")
+async def unarchive_quiz(
+    quiz_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    quiz = await _get_owned_quiz(quiz_id, db, current_user)
+    quiz.is_archived = False
+    await db.commit()
+    await _invalidate_dashboard_cache(current_user.id)
+    return {"message": "Quiz restored successfully"}
 
 
 @router.post("/{quiz_id}/unpublish")
@@ -961,5 +1220,6 @@ async def unpublish_quiz(
         quiz.ai_generation_status = "APPROVED"
 
     await db.commit()
+    await _invalidate_dashboard_cache(current_user.id)
 
     return {"message": "Quiz unpublished successfully"}
