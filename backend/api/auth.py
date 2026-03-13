@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,9 +14,15 @@ from backend.core.security import (
     verify_password,
 )
 from backend.models.user import User
+from backend.services.email_service import send_verification_email
+from backend.services.email_verification_service import (
+    generate_email_verification_token,
+    get_email_verification_token,
+)
 from backend.schemas.auth import (
     LoginRequest,
     RegisterRequest,
+    VerifyEmailRequest,
 )
 
 
@@ -90,7 +98,7 @@ async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db))
         hashed_password=hash_password(payload.password),
         is_active=True,
         is_staff=False,
-        is_verified=True,
+        is_verified=False,
         phone_number=payload.phone_number,
         institution=payload.institution,
         country=payload.country,
@@ -100,8 +108,14 @@ async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db))
     )
     db.add(user)
     await db.commit()
+    await db.refresh(user)
 
-    return {"message": "Registration successful"}
+    token = await generate_email_verification_token(user.id, db)
+    verification_url = f"{settings.APP_URL.rstrip('/')}/verify-email?token={token}"
+    await send_verification_email(user.email, verification_url)
+    await db.commit()
+
+    return {"message": "Registration successful. Please verify your email."}
 
 
 @router.post("/login")
@@ -111,9 +125,11 @@ async def login(payload: LoginRequest, response: Response, db: AsyncSession = De
 
     if not user or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+    if not user.is_verified:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Email not verified")
 
     set_auth_cookies(response, str(user.id))
-    return {"success": True, "onboarding_completed": user.onboarding_completed}
+    return {"success": True, "onboarding_completed": user.onboarding_completed, "is_verified": user.is_verified}
 
 
 @router.post("/logout")
@@ -126,6 +142,38 @@ async def logout(response: Response):
 @router.get("/me")
 async def get_me(current_user: User = Depends(get_current_user)):
     return serialize_user(current_user)
+
+
+@router.post("/verify-email")
+async def verify_email(payload: VerifyEmailRequest, response: Response, db: AsyncSession = Depends(get_db)):
+    token_record = await get_email_verification_token(payload.token, db)
+    if not token_record:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid verification token")
+
+    now = datetime.now(timezone.utc)
+    expires_at = token_record.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at < now:
+        await db.delete(token_record)
+        await db.commit()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verification token expired")
+
+    user = await db.get(User, token_record.user_id)
+    if not user:
+        await db.delete(token_record)
+        await db.commit()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    user.is_verified = True
+    user.email_verification_token_hash = None
+    user.email_verification_expires_at = None
+    db.add(user)
+    await db.delete(token_record)
+    await db.commit()
+
+    set_auth_cookies(response, str(user.id))
+    return {"message": "Email verified successfully", "success": True}
 
 
 @router.post("/refresh")
