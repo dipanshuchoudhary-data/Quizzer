@@ -1,3 +1,6 @@
+import asyncio
+import sys
+
 from sqlalchemy.ext.asyncio import (
     create_async_engine,
     async_sessionmaker,
@@ -7,6 +10,19 @@ from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy import MetaData
 
 from backend.core.config import settings
+
+# psycopg async mode is incompatible with ProactorEventLoop on Windows.
+# Ensure selector policy is active before SQLAlchemy creates connections.
+if sys.platform.startswith("win"):
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+
+def _resolve_async_dsn(raw_dsn: str) -> str:
+    # psycopg async can fail on Windows event-loop variants in some launch paths.
+    # Force asyncpg driver for runtime async engine to keep behavior stable.
+    if sys.platform.startswith("win") and raw_dsn.startswith("postgresql+psycopg://"):
+        return raw_dsn.replace("postgresql+psycopg://", "postgresql+asyncpg://", 1)
+    return raw_dsn
 
 
 # --------------------------------------------------
@@ -37,7 +53,7 @@ class Base(DeclarativeBase):
 # --------------------------------------------------
 
 engine = create_async_engine(
-    settings.POSTGRES_DSN,
+    _resolve_async_dsn(settings.POSTGRES_DSN),
     pool_pre_ping=True,
     echo=False,
 )
