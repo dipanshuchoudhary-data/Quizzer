@@ -14,6 +14,8 @@ function labelForViolation(type: ViolationWarning["type"]) {
       return "Tab switch detected";
     case "FULLSCREEN_EXIT":
       return "Fullscreen exited";
+    case "WINDOW_BLUR":
+      return "Window focus lost";
     case "PASTE_ATTEMPT":
       return "Paste attempt blocked";
     case "LARGE_TEXT_INSERT":
