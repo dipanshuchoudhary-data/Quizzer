@@ -36,6 +36,11 @@ dependencies = [
     "Pillow",
     "openpyxl",
     "python-multipart>=0.0.22",
+    "numpy>=2.4.3",
+    "sk>=0.0.1",
+    "learn>=1.0.0",
+    "scikit-learn>=1.8.0",
+    "passlib>=1.7.4",
 ]
 
 [tool.uv]
