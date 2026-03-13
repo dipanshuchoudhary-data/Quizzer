@@ -18,6 +18,7 @@ class StudentProfile(Base, UUIDMixin, TimestampMixin):
 
     student_name: Mapped[str] = mapped_column(String(255), nullable=False)
     enrollment_number: Mapped[str] = mapped_column(String(100), nullable=False)
+    institution_type: Mapped[str] = mapped_column(String(20), nullable=False, default="college")
 
     # College fields
     course: Mapped[str | None] = mapped_column(String(255), nullable=True)

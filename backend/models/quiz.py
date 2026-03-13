@@ -38,9 +38,28 @@ class Quiz(Base, UUIDMixin, TimestampMixin):
         Boolean,
         default=False
     )
+    is_archived: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+    )
+    public_slug: Mapped[str | None] = mapped_column(
+        String(64),
+        unique=True,
+        nullable=True,
+    )
+    duration_minutes: Mapped[int] = mapped_column(
+        default=60,
+        nullable=False,
+    )
 
     sections = relationship(
         "QuizSection",
         back_populates="quiz",
         cascade="all,delete"
+    )
+    settings = relationship(
+        "QuizSettings",
+        back_populates="quiz",
+        cascade="all,delete-orphan",
     )
