@@ -10,6 +10,12 @@ from backend.models.base import UUIDMixin, TimestampMixin
 class Question(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "questions"
 
+    quiz_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("quizzes.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
     section_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("quiz_sections.id", ondelete="CASCADE"),
@@ -23,6 +29,7 @@ class Question(Base, UUIDMixin, TimestampMixin):
 
     # Question type (MCQ, SHORT_ANSWER, etc.)
     question_type: Mapped[str] = mapped_column(String(50))
+    difficulty: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     status: Mapped[str] = mapped_column(
         String(50),
