@@ -1,10 +1,13 @@
 import redis.asyncio as redis
+import json
 from backend.core.config import settings
 
 
 redis_client = redis.from_url(
     settings.REDIS_URL,
     decode_responses=True,
+    max_connections=50,
+    health_check_interval=30,
 )
 
 
@@ -63,3 +66,21 @@ async def get_violation_count(attempt_id: str) -> int:
 async def lock_attempt_session(attempt_id: str) -> bool:
     key = f"exam:lock:{attempt_id}"
     return await redis_client.set(key, "locked", nx=True, ex=7200)
+
+
+async def cache_get_json(key: str) -> dict | list | None:
+    payload = await redis_client.get(key)
+    if not payload:
+        return None
+    try:
+        return json.loads(payload)
+    except json.JSONDecodeError:
+        return None
+
+
+async def cache_set_json(key: str, value: dict | list, ttl_seconds: int) -> None:
+    await redis_client.set(key, json.dumps(value, default=str), ex=ttl_seconds)
+
+
+async def cache_delete(key: str) -> None:
+    await redis_client.delete(key)
