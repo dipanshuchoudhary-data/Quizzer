@@ -27,6 +27,8 @@ from backend.models import (
     ai_job,
     student_profile,
     auth_otp,
+    email_verification_token,
+    quiz_settings,
 )
 
 # Alembic Config object
