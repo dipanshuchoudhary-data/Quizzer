@@ -3,6 +3,7 @@ export type ExamMode = "college" | "school";
 export type ViolationType =
   | "TAB_SWITCH"
   | "FULLSCREEN_EXIT"
+  | "WINDOW_BLUR"
   | "PASTE_ATTEMPT"
   | "LARGE_TEXT_INSERT"
   | "CONTEXT_MENU"
@@ -22,6 +23,7 @@ export interface ExamQuestion {
 export interface StartExamPayload {
   student_name: string;
   enrollment_number: string;
+  institution_type?: ExamMode;
   course?: string;
   section?: string;
   batch?: string;
