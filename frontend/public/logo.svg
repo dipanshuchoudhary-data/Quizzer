@@ -1,0 +1,5 @@
+<svg width="160" height="40" viewBox="0 0 160 40" xmlns="http://www.w3.org/2000/svg" fill="none">
+  <rect width="160" height="40" rx="8" fill="#111827"/>
+  <circle cx="24" cy="20" r="10" fill="#22c55e"/>
+  <text x="42" y="25" fill="#f9fafb" font-family="Arial, sans-serif" font-size="16" font-weight="700">Quizzer</text>
+</svg>
