@@ -1,11 +1,12 @@
 import { api } from "@/lib/api/client"
 import { env } from "@/lib/env"
-import type { Quiz } from "@/types/quiz"
+import { defaultQuizExamSettings, type Quiz, type QuizExamSettings } from "@/types/quiz"
 
 export interface CreateQuizPayload {
   title: string
   description: string
   academic_type?: "college" | "school"
+  duration_minutes?: number
 }
 
 export interface GenerateQuizPayload {
@@ -28,23 +29,30 @@ export interface SourceReference {
 }
 
 function normalizeLifecycle(quiz: Quiz): Quiz {
+  const normalizedQuiz = {
+    ...quiz,
+    duration_minutes: quiz.duration_minutes ?? defaultQuizExamSettings.duration,
+    question_count: quiz.question_count ?? 0,
+    is_archived: quiz.is_archived ?? false,
+  }
+
   if (quiz.is_published) {
-    return { ...quiz, ai_generation_status: "PUBLISHED" }
+    return { ...normalizedQuiz, ai_generation_status: "PUBLISHED" }
   }
 
   if (quiz.ai_generation_status === "APPROVED") {
-    return { ...quiz, ai_generation_status: "APPROVED" }
+    return { ...normalizedQuiz, ai_generation_status: "APPROVED" }
   }
 
   if (quiz.ai_generation_status === "GENERATED") {
-    return { ...quiz, ai_generation_status: "REVIEWING" }
+    return { ...normalizedQuiz, ai_generation_status: "REVIEWING" }
   }
 
   if (quiz.ai_generation_status === "NOT_STARTED") {
-    return { ...quiz, ai_generation_status: "DRAFT" }
+    return { ...normalizedQuiz, ai_generation_status: "DRAFT" }
   }
 
-  return quiz
+  return normalizedQuiz
 }
 
 export const quizApi = {
@@ -62,8 +70,24 @@ export const quizApi = {
     const { data } = await api.post<Quiz>("/quizzes", {
       ...payload,
       academic_type: payload.academic_type ?? "college",
+      duration_minutes: payload.duration_minutes ?? 60,
     })
     return normalizeLifecycle(data)
+  },
+
+  async update(id: string, payload: Partial<Pick<Quiz, "title" | "description" | "duration_minutes" | "is_archived">>): Promise<Quiz> {
+    const { data } = await api.patch<Quiz>(`/quizzes/${id}`, payload)
+    return normalizeLifecycle(data)
+  },
+
+  async getSettings(id: string): Promise<QuizExamSettings> {
+    const { data } = await api.get<QuizExamSettings>(`/quizzes/${id}/settings`)
+    return { ...defaultQuizExamSettings, ...data }
+  },
+
+  async updateSettings(id: string, payload: Partial<QuizExamSettings>): Promise<QuizExamSettings> {
+    const { data } = await api.patch<QuizExamSettings>(`/quizzes/${id}/settings`, payload)
+    return { ...defaultQuizExamSettings, ...data }
   },
 
   async deleteById(id: string): Promise<{ message: string }> {
@@ -78,6 +102,16 @@ export const quizApi = {
 
   async unpublish(id: string): Promise<{ message: string }> {
     const { data } = await api.post<{ message: string }>(`/quizzes/${id}/unpublish`)
+    return data
+  },
+
+  async archive(id: string): Promise<{ message: string }> {
+    const { data } = await api.post<{ message: string }>(`/quizzes/${id}/archive`)
+    return data
+  },
+
+  async unarchive(id: string): Promise<{ message: string }> {
+    const { data } = await api.post<{ message: string }>(`/quizzes/${id}/unarchive`)
     return data
   },
 
