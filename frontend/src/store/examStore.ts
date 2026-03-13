@@ -16,6 +16,7 @@ interface AttemptIdentity {
 interface StudentProfileState {
   student_name: string;
   enrollment_number: string;
+  institution_type?: ExamMode;
   course?: string;
   section?: string;
   batch?: string;
@@ -35,6 +36,7 @@ interface PersistedExamState {
   currentQuestionId: string | null;
   remainingTime: number;
   isSubmitted: boolean;
+  violationCount: number;
 }
 
 interface ExamStoreState extends PersistedExamState {
@@ -88,6 +90,7 @@ const initialPersistedState: PersistedExamState = {
   currentQuestionId: null,
   remainingTime: 0,
   isSubmitted: false,
+  violationCount: 0,
 };
 
 const initialVolatileState = {
@@ -135,6 +138,7 @@ export const useExamStore = create<ExamStoreState>()(
           flagged: new Set(),
           remainingTime: payload.durationSeconds,
           isSubmitted: false,
+          violationCount: 0,
           answers: {},
           dirtyQuestionIds: new Set(),
           violationWarning: null,
@@ -201,7 +205,10 @@ export const useExamStore = create<ExamStoreState>()(
           const now = Date.now();
           const current = state.violationWarning;
           const nextCount = current?.type === type ? current.count + 1 : 1;
-          return { violationWarning: { type, count: nextCount, lastAt: now } };
+          return {
+            violationWarning: { type, count: nextCount, lastAt: now },
+            violationCount: state.violationCount + 1,
+          };
         }),
       resetExamStore: () =>
         set({
@@ -225,6 +232,7 @@ export const useExamStore = create<ExamStoreState>()(
         currentQuestionId: state.currentQuestionId,
         remainingTime: state.remainingTime,
         isSubmitted: state.isSubmitted,
+        violationCount: state.violationCount,
       }),
       merge: (persistedState, currentState) => {
         const persisted = (persistedState as PersistedExamState | undefined) ?? initialPersistedState;
