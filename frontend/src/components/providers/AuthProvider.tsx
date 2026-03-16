@@ -5,6 +5,14 @@ import { usePathname, useRouter } from "next/navigation"
 import { useAuthStore } from "@/stores/useAuthStore"
 
 const AUTH_ROUTES = new Set(["/login", "/signup"])
+const PUBLIC_PREFIXES = ["/exam", "/verify-email"]
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+const isPublicQuizRoute = (pathname: string) => {
+  if (!pathname.startsWith("/quiz/")) return false
+  const slug = pathname.replace("/quiz/", "").split("/")[0]
+  return Boolean(slug) && !UUID_REGEX.test(slug)
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -18,7 +26,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (isLoading) return
 
-    const isPublic = AUTH_ROUTES.has(pathname)
+    const isPublic =
+      AUTH_ROUTES.has(pathname) ||
+      PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix)) ||
+      isPublicQuizRoute(pathname)
     if (!isAuthenticated && !isPublic) {
       router.replace("/login")
       return
