@@ -9,12 +9,10 @@ import { quizApi } from "@/lib/api/quiz"
 import { getApiErrorMessage } from "@/lib/api/error"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { LifecycleBadge } from "@/components/common/LifecycleBadge"
-import { QuizCreationWizard } from "@/features/quiz/creation/QuizCreationWizard"
 import { useQuizSelectionStore } from "@/stores/useQuizSelectionStore"
 
 type GroupMode = "none" | "course" | "status"
@@ -44,7 +42,6 @@ export default function QuizzesPage() {
   const searchParams = useSearchParams()
   const queryClient = useQueryClient()
 
-  const [openCreate, setOpenCreate] = useState(false)
   const [courseMap, setCourseMap] = useState<CourseMap>({})
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
 
@@ -70,9 +67,11 @@ export default function QuizzesPage() {
 
   useEffect(() => {
     if (searchParams.get("create") === "1") {
-      setOpenCreate(true)
+      const source = searchParams.get("source")
+      const next = source ? `/quizzes/create?source=${source}` : "/quizzes/create"
+      router.replace(next)
     }
-  }, [searchParams])
+  }, [router, searchParams])
 
   const setParam = (key: string, value: string) => {
     const next = new URLSearchParams(searchParams.toString())
@@ -198,7 +197,7 @@ export default function QuizzesPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">Quiz Management</h1>
-        <p className="text-sm text-muted-foreground">Use top-right Create Quiz to open the AI flow.</p>
+        <p className="text-sm text-muted-foreground">Use Actions or Create Quiz to open the AI flow.</p>
       </div>
 
       <Card>
@@ -368,20 +367,6 @@ export default function QuizzesPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={openCreate} onOpenChange={setOpenCreate}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-4xl">
-          <DialogHeader>
-            <DialogTitle>AI Quiz Creation</DialogTitle>
-          </DialogHeader>
-          <QuizCreationWizard
-            onDone={() => {
-              setOpenCreate(false)
-              clearQuizSelection()
-              void refetch()
-            }}
-          />
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
