@@ -43,7 +43,6 @@
 body {
   margin: 0;
   font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-  color: #0f172a;
   scrollbar-gutter: stable;
 }
 
@@ -133,5 +132,81 @@ a {
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+@keyframes dashboard-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes dashboard-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes dashboard-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 hsl(var(--chart-2) / 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 6px hsl(var(--chart-2) / 0);
+  }
+}
+
+@keyframes page-transition {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dashboard-fade-up {
+  animation: dashboard-fade-up 250ms ease-out both;
+}
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  border-radius: calc(var(--radius) + 2px);
+  background: linear-gradient(
+    90deg,
+    hsl(var(--muted)) 0%,
+    hsl(var(--background)) 50%,
+    hsl(var(--muted)) 100%
+  );
+  background-size: 200% 100%;
+  animation: dashboard-shimmer 1.2s ease-in-out infinite;
+}
+
+.dash-pulse {
+  animation: dashboard-pulse 1.8s ease-in-out infinite;
+}
+
+.page-transition {
+  animation: page-transition 200ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-fade-up,
+  .skeleton,
+  .dash-pulse,
+  .page-transition {
+    animation: none;
   }
 }
