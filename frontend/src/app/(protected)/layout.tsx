@@ -1,6 +1,7 @@
-import { CommandPalette } from "@/components/layout/CommandPalette"
-import { Sidebar } from "@/components/layout/Sidebar"
-import { Topbar } from "@/components/layout/Topbar"
+import { CommandPalette } from "@/components/navigation/command-palette"
+import { Sidebar } from "@/components/navigation/sidebar"
+import { Topbar } from "@/components/navigation/topbar"
+import { PageShell } from "@/components/navigation/page-shell"
 
 export default function ProtectedLayout({
   children,
@@ -12,7 +13,9 @@ export default function ProtectedLayout({
       <Sidebar />
       <div className="flex min-h-screen flex-1 flex-col">
         <Topbar />
-        <main className="flex-1 p-6">{children}</main>
+        <main className="flex-1 p-6">
+          <PageShell>{children}</PageShell>
+        </main>
       </div>
       <CommandPalette />
     </div>
