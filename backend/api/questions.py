@@ -1,7 +1,7 @@
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 
 from backend.core.database import get_db
 from backend.api.deps import get_current_user
@@ -108,6 +108,13 @@ async def create_question(
 
     sanitized = _sanitize_question_payload(payload)
 
+    max_order = (
+        await db.execute(
+            select(func.coalesce(func.max(Question.order_index), 0))
+            .where(Question.section_id == section.id)
+        )
+    ).scalar() or 0
+
     question = Question(
         quiz_id=section.quiz_id,
         section_id=section.id,
@@ -118,6 +125,7 @@ async def create_question(
         correct_answer=sanitized["correct_answer"],
         marks=sanitized["marks"],
         status=payload.get("status") or "DRAFT",
+        order_index=int(max_order) + 1,
     )
 
     db.add(question)
@@ -138,7 +146,7 @@ async def update_question(
     changed = False
 
     normalized_payload = None
-    question_fields = {"question_text", "question_type", "options", "correct_answer", "marks"}
+    question_fields = {"question_text", "question_type", "options", "correct_answer", "marks", "order_index"}
     if any(field in payload for field in question_fields):
         normalized_payload = _sanitize_question_payload(payload, current=question)
 
@@ -149,6 +157,7 @@ async def update_question(
         "options",
         "correct_answer",
         "marks",
+        "order_index",
     ]:
         if field in payload:
             next_value = normalized_payload[field] if normalized_payload and field in normalized_payload else payload[field]
@@ -195,6 +204,12 @@ async def duplicate_question(
     current_user: User = Depends(get_current_user),
 ):
     source = await _ensure_question_owner(question_id, db, current_user)
+    max_order = (
+        await db.execute(
+            select(func.coalesce(func.max(Question.order_index), 0))
+            .where(Question.section_id == source.section_id)
+        )
+    ).scalar() or 0
 
     duplicated = Question(
         quiz_id=source.quiz_id,
@@ -206,6 +221,7 @@ async def duplicate_question(
         correct_answer=source.correct_answer,
         marks=source.marks,
         status="DRAFT",
+        order_index=int(max_order) + 1,
     )
     db.add(duplicated)
     await _mark_quiz_needs_republish(source.quiz_id, db)
