@@ -21,6 +21,7 @@ from backend.api.monitoring import router as monitoring_router
 from backend.api.users import router as user_router
 from backend.api.ai_jobs import router as ai_jobs_router
 from backend.api.dashboard import router as dashboard_router
+from backend.api.ai_quiz import router as ai_quiz_router
 
 # psycopg async mode is incompatible with ProactorEventLoop on Windows.
 # Set Selector policy before any event loop is created.
@@ -73,6 +74,7 @@ def create_app() -> FastAPI:
     app.include_router(user_router)
     app.include_router(ai_jobs_router)
     app.include_router(dashboard_router)
+    app.include_router(ai_quiz_router)
 
     @app.get("/health", tags=["Health"])
     async def health():
