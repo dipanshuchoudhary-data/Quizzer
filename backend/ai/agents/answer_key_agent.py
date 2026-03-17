@@ -20,6 +20,7 @@ STRICT RULES:
    return "answer_unavailable" for that question.
 7. Do NOT provide reasoning or explanation.
 8. Output must strictly match the structured schema.
+9. Output valid JSON only. Use double quotes for all keys and string values.
 
 ANSWER GENERATION RULES:
 - Base answers strictly on the question text.
