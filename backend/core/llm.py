@@ -3,6 +3,11 @@ from pydantic import BaseModel
 
 from langchain_openai import ChatOpenAI
 from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.exceptions import OutputParserException
+try:
+    from langchain.output_parsers import OutputFixingParser  # type: ignore
+except Exception:  # pragma: no cover
+    OutputFixingParser = None  # type: ignore
 
 from backend.core.config import settings
 
@@ -40,6 +45,15 @@ async def structured_llm_call(prompt: str, output_schema: Type[T]) -> T:
 
     chain = llm | parser
 
-    raw = await chain.ainvoke(full_prompt)
+    try:
+        raw = await chain.ainvoke(full_prompt)
+    except OutputParserException:
+        # Fallback: get raw text and repair to valid JSON
+        raw_msg = await llm.ainvoke(full_prompt)
+        raw_text = raw_msg.content if hasattr(raw_msg, "content") else str(raw_msg)
+        if OutputFixingParser is None:
+            raise
+        fixer = OutputFixingParser.from_llm(llm, parser)
+        raw = await fixer.aparse(raw_text)
 
     return output_schema.model_validate(raw)
