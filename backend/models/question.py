@@ -48,3 +48,5 @@ class Question(Base, UUIDMixin, TimestampMixin):
     )
 
     marks: Mapped[int] = mapped_column(Integer)
+
+    order_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
