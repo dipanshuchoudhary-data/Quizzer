@@ -1105,7 +1105,9 @@ async def list_quiz_questions(
         )
 
     result = await db.execute(
-        select(Question).where(Question.quiz_id == quiz_id)
+        select(Question)
+        .where(Question.quiz_id == quiz_id)
+        .order_by(Question.order_index.asc(), Question.created_at.asc())
     )
 
     return result.scalars().all()
@@ -1162,7 +1164,7 @@ async def publish_quiz(
     return {
         "message": "Quiz published successfully",
         "public_slug": quiz.public_slug,
-        "public_url": f"/quiz/{quiz.public_slug}",
+        "public_url": f"/exam/{quiz.public_slug}",
     }
 
 
