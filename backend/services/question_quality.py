@@ -40,7 +40,29 @@ def normalize_question_type(value: str | None) -> str:
         return "SHORT_ANSWER"
     if token in {"LONGANSWER", "LONG_ANSWER", "LA"}:
         return "LONG_ANSWER"
+    if token in {"DESCRIPTIVE", "DESCRIPTIVE_ANSWER"}:
+        return "DESCRIPTIVE"
+    if token in {"FILL_BLANK", "FILL_IN_THE_BLANK", "FILL_IN_BLANK"}:
+        return "FILL_BLANK"
+    if token in {"NUMERICAL", "NUMERIC", "NUMERICAL_ANSWER"}:
+        return "NUMERICAL"
+    if token in {"ASSERTION_REASONING", "ASSERTION_REASON", "ASSERTION_REASONING_Q"}:
+        return "ASSERTION_REASONING"
+    if token in {"CASE_BASED", "CASE_STUDY", "CASE"}:
+        return "CASE_BASED"
     return "MCQ"
+
+
+def map_marks_to_question_type(marks: int, fallback: str = "MCQ") -> str:
+    if marks >= 6:
+        return "LONG_ANSWER"
+    if 3 <= marks <= 5:
+        return "DESCRIPTIVE"
+    if marks == 2:
+        return "SHORT_ANSWER"
+    if marks <= 1:
+        return fallback
+    return fallback
 
 
 def _normalize_text(text: Any) -> str:
@@ -223,13 +245,18 @@ def sanitize_question_candidate(
     except (TypeError, ValueError):
         normalized_marks = 1
 
+    if normalized_marks >= 2 and normalized_type in {"MCQ", "TRUE_FALSE"}:
+        normalized_type = map_marks_to_question_type(normalized_marks, fallback=normalized_type)
+    if normalized_type in {"MCQ", "SHORT_ANSWER", "LONG_ANSWER", "DESCRIPTIVE"} and question_type in {None, "", "AUTO"}:
+        normalized_type = map_marks_to_question_type(normalized_marks, fallback=normalized_type)
+
     normalized_options = _normalize_options(options)
     normalized_answer: str | None = None
 
     if normalized_type == "TRUE_FALSE":
         normalized_options = ["True", "False"]
         normalized_answer = _normalize_tf_answer(correct_answer)
-    elif normalized_type == "MCQ":
+    elif normalized_type in {"MCQ", "ASSERTION_REASONING", "CASE_BASED"}:
         question_key = _canonical_text_key(cleaned_text)
         normalized_options = [
             option for option in normalized_options
@@ -240,6 +267,9 @@ def sanitize_question_candidate(
         if len({_canonical_text_key(option) for option in normalized_options}) != 4:
             return None
         normalized_answer = _map_mcq_answer(correct_answer, normalized_options)
+    elif normalized_type in {"FILL_BLANK", "NUMERICAL"}:
+        normalized_options = []
+        normalized_answer = _normalize_text(correct_answer)
     else:
         normalized_options = []
         normalized_answer = None
