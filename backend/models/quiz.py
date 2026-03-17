@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import String, Boolean, ForeignKey
+from sqlalchemy import String, Boolean, ForeignKey, JSON, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
 from backend.core.database import Base
@@ -51,6 +51,15 @@ class Quiz(Base, UUIDMixin, TimestampMixin):
     duration_minutes: Mapped[int] = mapped_column(
         default=60,
         nullable=False,
+    )
+
+    # Legacy JSON settings column (kept for backward compatibility with existing schema).
+    settings_json: Mapped[dict] = mapped_column(
+        "settings",
+        JSON,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'"),
     )
 
     sections = relationship(
