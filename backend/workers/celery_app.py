@@ -1,5 +1,6 @@
 import backend.models 
 import os
+import sys
 from celery import Celery
 from backend.core.config import settings
 
@@ -22,6 +23,13 @@ celery_app.conf.update(
     result_expires=3600,
     task_acks_late=True,
 )
+
+# Windows: billiard prefork pools can crash with WinError 5/6. Use solo worker pool.
+if sys.platform.startswith("win"):
+    celery_app.conf.update(
+        worker_pool="solo",
+        worker_concurrency=1,
+    )
 
 # 🔥 IMPORTANT: Explicitly include worker modules
 celery_app.autodiscover_tasks([
