@@ -8,6 +8,7 @@ export interface Question {
   correct_answer: string | null
   marks: number
   status: string
+  order_index?: number
   created_at?: string
   updated_at?: string
 }
