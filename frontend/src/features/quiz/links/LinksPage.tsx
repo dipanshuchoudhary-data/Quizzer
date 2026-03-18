@@ -32,7 +32,7 @@ export function LinksPage({ quizId }: { quizId: string }) {
 
   const publishedUrl = useMemo(() => {
     if (!quiz?.public_slug) return null
-    const path = `/quiz/${quiz.public_slug}`
+    const path = `/exam/${quiz.public_slug}`
     if (typeof window === "undefined") return path
     return `${window.location.origin}${path}`
   }, [quiz?.public_slug])
