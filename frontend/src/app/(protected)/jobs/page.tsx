@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation"
 
 export default function JobsRedirectPage() {
-  redirect("/dashboard#ai-generation-status")
+  redirect("/exams#ai-jobs")
 }
