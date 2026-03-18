@@ -2,7 +2,7 @@ import { api } from "@/lib/api/client"
 import type { Question } from "@/types/question"
 
 export type QuestionUpdatePayload = Partial<
-  Pick<Question, "question_text" | "question_type" | "difficulty" | "marks" | "correct_answer" | "options" | "section_id" | "status">
+  Pick<Question, "question_text" | "question_type" | "difficulty" | "marks" | "correct_answer" | "options" | "section_id" | "status" | "order_index">
 >
 
 export const questionApi = {
