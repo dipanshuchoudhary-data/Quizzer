@@ -145,14 +145,23 @@ export function ReviewPage({ quizId }: { quizId: string }) {
 
   const patchQuestion = (questionId: string, payload: Partial<Question>) => {
     queryClient.setQueryData<Question[]>(["questions", quizId], (current = []) =>
-      current.map((question) => (question.id === questionId ? { ...question, ...payload } : question))
+      current.map((question) => {
+        if (question.id !== questionId) return question
+        const nextStatus =
+          question.status === "APPROVED" && payload.status === undefined ? "DRAFT" : question.status
+        return { ...question, ...payload, status: payload.status ?? nextStatus }
+      })
     )
-    saveQuestion.mutate({ questionId, payload })
+    const current = queryClient.getQueryData<Question[]>(["questions", quizId]) ?? []
+    const target = current.find((q) => q.id === questionId)
+    const shouldDemote = target?.status === "APPROVED" && payload.status === undefined
+    const nextPayload = shouldDemote ? { ...payload, status: "DRAFT" } : payload
+    saveQuestion.mutate({ questionId, payload: nextPayload })
   }
 
   return (
-    <div className="rounded-lg border bg-background">
-      <div className="flex items-center justify-between border-b p-3">
+    <div className="min-h-[calc(100vh-220px)] overflow-hidden rounded-2xl border bg-background/95">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b p-4">
         <p className="text-sm text-muted-foreground">Review questions inline with autosave and optimistic updates.</p>
         <div className="flex items-center gap-2">
           <Button size="sm" variant="outline" onClick={() => setMany(filteredIds)} disabled={filteredIds.length === 0}>
@@ -181,7 +190,7 @@ export function ReviewPage({ quizId }: { quizId: string }) {
         </div>
       </div>
 
-      <div className="flex">
+      <div className="flex min-h-0">
         {!focusMode && (
           <SectionSidebar
             sections={sections}
@@ -196,7 +205,7 @@ export function ReviewPage({ quizId }: { quizId: string }) {
             approvingFilteredPending={approveFilteredPending.isPending}
           />
         )}
-        <div className="flex-1">
+        <div className="flex min-h-0 flex-1 flex-col">
           <BulkActionsBar sections={sections} onDone={() => queryClient.invalidateQueries({ queryKey: ["questions", quizId] })} />
           {filteredQuestions.length === 0 ? (
             <div className="p-6">

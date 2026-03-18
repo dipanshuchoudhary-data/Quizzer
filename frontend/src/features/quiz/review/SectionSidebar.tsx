@@ -62,8 +62,8 @@ export function SectionSidebar({
   }, [sections, questions])
 
   return (
-    <aside className="w-72 border-r bg-muted/20">
-      <ScrollArea className="h-full p-3">
+    <aside className="w-[300px] border-r bg-background/95">
+      <ScrollArea className="h-full p-4">
         <div className="space-y-3">
           <div className="rounded-md border bg-background p-3">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Review Health</p>
