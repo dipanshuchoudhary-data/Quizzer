@@ -3,18 +3,17 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { motion } from "framer-motion"
-import { Activity, BarChart3, Bot, ClipboardList, LayoutDashboard, Link2, PanelLeftClose, PanelLeftOpen } from "lucide-react"
+import { BarChart3, GraduationCap, LayoutDashboard, PanelLeftClose, PanelLeftOpen, Settings, Users } from "lucide-react"
 import { useUIStore } from "@/stores/useUIStore"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
 const items = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Quizzes", href: "/quizzes", icon: ClipboardList },
-  { name: "Published Exams", href: "/published", icon: Link2 },
-  { name: "Active Monitoring", href: "/monitoring", icon: Activity },
-  { name: "Results", href: "/results", icon: BarChart3 },
-  { name: "AI Jobs", href: "/jobs", icon: Bot },
+  { name: "Exams", href: "/exams", icon: GraduationCap },
+  { name: "Students", href: "/students", icon: Users },
+  { name: "Analytics", href: "/analytics", icon: BarChart3 },
+  { name: "Settings", href: "/settings", icon: Settings },
 ]
 
 export function Sidebar() {
@@ -22,7 +21,7 @@ export function Sidebar() {
   const { sidebarCollapsed, toggleSidebar } = useUIStore()
 
   const isActive = (href: string) => {
-    if (href === "/quizzes" && pathname.startsWith("/quiz/")) return true
+    if (href === "/exams" && pathname.startsWith("/quiz/")) return true
     return pathname === href || pathname.startsWith(`${href}/`)
   }
 

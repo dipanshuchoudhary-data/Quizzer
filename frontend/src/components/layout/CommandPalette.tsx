@@ -15,9 +15,10 @@ import { useUIStore } from "@/stores/useUIStore"
 
 const quickNav = [
   { label: "Go to Dashboard", href: "/dashboard" },
-  { label: "Go to Quizzes", href: "/quizzes" },
-  { label: "Go to Monitoring", href: "/monitoring" },
-  { label: "Go to Results", href: "/results" },
+  { label: "Go to Exams", href: "/exams" },
+  { label: "Go to Students", href: "/students" },
+  { label: "Go to Analytics", href: "/analytics" },
+  { label: "Go to Settings", href: "/settings" },
 ]
 
 export function CommandPalette() {
@@ -41,14 +42,6 @@ export function CommandPalette() {
     router.push(href)
   }
 
-  const runAction = (eventName: string, route?: string) => {
-    setCommandOpen(false)
-    if (route) router.push(route)
-    window.setTimeout(() => {
-      window.dispatchEvent(new CustomEvent(eventName))
-    }, 100)
-  }
-
   return (
     <CommandDialog open={commandOpen} onOpenChange={setCommandOpen}>
       <CommandInput placeholder="Search pages and actions..." />
@@ -63,10 +56,7 @@ export function CommandPalette() {
         </CommandGroup>
         <CommandSeparator />
         <CommandGroup heading="Actions">
-          <CommandItem onSelect={() => navigate("/quizzes?create=1")}>Create quiz</CommandItem>
-          <CommandItem onSelect={() => runAction("quizzer:search-focus", "/quizzes")}>Search quiz</CommandItem>
-          <CommandItem onSelect={() => runAction("quizzer:bulk-publish", "/quizzes")}>Publish selected quiz</CommandItem>
-          <CommandItem onSelect={() => runAction("quizzer:bulk-regenerate", "/quizzes")}>AI regenerate questions</CommandItem>
+          <CommandItem onSelect={() => navigate("/quizzes/create")}>Create quiz</CommandItem>
         </CommandGroup>
       </CommandList>
     </CommandDialog>

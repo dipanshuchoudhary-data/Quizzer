@@ -12,6 +12,7 @@ import { useAccountSettingsStore } from "@/stores/useAccountSettingsStore"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { getDisplayName, getInitials } from "@/lib/user"
 
 export function Topbar() {
   const router = useRouter()
@@ -24,10 +25,9 @@ export function Topbar() {
     hydrate(user)
   }, [hydrate, user])
 
-  const fallbackName = user?.email ? user.email.split("@")[0] : "Professor"
-  const displayName = profile.name || fallbackName
+  const displayName = getDisplayName(user)
   const displayEmail = profile.email || user?.email || "-"
-  const initials = displayName.slice(0, 2).toUpperCase() || "PR"
+  const initials = getInitials(displayName)
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
 
   const goto = (href: string) => {
@@ -67,7 +67,7 @@ export function Topbar() {
           <span className="ml-2 hidden rounded border px-1.5 py-0.5 text-[10px] text-muted-foreground sm:inline">Ctrl K</span>
         </Button>
 
-        <Button onClick={() => router.push("/quizzes?create=1")}>
+        <Button onClick={() => router.push("/quizzes/create")}>
           <Plus className="mr-2 size-4" />
           Create Quiz
         </Button>

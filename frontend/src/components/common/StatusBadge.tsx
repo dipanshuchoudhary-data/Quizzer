@@ -8,6 +8,7 @@ const badgeMap: Record<string, { label: string; className: string }> = {
   REVIEWING: { label: "Reviewing", className: "bg-indigo-100 text-indigo-900 dark:bg-indigo-900/40 dark:text-indigo-200" },
   APPROVED: { label: "Approved", className: "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-200" },
   PUBLISHED: { label: "Published", className: "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-200" },
+  LIVE: { label: "Live", className: "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-200" },
   CLOSED: { label: "Closed", className: "bg-red-100 text-red-900 dark:bg-red-900/40 dark:text-red-200" },
   PENDING: { label: "Pending", className: "border border-border bg-background text-foreground" },
   FAILED: { label: "Failed", className: "bg-red-100 text-red-900 dark:bg-red-900/40 dark:text-red-200" },
