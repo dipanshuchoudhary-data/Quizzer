@@ -1,6 +1,6 @@
 import asyncio
 from backend.workers.celery_app import celery_app
-from backend.core.database import SessionLocal
+from backend.workers.task_db import get_task_sessionmaker
 from backend.ai.graphs.result_processing_graph import build_result_processing_graph
 
 
@@ -10,6 +10,7 @@ def process_result(attempt_id: str):
     async def _run():
         graph = build_result_processing_graph()
 
+        SessionLocal = get_task_sessionmaker()
         async with SessionLocal() as db:
 
             await graph.ainvoke(

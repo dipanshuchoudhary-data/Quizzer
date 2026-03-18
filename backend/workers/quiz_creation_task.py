@@ -1,6 +1,7 @@
 import asyncio
 import re
 import sys
+import uuid
 from types import SimpleNamespace
 
 from sqlalchemy import select
@@ -8,8 +9,8 @@ from sqlalchemy import select
 from backend.workers.celery_app import celery_app
 from backend.ai.graphs.quiz_creation_graph import build_quiz_creation_graph
 from backend.ai.agents.answer_key_agent import generate_missing_answers
-from backend.core.database import SessionLocal
-from backend.services.question_quality import sanitize_question_candidate, normalize_question_type as normalize_question_type_shared
+from backend.workers.task_db import get_task_sessionmaker
+from backend.services.question_quality import sanitize_question_candidate, normalize_question_type as normalize_question_type_shared, map_marks_to_question_type
 
 from backend.models.quiz import Quiz
 from backend.models.quiz_section import QuizSection
@@ -323,6 +324,10 @@ def parse_questions_from_source(extracted_text: str) -> list[SimpleNamespace]:
         mark_match = marks_line.search(block)
         marks = int(mark_match.group(1)) if mark_match else None
 
+        if marks is not None:
+            if q_type in {"MCQ", "SHORT_ANSWER"}:
+                q_type = map_marks_to_question_type(marks, fallback=q_type)
+
         # Keep only the stem before the first option marker.
         if option_matches:
             question_text = question_body[:option_matches[0].start()].strip()
@@ -482,6 +487,7 @@ SOURCE TEXT:
 
 @celery_app.task(name="create_quiz_ai")
 def create_quiz_ai(
+    job_id: str,
     quiz_id: str,
     extracted_text: str,
     blueprint: dict,
@@ -491,15 +497,22 @@ def create_quiz_ai(
     async def _run():
         graph = build_quiz_creation_graph()
 
+        SessionLocal = get_task_sessionmaker()
         async with SessionLocal() as db:
-            job = AIJob(
-                quiz_id=quiz_id,
-                job_type="QUIZ_CREATION",
-                status="PROCESSING",
-            )
-            db.add(job)
-            await db.commit()
-            await db.refresh(job)
+            job = await db.get(AIJob, job_id)
+            if not job:
+                job = AIJob(
+                    id=uuid.UUID(str(job_id)),
+                    quiz_id=quiz_id,
+                    job_type="QUIZ_CREATION",
+                    status="PROCESSING",
+                )
+                db.add(job)
+                await db.commit()
+                await db.refresh(job)
+            else:
+                job.status = "PROCESSING"
+                await db.commit()
 
             quiz = None
             try:
@@ -511,6 +524,8 @@ def create_quiz_ai(
                 job.meta = {
                     "source_mode": blueprint.get("source_mode"),
                     "source_references": blueprint.get("source_references", []),
+                    "stage": "parsing_source",
+                    "progress": 10,
                 }
                 await db.commit()
 
@@ -525,6 +540,8 @@ def create_quiz_ai(
                 last_feedback = ""
 
                 source_questions = parse_questions_from_source(extracted_text)
+                job.meta = {**(job.meta or {}), "stage": "topic_detection", "progress": 25}
+                await db.commit()
                 default_5_mcq = (
                     len(blueprint_sections) == 1
                     and blueprint_sections[0]["number_of_questions"] == 5
@@ -585,6 +602,8 @@ def create_quiz_ai(
                 for _ in range(3):
                     if selected_pairs:
                         break
+                    job.meta = {**(job.meta or {}), "stage": "question_generation", "progress": 50}
+                    await db.commit()
                     result = await graph.ainvoke(
                         {
                             "extracted_text": extracted_text,
@@ -616,6 +635,8 @@ def create_quiz_ai(
                     break
 
                 if selected_pairs and missing_answers_count(selected_pairs) > 0:
+                    job.meta = {**(job.meta or {}), "stage": "answer_generation", "progress": 70}
+                    await db.commit()
                     selected_pairs = await enrich_missing_answers(selected_pairs)
 
                 if not selected_pairs:
@@ -640,7 +661,19 @@ def create_quiz_ai(
                 db_sections = sections_result.scalars().all()
 
                 if not db_sections:
-                    raise ValueError("Quiz section not found")
+                    for spec in blueprint_sections:
+                        missing_section = QuizSection(
+                            quiz_id=quiz.id,
+                            title=spec["title"],
+                            total_marks=spec["number_of_questions"] * spec["marks_per_question"],
+                        )
+                        db.add(missing_section)
+                    await db.commit()
+                    sections_result = await db.execute(
+                        select(QuizSection).where(QuizSection.quiz_id == quiz_id).order_by(QuizSection.created_at.asc())
+                    )
+                    db_sections = sections_result.scalars().all()
+
                 if len(db_sections) < len(blueprint_sections):
                     for idx in range(len(db_sections), len(blueprint_sections)):
                         spec = blueprint_sections[idx]
@@ -656,6 +689,7 @@ def create_quiz_ai(
                     )
                     db_sections = sections_result.scalars().all()
 
+                order_cursor: dict[int, int] = {}
                 for section_spec, q in selected_pairs:
                     section_index = section_spec["index"]
                     target_section = db_sections[section_index]
@@ -692,7 +726,9 @@ def create_quiz_ai(
                         correct_answer=correct_answer,
                         marks=target_marks,
                         status="DRAFT",
+                        order_index=order_cursor.get(section_index, 0) + 1,
                     )
+                    order_cursor[section_index] = order_cursor.get(section_index, 0) + 1
                     db.add(question)
 
                 quiz.ai_generation_status = "GENERATED"
@@ -700,6 +736,8 @@ def create_quiz_ai(
                 job.meta = {
                     **(job.meta or {}),
                     "generated_count": len(selected_pairs),
+                    "stage": "difficulty_calibration",
+                    "progress": 100,
                 }
                 await db.commit()
 
