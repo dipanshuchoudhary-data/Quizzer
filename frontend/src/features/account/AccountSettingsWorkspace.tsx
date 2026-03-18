@@ -13,6 +13,7 @@ import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
+import { getDisplayName } from "@/lib/user"
 
 const tabs = ["profile", "preferences", "workspace", "security", "notifications", "integrations"] as const
 type SettingsTab = (typeof tabs)[number]
@@ -51,8 +52,8 @@ export function AccountSettingsWorkspace() {
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab)
 
   useEffect(() => {
-    hydrate(user?.email)
-  }, [hydrate, user?.email])
+    hydrate(user)
+  }, [hydrate, user])
 
   useEffect(() => {
     setActiveTab(initialTab)
@@ -87,7 +88,7 @@ export function AccountSettingsWorkspace() {
     }, 450)
   }
 
-  const displayName = profile.name || (user?.email ? user.email.split("@")[0] : "Professor")
+  const displayName = getDisplayName(user)
 
   return (
     <div className="space-y-6">

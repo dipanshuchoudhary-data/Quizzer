@@ -1,4 +1,5 @@
 import { create } from "zustand"
+import type { User } from "@/types/user"
 
 type ThemeMode = "light" | "dark" | "system"
 type DensityMode = "comfortable" | "compact"
@@ -48,7 +49,7 @@ interface AccountSettingsState {
   workspace: WorkspaceState
   security: SecurityState
 
-  hydrate: (userEmail?: string) => void
+  hydrate: (user?: User | string | null) => void
   setSaveState: (saveState: SaveState) => void
 
   patchProfile: (patch: Partial<ProfileState>) => void
@@ -128,7 +129,7 @@ function saveSnapshot(getState: () => AccountSettingsState) {
 export const useAccountSettingsStore = create<AccountSettingsState>((set, get) => ({
   ...defaults,
 
-  hydrate: (userEmail) => {
+  hydrate: (user) => {
     if (typeof window === "undefined") {
       set({ hydrated: true })
       return
@@ -136,15 +137,10 @@ export const useAccountSettingsStore = create<AccountSettingsState>((set, get) =
 
     const parsed = safeParse(window.localStorage.getItem(STORAGE_KEY))
 
-    const email =
-      typeof userEmail === "string"
-        ? userEmail
-        : ""
-
-    const derivedName =
-      email && email.includes("@")
-        ? email.split("@")[0]
-        : defaults.profile.name
+    const email = typeof user === "string" ? user : user?.email ?? ""
+    const derivedName = user && typeof user !== "string"
+      ? user.full_name?.trim() || user.username?.trim() || defaults.profile.name
+      : defaults.profile.name
 
     set({
       hydrated: true,
