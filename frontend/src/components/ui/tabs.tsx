@@ -20,14 +20,23 @@ function useTabsContext() {
 }
 
 type TabsProps = React.ComponentProps<"div"> & {
-  defaultValue: string
+  defaultValue?: string
+  value?: string
+  onValueChange?: (next: string) => void
 }
 
-function Tabs({ defaultValue, className, ...props }: TabsProps) {
+function Tabs({ defaultValue = "", value: controlledValue, onValueChange, className, ...props }: TabsProps) {
   const [value, setValue] = React.useState(defaultValue)
+  const isControlled = typeof controlledValue === "string"
+  const currentValue = isControlled ? controlledValue : value
+
+  const setNextValue = (next: string) => {
+    if (!isControlled) setValue(next)
+    onValueChange?.(next)
+  }
 
   return (
-    <TabsContext.Provider value={{ value, setValue }}>
+    <TabsContext.Provider value={{ value: currentValue, setValue: setNextValue }}>
       <div className={cn("w-full", className)} {...props} />
     </TabsContext.Provider>
   )
@@ -47,7 +56,7 @@ type TabsTriggerProps = React.ComponentProps<"button"> & {
   value: string
 }
 
-function TabsTrigger({ value, className, ...props }: TabsTriggerProps) {
+function TabsTrigger({ value, className, onClick, ...props }: TabsTriggerProps) {
   const context = useTabsContext()
   const active = context.value === value
 
@@ -56,7 +65,10 @@ function TabsTrigger({ value, className, ...props }: TabsTriggerProps) {
       type="button"
       role="tab"
       aria-selected={active}
-      onClick={() => context.setValue(value)}
+      onClick={(event) => {
+        context.setValue(value)
+        onClick?.(event)
+      }}
       className={cn(
         "rounded px-3 py-1.5 text-sm transition",
         active ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground",
