@@ -7,6 +7,7 @@ import { useAccountSettingsStore } from "@/stores/useAccountSettingsStore"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
+import { getDisplayName, getInitials } from "@/lib/user"
 
 export default function AccountProfilePage() {
   const { user } = useAuthStore()
@@ -16,8 +17,8 @@ export default function AccountProfilePage() {
     hydrate(user)
   }, [hydrate, user])
 
-  const name = profile.name || (user?.email ? user.email.split("@")[0] : "Professor")
-  const initials = name.slice(0, 2).toUpperCase()
+  const name = getDisplayName(user)
+  const initials = getInitials(name)
 
   return (
     <div className="space-y-6">
