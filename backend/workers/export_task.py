@@ -2,7 +2,7 @@ import asyncio
 import sys
 
 from backend.workers.celery_app import celery_app
-from backend.core.database import SessionLocal
+from backend.workers.task_db import get_task_sessionmaker
 from backend.services.export_service import (
     create_export_file,
     fetch_results_for_quiz,
@@ -17,6 +17,7 @@ def export_results(quiz_id: str, format_type: str, owner_id: str | None = None):
 
     async def _run():
 
+        SessionLocal = get_task_sessionmaker()
         async with SessionLocal() as db:
 
             data = await fetch_results_for_quiz(db, quiz_id)

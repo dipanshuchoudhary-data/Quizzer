@@ -1,9 +1,9 @@
 import asyncio
 import sys
-from backend.core.database import SessionLocal
+from backend.workers.task_db import get_task_sessionmaker
 from backend.workers.celery_app import celery_app
 from backend.models.document import Document
-from backend.services.document_service import extract_text_from_image
+from backend.services.document_service import extract_text_from_file
 from backend.ai.agents.summarization_agent import summarize_document
 
 
@@ -25,6 +25,7 @@ def process_document(document_id: str):
 
     async def _run():
 
+        SessionLocal = get_task_sessionmaker()
         async with SessionLocal() as db:
 
             # Fetch document
@@ -41,7 +42,7 @@ def process_document(document_id: str):
                 # -----------------------------------
                 # Extract text from file
                 # -----------------------------------
-                extracted_text = extract_text_from_image(
+                extracted_text = extract_text_from_file(
                     doc.storage_path,
                     doc.file_type,
                 )
@@ -58,6 +59,7 @@ def process_document(document_id: str):
                 # Store structured metadata
                 # -----------------------------------
                 doc.extracted_metadata = {
+                    "extracted_text": extracted_text,
                     "summary": summary_data.summary,
                     "key_topics": summary_data.key_topics,
                     "difficulty_level": summary_data.difficulty_level,
