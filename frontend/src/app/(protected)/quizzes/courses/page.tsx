@@ -85,10 +85,10 @@ export default function CourseManagerPage() {
             <h1 className="text-2xl font-semibold tracking-tight">Courses and Units</h1>
             <p className="text-sm text-muted-foreground">Build your own structure for any discipline.</p>
           </div>
-          <Link href="/quizzes">
+          <Link href="/exams">
             <Button variant="outline">
               <ArrowLeft className="mr-2 size-4" />
-              Back to Quizzes
+              Back to Exams
             </Button>
           </Link>
         </div>
