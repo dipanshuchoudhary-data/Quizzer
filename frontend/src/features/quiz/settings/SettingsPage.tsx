@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { quizApi } from "@/lib/api/quiz"
 import { defaultQuizExamSettings, type QuizExamSettings } from "@/types/quiz"
+import { LinksPage } from "@/features/quiz/links/LinksPage"
 
 function SettingRow({
   title,
@@ -221,6 +222,7 @@ export function SettingsPage({ quizId }: { quizId: string }) {
           </CardContent>
         )}
       </Card>
+
 
       <div className="flex flex-col gap-3 rounded-xl border border-border/70 bg-background/95 p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
         <div className="text-sm text-muted-foreground">
