@@ -3,8 +3,9 @@ import logging
 import sys
 import time
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from backend.core.config import settings
 from backend.api.auth import router as auth_router
@@ -31,6 +32,22 @@ if sys.platform.startswith("win"):
 logger = logging.getLogger(__name__)
 
 
+def _resolve_cors_origins(raw_origins: str) -> list[str]:
+    origins = [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
+    expanded = set(origins)
+
+    # In local development Next.js may shift ports (3001, 3002, ...).
+    for port in range(3000, 3011):
+        expanded.add(f"http://localhost:{port}")
+        expanded.add(f"http://127.0.0.1:{port}")
+
+    return sorted(expanded)
+
+
+def _local_dev_origin_regex() -> str:
+    return r"^https?://(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$"
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
         title="Quizzer API",
@@ -42,7 +59,8 @@ def create_app() -> FastAPI:
     # CORS
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[origin.strip() for origin in settings.CORS_ALLOW_ORIGINS.split(",") if origin.strip()],
+        allow_origins=_resolve_cors_origins(settings.CORS_ALLOW_ORIGINS),
+        allow_origin_regex=_local_dev_origin_regex(),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -51,12 +69,25 @@ def create_app() -> FastAPI:
     @app.middleware("http")
     async def log_slow_requests(request, call_next):
         started_at = time.perf_counter()
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except Exception:
+            duration_ms = (time.perf_counter() - started_at) * 1000
+            logger.exception("request_failed method=%s path=%s duration_ms=%.1f", request.method, request.url.path, duration_ms)
+            raise
         duration_ms = (time.perf_counter() - started_at) * 1000
         response.headers["X-Response-Time-MS"] = f"{duration_ms:.1f}"
         if duration_ms > 150:
             logger.warning("slow_request method=%s path=%s duration_ms=%.1f", request.method, request.url.path, duration_ms)
         return response
+
+    @app.exception_handler(Exception)
+    async def unhandled_exception_handler(request: Request, exc: Exception):
+        logger.exception("unhandled_exception method=%s path=%s", request.method, request.url.path, exc_info=exc)
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Internal server error"},
+        )
 
     # Routers
     app.include_router(auth_router)
