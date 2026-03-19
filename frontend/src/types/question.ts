@@ -6,6 +6,8 @@ export interface Question {
   difficulty?: "Easy" | "Medium" | "Hard" | string
   options: string[] | Record<string, string> | null
   correct_answer: string | null
+  expected_answer?: string | null
+  explanation?: string | null
   marks: number
   status: string
   order_index?: number
