@@ -4,7 +4,6 @@ import { useMemo } from "react"
 import type { Section } from "@/types/section"
 import type { Question } from "@/types/question"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 
@@ -15,10 +14,6 @@ export function SectionSidebar({
   reviewFilter,
   onChange,
   onFilterChange,
-  onSelectFiltered,
-  onClearSelection,
-  onApproveFilteredPending,
-  approvingFilteredPending,
 }: {
   sections: Section[]
   questions: Question[]
@@ -26,26 +21,13 @@ export function SectionSidebar({
   reviewFilter: "all" | "pending" | "missing_answer"
   onChange: (id: string | null) => void
   onFilterChange: (filter: "all" | "pending" | "missing_answer") => void
-  onSelectFiltered: () => void
-  onClearSelection: () => void
-  onApproveFilteredPending: () => void
-  approvingFilteredPending: boolean
 }) {
   const isMissingAnswer = (question: Question) =>
     !question.correct_answer || question.correct_answer.trim().length === 0 || question.correct_answer === "answer_unavailable"
 
-  const sectionScopedQuestions = active ? questions.filter((question) => question.section_id === active) : questions
-  const visibleQuestions =
-    reviewFilter === "pending"
-      ? sectionScopedQuestions.filter((question) => question.status !== "APPROVED")
-      : reviewFilter === "missing_answer"
-        ? sectionScopedQuestions.filter((question) => isMissingAnswer(question))
-        : sectionScopedQuestions
-
   const approvedCount = questions.filter((question) => question.status === "APPROVED").length
   const pendingCount = questions.length - approvedCount
   const missingAnswerCount = questions.filter((question) => isMissingAnswer(question)).length
-  const visiblePendingCount = visibleQuestions.filter((question) => question.status !== "APPROVED").length
   const sectionStats = useMemo(() => {
     const stats = new Map<string, { total: number; approved: number; issues: number }>()
     for (const section of sections) {
@@ -62,8 +44,8 @@ export function SectionSidebar({
   }, [sections, questions])
 
   return (
-    <aside className="w-[300px] border-r bg-background/95">
-      <ScrollArea className="h-full p-4">
+    <aside className="border-b bg-background/95 lg:w-[300px] lg:border-b-0 lg:border-r">
+      <ScrollArea className="max-h-[42vh] p-4 lg:h-full lg:max-h-none">
         <div className="space-y-3">
           <div className="rounded-md border bg-background p-3">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Review Health</p>
@@ -118,45 +100,26 @@ export function SectionSidebar({
             </div>
           </div>
 
-          <div className="rounded-md border bg-background p-3">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Quick Actions</p>
-            <div className="mt-2 space-y-2">
-              <Button size="sm" variant="outline" className="w-full justify-start" onClick={onSelectFiltered}>
-                Select visible ({visibleQuestions.length})
-              </Button>
-              <Button size="sm" variant="outline" className="w-full justify-start" onClick={onClearSelection}>
-                Clear selection
-              </Button>
-              <Button
-                size="sm"
-                className="w-full justify-start"
-                onClick={onApproveFilteredPending}
-                disabled={visiblePendingCount === 0 || approvingFilteredPending}
-              >
-                {approvingFilteredPending ? "Approving..." : `Approve visible pending (${visiblePendingCount})`}
-              </Button>
-            </div>
-          </div>
         </div>
 
         <div className="mt-3">
           <p className="px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Sections</p>
         </div>
+        <div className="mb-2 mt-2 flex gap-2 overflow-x-auto pb-1 lg:block lg:space-y-2 lg:overflow-visible lg:pb-0">
         <button
           className={cn(
-            "mb-2 mt-2 w-full rounded-md border px-3 py-2 text-left text-sm",
+            "shrink-0 rounded-md border px-3 py-2 text-left text-sm lg:mb-0 lg:w-full",
             active === null ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"
           )}
           onClick={() => onChange(null)}
         >
           All sections
         </button>
-        <div className="space-y-2">
           {sections.map((section, idx) => (
             <div
               key={section.id}
               className={cn(
-                "rounded-md border p-2",
+                "min-w-[220px] rounded-md border p-2 lg:min-w-0",
                 active === section.id ? "border-primary bg-primary/5" : "bg-background hover:bg-muted/40"
               )}
             >
