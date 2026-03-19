@@ -9,11 +9,15 @@ export default function ProtectedLayout({
   children: React.ReactNode
 }) {
   return (
-    <div className="flex min-h-screen bg-[radial-gradient(circle_at_top,_hsl(var(--muted))_0,_transparent_50%)]">
-      <Sidebar />
-      <div className="flex min-h-screen flex-1 flex-col">
-        <Topbar />
-        <main className="flex-1 p-6">
+    <div data-app-shell className="flex min-h-screen flex-col bg-[radial-gradient(circle_at_top,_hsl(var(--muted))_0,_transparent_50%)] lg:flex-row">
+      <div data-app-sidebar className="lg:shrink-0">
+        <Sidebar />
+      </div>
+      <div data-app-content className="flex min-h-screen min-w-0 flex-1 flex-col">
+        <div data-app-topbar>
+          <Topbar />
+        </div>
+        <main data-app-main className="flex-1">
           <PageShell>{children}</PageShell>
         </main>
       </div>
