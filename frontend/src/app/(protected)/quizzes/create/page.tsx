@@ -20,6 +20,9 @@ import type { Document } from "@/types/document"
 
 type SourceMode = "paste" | "files" | "links"
 type GenerationMode = "auto" | "custom"
+type SupportedQuestionType = "MCQ" | "True/False" | "Short Answer" | "Long Answer"
+
+const AUTO_QUESTION_TYPES: SupportedQuestionType[] = ["MCQ", "True/False", "Short Answer", "Long Answer"]
 
 const defaultSection: DraftSection = {
   id: crypto.randomUUID(),
@@ -43,6 +46,7 @@ export default function QuizCreatePage() {
   const [generationMode, setGenerationMode] = useState<GenerationMode>("auto")
   const [sections, setSections] = useState<DraftSection[]>([defaultSection])
   const [questionTarget, setQuestionTarget] = useState(10)
+  const [selectedTypes, setSelectedTypes] = useState<SupportedQuestionType[]>(["MCQ"])
   const [jobId, setJobId] = useState<string | null>(null)
   const [processingError, setProcessingError] = useState<string | null>(null)
   const [ingestState, setIngestState] = useState<"idle" | "processing" | "ready" | "failed">("idle")
@@ -100,9 +104,9 @@ export default function QuizCreatePage() {
               sections: [
                 {
                   title: "Section 1",
-                  numberOfQuestions: questionTarget,
-                  questionType: "MCQ",
-                  marksPerQuestion: 1,
+                  number_of_questions: questionTarget,
+                  question_types: selectedTypes,
+                  marks_per_question: 1,
                 },
               ],
               auto_detect_structure: true,
@@ -134,6 +138,20 @@ export default function QuizCreatePage() {
     },
   })
 
+  const toggleQuestionType = (type: SupportedQuestionType) => {
+    setSelectedTypes((current) => {
+      const exists = current.includes(type)
+      if (exists) {
+        if (current.length === 1) {
+          toast.error("Select at least one question type")
+          return current
+        }
+        return current.filter((item) => item !== type)
+      }
+      return [...current, type]
+    })
+  }
+
 
   useEffect(() => {
     if (!jobStatus) return
@@ -146,7 +164,7 @@ export default function QuizCreatePage() {
   }, [jobStatus])
 
   const handleNextFromMetadata = () => {
-    if (title.trim().length < 3) {
+    if (title.trim().length < 1) {
       toast.error("Quiz title is required")
       return
     }
@@ -205,6 +223,7 @@ export default function QuizCreatePage() {
 
   const progress = Number(jobStatus?.metadata?.progress ?? 0)
   const stage = (jobStatus?.metadata?.stage as string | undefined) ?? "parsing_source"
+  const hasTitle = title.trim().length > 0
 
   useEffect(() => {
     if (sourceMode !== "files") return
@@ -235,23 +254,54 @@ export default function QuizCreatePage() {
       contentClassName={step === 4 ? "min-h-[calc(100vh-220px)] overflow-hidden" : undefined}
     >
       {step === 0 ? (
-        <div className="space-y-6">
-          <div className="space-y-2">
-            <p className="text-sm font-semibold text-foreground">Quiz metadata</p>
-            <p className="text-xs text-muted-foreground">Define the quiz title and description before ingesting content.</p>
+        <div className="mx-auto w-full max-w-[1000px] space-y-6">
+          <div className="space-y-1">
+            <h2 className="text-2xl font-semibold tracking-tight text-foreground">Quiz Details</h2>
+            <p className="text-sm text-muted-foreground">Set the title and optional description before adding content sources.</p>
           </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            <Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Quiz title" />
-            <Textarea
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              placeholder="Short description (optional)"
-              className="min-h-[96px]"
-            />
+
+          <div className="space-y-5">
+            <div className="space-y-2">
+              <label htmlFor="quiz-title" className="text-sm font-medium text-foreground">
+                Quiz Title
+              </label>
+              <Input
+                id="quiz-title"
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                placeholder="e.g., Fundamentals of Data Structures - Week 1"
+                aria-invalid={!hasTitle}
+                className="h-11"
+              />
+              {!hasTitle ? (
+                <p className="text-xs text-destructive">Title is required to continue.</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">Use a clear, specific title for quick recognition.</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="quiz-description" className="text-sm font-medium text-foreground">
+                Description (Optional)
+              </label>
+              <Textarea
+                id="quiz-description"
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                placeholder="Optional: Add scope, learner level, or key topics to guide quiz generation."
+                className="min-h-[112px]"
+              />
+              <p className="text-xs text-muted-foreground">Example: Covers arrays, linked lists, stacks, and queue operations.</p>
+            </div>
           </div>
-          <div className="flex justify-end">
-            <Button onClick={handleNextFromMetadata} disabled={createQuizMutation.isPending}>
-              {createQuizMutation.isPending ? "Creating..." : "Continue"}
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+            <Button
+              onClick={handleNextFromMetadata}
+              disabled={createQuizMutation.isPending || !hasTitle}
+              className="h-11 w-full px-6 text-sm font-semibold sm:w-auto"
+            >
+              {createQuizMutation.isPending ? "Creating..." : "Continue →"}
             </Button>
           </div>
         </div>
@@ -289,14 +339,15 @@ export default function QuizCreatePage() {
               {ingestMessage || "Waiting for content input…"}
             </div>
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <Button variant="outline" onClick={() => setStep(0)}>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <Button variant="outline" onClick={() => setStep(0)} className="h-11 w-full sm:w-auto">
               Back
             </Button>
             {sourceMode === "files" ? (
               <Button
                 onClick={() => setStep(2)}
                 disabled={documents.length === 0 || filesProcessing || filesFailed}
+                className="h-11 w-full sm:w-auto"
               >
                 {filesFailed
                   ? "Resolve failed files"
@@ -305,7 +356,7 @@ export default function QuizCreatePage() {
                   : "Continue"}
               </Button>
             ) : (
-              <Button onClick={handleSaveSource} disabled={!canProceedSources || ingestState === "processing"}>
+              <Button onClick={handleSaveSource} disabled={!canProceedSources || ingestState === "processing"} className="h-11 w-full sm:w-auto">
                 {ingestState === "processing" ? "Processing…" : "Continue"}
               </Button>
             )}
@@ -315,46 +366,93 @@ export default function QuizCreatePage() {
 
       {step === 2 ? (
         <div className="space-y-6">
-          <div className="grid gap-4 md:grid-cols-2">
-            <button
-              type="button"
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div
+              role="button"
+              tabIndex={0}
               onClick={() => setGenerationMode("auto")}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault()
+                  setGenerationMode("auto")
+                }
+              }}
               className={`rounded-2xl border p-4 text-left transition-all ${generationMode === "auto" ? "border-primary/40 bg-primary/5" : "hover:-translate-y-1 hover:border-primary/30 hover:bg-muted/40"}`}
             >
               <p className="text-sm font-semibold text-foreground">Start AI Processing</p>
-              <p className="text-xs text-muted-foreground">Auto-generate MCQ distribution and answers.</p>
+              <p className="text-xs text-muted-foreground">Set total questions and let AI distribute selected question types automatically.</p>
               {generationMode === "auto" ? (
-                <div className="mt-4">
-                  <Input
-                    type="number"
-                    min={5}
-                    value={questionTarget}
-                    onChange={(event) => setQuestionTarget(Number(event.target.value || 10))}
-                    placeholder="Total questions"
-                  />
+                <div className="mt-4 space-y-4">
+                  <div className="space-y-2">
+                    <label htmlFor="total-questions" className="text-xs font-medium text-foreground">
+                      Total Questions
+                    </label>
+                    <Input
+                      id="total-questions"
+                      type="number"
+                      min={1}
+                      value={questionTarget}
+                      onChange={(event) => setQuestionTarget(Math.max(1, Number(event.target.value || 1)))}
+                      placeholder="Total questions"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-foreground">Question Types</p>
+                    <div className="flex flex-wrap gap-2">
+                      {AUTO_QUESTION_TYPES.map((type) => {
+                        const isSelected = selectedTypes.includes(type)
+                        return (
+                          <button
+                            key={type}
+                            type="button"
+                            onClick={(event) => {
+                              event.preventDefault()
+                              toggleQuestionType(type)
+                            }}
+                            className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${isSelected ? "border-primary bg-primary/10 text-primary" : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}
+                            aria-pressed={isSelected}
+                          >
+                            {type}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
                 </div>
               ) : null}
-            </button>
+            </div>
 
-            <button
-              type="button"
+            <div
+              role="button"
+              tabIndex={0}
               onClick={() => setGenerationMode("custom")}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault()
+                  setGenerationMode("custom")
+                }
+              }}
               className={`rounded-2xl border p-4 text-left transition-all ${generationMode === "custom" ? "border-primary/40 bg-primary/5" : "hover:-translate-y-1 hover:border-primary/30 hover:bg-muted/40"}`}
             >
               <p className="text-sm font-semibold text-foreground">Custom Structure</p>
               <p className="text-xs text-muted-foreground">Configure question counts, types, and marks.</p>
-            </button>
+            </div>
           </div>
 
           {generationMode === "custom" ? (
             <SectionBuilder sections={sections} onChange={setSections} />
           ) : null}
 
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <Button variant="outline" onClick={() => setStep(1)}>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <Button variant="outline" onClick={() => setStep(1)} className="h-11 w-full sm:w-auto">
               Back
             </Button>
-            <Button onClick={() => generateMutation.mutate()} disabled={generateMutation.isPending}>
+            <Button
+              onClick={() => generateMutation.mutate()}
+              disabled={generateMutation.isPending || (generationMode === "auto" && (questionTarget <= 0 || selectedTypes.length === 0))}
+              className="h-11 w-full sm:w-auto"
+            >
               {generateMutation.isPending ? "Starting..." : "Start AI Processing"}
             </Button>
           </div>
@@ -370,7 +468,7 @@ export default function QuizCreatePage() {
             error={processingError}
           />
           <div className="flex justify-end">
-            <Button variant="outline" onClick={() => setStep(4)} disabled={!quizId}>
+            <Button variant="outline" onClick={() => setStep(4)} disabled={!quizId} className="h-11 w-full sm:w-auto">
               Skip to Review
             </Button>
           </div>
