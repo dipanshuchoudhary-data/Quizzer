@@ -115,9 +115,7 @@ export function QuizReview({ quizId }: { quizId: string }) {
   const [filterSection, setFilterSection] = useState<string>("all")
   const [filterType, setFilterType] = useState<string>("all")
   const [searchQuery, setSearchQuery] = useState("")
-  const [publishUrl, setPublishUrl] = useState<string | null>(null)
   const [hasChangesSincePublish, setHasChangesSincePublish] = useState(false)
-  const [origin, setOrigin] = useState("")
 
   const { data: questions = [], refetch: refetchQuestions, isLoading } = useQuery({
     queryKey: ["questions", quizId],
@@ -140,19 +138,6 @@ export function QuizReview({ quizId }: { quizId: string }) {
   useEffect(() => {
     if (questions.length > 0) setHasLoaded(true)
   }, [questions.length])
-
-  useEffect(() => {
-    if (typeof window === "undefined") return
-    setOrigin(window.location.origin)
-  }, [])
-
-  useEffect(() => {
-    if (!quiz) return
-    if (quiz.is_published) {
-      const slug = quiz.public_slug ?? quiz.id
-      setPublishUrl(`/exam/${slug}`)
-    }
-  }, [quiz])
 
   const updateQuestionMutation = useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: Record<string, unknown> }) => questionApi.update(id, payload),
@@ -220,19 +205,26 @@ export function QuizReview({ quizId }: { quizId: string }) {
     mutationFn: () => quizApi.publish(quizId),
     onSuccess: (data) => {
       toast.success("Quiz published")
-      const url = data.public_url ?? (data.public_slug ? `/exam/${data.public_slug}` : `/exam/${quizId}`)
-      setPublishUrl(url)
+      queryClient.setQueryData(["quiz", quizId], (current: typeof quiz) =>
+        current
+          ? {
+              ...current,
+              is_published: true,
+              public_id: data.public_id ?? current.public_id ?? null,
+              public_url: data.public_url ?? current.public_url ?? null,
+              ai_generation_status: "PUBLISHED",
+            }
+          : current
+      )
+      queryClient.invalidateQueries({ queryKey: ["quiz", quizId] })
+      queryClient.invalidateQueries({ queryKey: ["quizzes"] })
       setHasChangesSincePublish(false)
     },
     onError: () => toast.error("Publish validation failed"),
   })
 
-  const isPublished = Boolean(publishUrl)
-  const fullPublishUrl = publishUrl
-    ? publishUrl.startsWith("http")
-      ? publishUrl
-      : `${origin}${publishUrl}`
-    : null
+  const fullPublishUrl = quiz?.is_published ? quiz.public_url ?? null : null
+  const isPublished = Boolean(fullPublishUrl)
   const handleBulkAction = async (action: string) => {
     const actions = questions.map((question) => {
       if (action === "approve") return questionApi.update(question.id, { status: "APPROVED" })
@@ -775,7 +767,7 @@ export function QuizReview({ quizId }: { quizId: string }) {
 
       <div className="rounded-2xl border bg-muted/30 p-4 text-sm">
         <p className="text-xs font-semibold text-muted-foreground">Links</p>
-        {fullPublishUrl ? (
+        {isPublished && fullPublishUrl ? (
           <>
             <p className="mt-1 font-semibold text-foreground">{fullPublishUrl}</p>
             <div className="mt-3 flex flex-wrap items-center gap-2">
