@@ -43,9 +43,10 @@ class Quiz(Base, UUIDMixin, TimestampMixin):
         default=False,
         nullable=False,
     )
-    public_slug: Mapped[str | None] = mapped_column(
+    public_id: Mapped[str | None] = mapped_column(
         String(64),
         unique=True,
+        index=True,
         nullable=True,
     )
     duration_minutes: Mapped[int] = mapped_column(
