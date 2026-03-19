@@ -33,7 +33,18 @@ from backend.models import (
 
 # Alembic Config object
 config = context.config
-config.set_main_option("sqlalchemy.url", settings.POSTGRES_DSN)
+
+
+def _resolve_sync_dsn(raw_dsn: str) -> str:
+    # Alembic runs migrations through SQLAlchemy's synchronous engine path.
+    # If an async dialect is configured, it can raise MissingGreenlet.
+    if raw_dsn.startswith("postgresql+asyncpg://"):
+        return raw_dsn.replace("postgresql+asyncpg://", "postgresql+psycopg://", 1)
+    return raw_dsn
+
+
+SYNC_DSN = _resolve_sync_dsn(settings.POSTGRES_DSN)
+config.set_main_option("sqlalchemy.url", SYNC_DSN)
 
 # Logging
 if config.config_file_name is not None:
@@ -48,7 +59,7 @@ target_metadata = Base.metadata
 # ----------------------------
 def run_migrations_offline() -> None:
     context.configure(
-        url=settings.POSTGRES_DSN,
+        url=SYNC_DSN,
         target_metadata=target_metadata,
         literal_binds=True,
         compare_type=True,
@@ -64,7 +75,7 @@ def run_migrations_offline() -> None:
 # ----------------------------
 def run_migrations_online() -> None:
     configuration = config.get_section(config.config_ini_section)
-    configuration["sqlalchemy.url"] = settings.POSTGRES_DSN
+    configuration["sqlalchemy.url"] = SYNC_DSN
 
     connectable = engine_from_config(
         configuration,
