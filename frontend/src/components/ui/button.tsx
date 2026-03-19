@@ -8,9 +8,9 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:opacity-90",
-        outline: "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
-        secondary: "bg-secondary text-secondary-foreground hover:opacity-90",
+        default: "bg-primary text-primary-foreground hover:opacity-90 dark:bg-white dark:text-black dark:hover:bg-zinc-200",
+        outline: "border border-input bg-background hover:bg-accent hover:text-accent-foreground dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)] dark:text-[var(--text-primary)] dark:hover:bg-[var(--card-hover)] dark:hover:text-[var(--text-primary)]",
+        secondary: "bg-secondary text-secondary-foreground hover:opacity-90 dark:bg-[var(--bg-secondary)] dark:text-[var(--text-primary)] dark:hover:bg-[var(--bg-tertiary)]",
         ghost: "hover:bg-accent hover:text-accent-foreground",
         destructive: "bg-destructive text-white hover:opacity-90",
       },
