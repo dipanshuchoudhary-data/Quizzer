@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     # ----------------------
     APP_ENV: str = "local"
     APP_URL: str = "http://localhost:3000"
+    FRONTEND_URL: str = "http://localhost:3000"
     CORS_ALLOW_ORIGINS: str = "http://localhost:3000"
 
     # ----------------------
