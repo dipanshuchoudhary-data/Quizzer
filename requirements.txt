@@ -2,37 +2,35 @@ fastapi
 uvicorn[standard]
 
 sqlalchemy>=2.0
-alembic
+asyncpg
 psycopg[binary]
-
-redis
-celery
+alembic
 
 pydantic>=2.0
 pydantic-settings
+pydantic[email]
 
 python-jose[cryptography]
 passlib[bcrypt]
 
-python-multipart
-httpx
+redis
+celery[redis]
 
-langgraph
 langchain-core
 langchain-openai
+langgraph
 tiktoken
 tenacity
 
-python-docx
-python-pptx
 pdfplumber
 pymupdf
-pillow
+python-docx
+python-pptx
 pytesseract
-
-boto3
-
+Pillow
 openpyxl
-pandas
 
+httpx
+boto3
+pandas
 structlog

@@ -1,3 +1,4 @@
+
 [project]
 name = "Quizzer"
 version = "0.1.0"
@@ -5,28 +6,36 @@ description = "Backend-authoritative AI-powered quiz and assessment platform"
 requires-python = ">=3.11"
 
 dependencies = [
+    # Core API
     "fastapi",
     "uvicorn[standard]",
+
     # Database
     "sqlalchemy>=2.0",
     "asyncpg",
     "psycopg[binary]",
     "alembic",
-    # Settings
+
+    # Settings & Validation
     "pydantic>=2.0",
     "pydantic-settings",
     "pydantic[email]",
-    # Auth
-    "python-jose",
-    "argon2-cffi",
-    # Redis
+
+    # Authentication & Security
+    "python-jose[cryptography]",
+    "passlib[bcrypt]",
+
+    # Background Jobs & Cache
     "redis",
-    # Celery
     "celery[redis]",
-    # AI Stack
+
+    # AI / LLM Stack
     "langchain-core",
     "langchain-openai",
     "langgraph",
+    "tiktoken",
+    "tenacity",
+
     # File Processing
     "pdfplumber",
     "pymupdf",
@@ -35,14 +44,12 @@ dependencies = [
     "pytesseract",
     "Pillow",
     "openpyxl",
-    "python-multipart>=0.0.22",
-    "numpy>=2.4.3",
-    "sk>=0.0.1",
-    "learn>=1.0.0",
-    "scikit-learn>=1.8.0",
-    "passlib>=1.7.4",
-    "tesseract>=0.1.3",
-    "psycopg2>=2.9.11",
+
+    # Networking & Utilities
+    "httpx",
+    "boto3",
+    "pandas",
+    "structlog",
 ]
 
 [tool.uv]
