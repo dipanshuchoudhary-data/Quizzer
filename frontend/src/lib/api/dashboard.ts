@@ -69,6 +69,22 @@ export interface LiveExamsResponse {
 }
 
 export interface AnalyticsResponse {
+  filters: {
+    selected: {
+      date_from: string
+      date_to: string
+      quiz: string
+      status: string
+    }
+    quizzes: Array<{
+      value: string
+      label: string
+    }>
+    statuses: Array<{
+      value: string
+      label: string
+    }>
+  }
   metrics: {
     total_attempts: number
     completion_rate: number
@@ -76,12 +92,38 @@ export interface AnalyticsResponse {
     total_violations: number
     highest_score: number
     lowest_score: number
+    active_quizzes: number
   }
-  score_distribution: Array<{
-    quiz_name: string
+  metric_deltas: Record<
+    string,
+    {
+      delta: number
+      delta_percent: number
+      direction: "up" | "down" | "flat"
+      context: string
+    }
+  >
+  score_distribution: {
+    overall: Array<{
+      range: string
+      students: number
+    }>
+    by_quiz: Array<{
+      quiz_name: string
+      students: number
+      average_score: number
+    }>
+  }
+  completion_trend: Array<{
+    date: string
+    label: string
+    attempts: number
+    completion_rate: number
     average_score: number
-    highest_score: number
-    lowest_score: number
+  }>
+  violations_by_quiz: Array<{
+    quiz_name: string
+    violations: number
   }>
   table: Array<{
     quiz_id: string
@@ -91,6 +133,7 @@ export interface AnalyticsResponse {
     completion_rate: number
     violations: number
   }>
+  insights: string[]
 }
 
 export const dashboardApi = {
@@ -104,8 +147,13 @@ export const dashboardApi = {
     return data
   },
 
-  async getAnalytics(): Promise<AnalyticsResponse> {
-    const { data } = await api.get<AnalyticsResponse>("/dashboard/analytics")
+  async getAnalytics(params?: {
+    date_from?: string
+    date_to?: string
+    quiz?: string
+    status?: string
+  }): Promise<AnalyticsResponse> {
+    const { data } = await api.get<AnalyticsResponse>("/dashboard/analytics", { params })
     return data
   },
 }
