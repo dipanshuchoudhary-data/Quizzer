@@ -24,7 +24,7 @@ export function Sidebar() {
     <>
       <div
         className={cn(
-          "fixed inset-0 z-30 bg-black/30 backdrop-blur-sm transition-opacity duration-200 md:hidden",
+          "fixed inset-0 z-30 bg-black/40 backdrop-blur-sm transition-opacity duration-200 lg:hidden",
           mobileSidebarOpen ? "opacity-100" : "pointer-events-none opacity-0"
         )}
         onClick={() => setMobileSidebarOpen(false)}
@@ -32,13 +32,13 @@ export function Sidebar() {
       />
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex h-screen min-h-0 flex-col border-r border-sidebar-border/80 bg-sidebar text-sidebar-foreground transition-all duration-200 md:sticky md:top-0",
-          sidebarCollapsed ? "w-[84px]" : "w-[272px]",
-          mobileSidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+          "fixed inset-y-0 left-0 z-40 flex h-screen min-h-0 max-w-[88vw] flex-col border-r border-sidebar-border/80 bg-sidebar text-sidebar-foreground transition-all duration-200 lg:sticky lg:top-0 lg:max-w-none",
+          sidebarCollapsed ? "lg:w-[84px]" : "w-[272px]",
+          mobileSidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}
       >
-        <div className="flex h-16 items-center justify-between px-3">
-          <div className={cn("min-w-0", sidebarCollapsed && "hidden")}>
+        <div className="flex h-16 items-center justify-between px-4 lg:px-3">
+          <div className={cn("min-w-0", sidebarCollapsed && "hidden lg:block")}>
             <p className="truncate text-lg font-semibold tracking-tight text-sidebar-foreground">Quizzer</p>
             <p className="truncate text-xs text-sidebar-foreground/65">Professor Workspace</p>
           </div>
@@ -47,14 +47,23 @@ export function Sidebar() {
             variant="ghost"
             onClick={toggleSidebar}
             aria-label="Toggle sidebar"
-            className="text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            className="hidden text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground lg:inline-flex"
           >
             {sidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={() => setMobileSidebarOpen(false)}
+            aria-label="Close navigation"
+            className="text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground lg:hidden"
+          >
+            <PanelLeftClose size={16} />
           </Button>
         </div>
 
         <nav
-          className="sidebar-scroll flex-1 min-h-0 space-y-6 overflow-y-auto bg-sidebar px-2 pb-6"
+          className="sidebar-scroll flex-1 min-h-0 space-y-6 overflow-y-auto bg-sidebar px-3 pb-6"
           aria-label="Primary"
         >
           {NAV_SECTIONS.map((section) => (
