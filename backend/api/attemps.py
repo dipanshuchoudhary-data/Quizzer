@@ -223,7 +223,7 @@ async def start_public_attempt(
     payload: StartPublicAttemptRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(Quiz).where(Quiz.public_slug == payload.public_exam_id))
+    result = await db.execute(select(Quiz).where(Quiz.public_id == payload.public_exam_id))
     quiz = result.scalar_one_or_none()
 
     if not quiz:
