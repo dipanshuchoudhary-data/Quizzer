@@ -16,7 +16,6 @@ import { sectionApi } from "@/lib/api/section"
 import { questionApi } from "@/lib/api/question"
 import { StatusBadge } from "@/components/common/StatusBadge"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-
 const STORAGE_KEY = "quizzer_ai_creation_wizard"
 
 interface WizardState {
@@ -199,7 +198,9 @@ export function QuizCreationWizard({ onDone }: { onDone: () => void }) {
     onError: (error: unknown) => toast.error(getApiErrorMessage(error, "Publish validation failed")),
   })
 
-  const canStart = state.title.trim().length > 2 && state.sourceText.trim().length > 0 && state.sections.length > 0
+  const hasTitle = state.title.trim().length > 0
+  const canProceedFromMetadata = hasTitle
+  const canStart = hasTitle && state.sourceText.trim().length > 0 && state.sections.length > 0
 
   const allQuestionsApproved = questions.length > 0 && questions.every((q) => q.status === "APPROVED")
 
@@ -228,30 +229,37 @@ export function QuizCreationWizard({ onDone }: { onDone: () => void }) {
       {step === 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Content Source</CardTitle>
+            <p className="text-xs font-medium uppercase tracking-wide text-primary">Step 1 of 5 - Quiz Details</p>
+            <CardTitle>Quiz Details</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Start by naming your quiz and adding optional context. In the next step, you will shape the section blueprint before
+              AI generation begins.
+            </p>
           </CardHeader>
           <CardContent className="space-y-3">
             <Input
-              placeholder="Quiz title"
+              placeholder="e.g., Intro to Thermodynamics - Quiz 1"
               value={state.title}
               onChange={(event) => setState((prev) => ({ ...prev, title: event.target.value }))}
             />
+            {!hasTitle ? <p className="text-xs text-destructive">A quiz title is required to continue.</p> : null}
             <Textarea
-              placeholder="Description (optional)"
+              placeholder="Optional: Add learner context, focus topics, or goals for this quiz."
               value={state.description}
               onChange={(event) => setState((prev) => ({ ...prev, description: event.target.value }))}
             />
 
             <Textarea
               className="min-h-40"
-              placeholder="Paste content to generate quiz questions..."
+              placeholder="Paste or draft the source material AI should use (lecture notes, textbook excerpt, syllabus points)."
               value={state.sourceText}
               onChange={(event) => setState((prev) => ({ ...prev, sourceText: event.target.value }))}
             />
+            <p className="text-xs text-muted-foreground">Tip: more specific source text usually produces higher quality questions.</p>
 
             <div className="flex justify-end">
-              <Button onClick={() => setStep(1)} disabled={!canStart}>
-                Next: Structure
+              <Button onClick={() => setStep(1)} disabled={!canProceedFromMetadata}>
+                Continue to Blueprint
               </Button>
             </div>
           </CardContent>
