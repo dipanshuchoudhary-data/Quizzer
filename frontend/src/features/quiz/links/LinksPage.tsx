@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Copy, ExternalLink, Link2, Trash2 } from "lucide-react"
 import { toast } from "sonner"
@@ -30,12 +30,7 @@ export function LinksPage({ quizId }: { quizId: string }) {
     queryFn: () => quizApi.getSourceReferences(quizId),
   })
 
-  const publishedUrl = useMemo(() => {
-    if (!quiz?.public_slug) return null
-    const path = `/exam/${quiz.public_slug}`
-    if (typeof window === "undefined") return path
-    return `${window.location.origin}${path}`
-  }, [quiz?.public_slug])
+  const publishedUrl = quiz?.is_published ? quiz.public_url ?? null : null
 
   const revoke = useMutation({
     mutationFn: documentApi.remove,
