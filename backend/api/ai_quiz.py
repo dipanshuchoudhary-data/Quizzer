@@ -66,6 +66,75 @@ def _fetch_url_content(url: str) -> str:
     return parser.get_text()
 
 
+def _normalize_question_type_strict(value: str | None) -> str | None:
+    token = str(value or "").strip().upper().replace("-", "_").replace(" ", "_").replace("/", "_")
+    aliases = {
+        "MCQ": "MCQ",
+        "TRUEFALSE": "TRUE_FALSE",
+        "TRUE_FALSE": "TRUE_FALSE",
+        "BOOLEAN": "TRUE_FALSE",
+        "TF": "TRUE_FALSE",
+        "SHORTANSWER": "SHORT_ANSWER",
+        "SHORT_ANSWER": "SHORT_ANSWER",
+        "SHORTANS": "SHORT_ANSWER",
+        "SA": "SHORT_ANSWER",
+        "LONGANSWER": "LONG_ANSWER",
+        "LONG_ANSWER": "LONG_ANSWER",
+        "LA": "LONG_ANSWER",
+    }
+    return aliases.get(token)
+
+
+def _normalize_blueprint_sections(blueprint: dict) -> list[dict]:
+    sections = blueprint.get("sections", [])
+    if not isinstance(sections, list) or len(sections) == 0:
+        raise HTTPException(status_code=422, detail="blueprint.sections must be a non-empty list")
+
+    normalized_sections: list[dict] = []
+    for idx, section in enumerate(sections):
+        if not isinstance(section, dict):
+            raise HTTPException(status_code=422, detail=f"Section {idx + 1}: must be an object")
+
+        raw_count = section.get("number_of_questions") or section.get("numberOfQuestions") or 1
+        try:
+            number_of_questions = int(raw_count)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail=f"Section {idx + 1}: number_of_questions must be an integer") from exc
+        if number_of_questions <= 0:
+            raise HTTPException(status_code=422, detail=f"Section {idx + 1}: number_of_questions must be greater than 0")
+
+        raw_types = section.get("question_types")
+        legacy_type = section.get("questionType") or section.get("question_type")
+        if raw_types is None:
+            raw_types = [legacy_type] if legacy_type is not None else ["MCQ"]
+
+        if not isinstance(raw_types, list):
+            raise HTTPException(status_code=422, detail=f"Section {idx + 1}: question_types must be a list")
+        if len(raw_types) == 0:
+            raise HTTPException(status_code=422, detail=f"Section {idx + 1}: question_types must not be empty")
+
+        normalized_types: list[str] = []
+        for raw_type in raw_types:
+            normalized = _normalize_question_type_strict(str(raw_type))
+            if not normalized:
+                raise HTTPException(status_code=422, detail=f"Section {idx + 1}: invalid question type '{raw_type}'")
+            if normalized not in normalized_types:
+                normalized_types.append(normalized)
+
+        if len(normalized_types) == 0:
+            raise HTTPException(status_code=422, detail=f"Section {idx + 1}: question_types must not be empty")
+
+        normalized_sections.append(
+            {
+                **section,
+                "number_of_questions": number_of_questions,
+                "question_types": normalized_types,
+            }
+        )
+
+    return normalized_sections
+
+
 @router.post("/source/text")
 async def add_text_source(
     payload: dict,
@@ -222,6 +291,7 @@ async def generate_quiz_from_sources(
         raise HTTPException(status_code=400, detail="No source content available")
 
     blueprint = dict(blueprint)
+    blueprint["sections"] = _normalize_blueprint_sections(blueprint)
     if source_mode:
         blueprint["source_mode"] = source_mode
     source_refs = [entry.get("url") for entry in sources.get("url_sources", []) if entry.get("url")]
