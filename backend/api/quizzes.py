@@ -9,6 +9,8 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func, select
+from sqlalchemy.exc import ProgrammingError, SQLAlchemyError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from backend.core.database import get_db
 from backend.api.deps import get_current_user
@@ -59,6 +61,44 @@ DEFAULT_QUIZ_SETTINGS = {
 }
 
 
+class QuizSettingsPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    duration: int = Field(ge=5)
+    default_marks: int = Field(ge=1)
+    shuffle_questions: bool
+    shuffle_options: bool
+    require_fullscreen: bool
+    block_tab_switch: bool
+    block_copy_paste: bool
+    violation_limit: int = Field(ge=1)
+    negative_marking: bool
+    penalty_wrong: int = Field(ge=0)
+    violation_penalty: int = Field(ge=0)
+    attempts_allowed: int = Field(ge=1)
+    allow_resume: bool
+    prevent_duplicate: bool
+
+
+class QuizSettingsResponse(BaseModel):
+    success: bool = True
+    message: str
+    settings: QuizSettingsPayload
+
+
+def _validate_quiz_settings_payload(payload: dict, base: dict) -> dict:
+    merged = {**base, **payload}
+    try:
+        validated = QuizSettingsPayload.model_validate(merged)
+    except ValidationError as exc:
+        errors = []
+        for item in exc.errors():
+            field = ".".join(str(p) for p in item.get("loc", [])) or "payload"
+            errors.append(f"{field}: {item.get('msg', 'invalid value')}")
+        raise HTTPException(status_code=422, detail="Invalid settings payload: " + "; ".join(errors)) from exc
+    return validated.model_dump()
+
+
 def _normalize_question_type(value: str | None) -> str:
     token = str(value or "").strip().upper().replace("-", "_").replace(" ", "_").replace("/", "_")
     if token in {"TRUEFALSE", "TRUE_FALSE", "BOOLEAN", "TF"}:
@@ -70,6 +110,31 @@ def _normalize_question_type(value: str | None) -> str:
     return "MCQ"
 
 
+def _normalize_question_type_strict(value: str | None) -> str | None:
+    token = str(value or "").strip().upper().replace("-", "_").replace(" ", "_").replace("/", "_")
+    aliases = {
+        "MCQ": "MCQ",
+        "TRUEFALSE": "TRUE_FALSE",
+        "TRUE_FALSE": "TRUE_FALSE",
+        "BOOLEAN": "TRUE_FALSE",
+        "TF": "TRUE_FALSE",
+        "SHORTANSWER": "SHORT_ANSWER",
+        "SHORT_ANSWER": "SHORT_ANSWER",
+        "SHORTANS": "SHORT_ANSWER",
+        "SA": "SHORT_ANSWER",
+        "LONGANSWER": "LONG_ANSWER",
+        "LONG_ANSWER": "LONG_ANSWER",
+        "LA": "LONG_ANSWER",
+    }
+    return aliases.get(token)
+
+
+def _distribute_question_counts(total: int, type_count: int) -> list[int]:
+    base = total // type_count
+    remainder = total % type_count
+    return [base + (1 if idx < remainder else 0) for idx in range(type_count)]
+
+
 def _parse_blueprint_sections(blueprint: dict) -> list[dict]:
     raw = blueprint.get("sections", [])
     if not isinstance(raw, list):
@@ -78,15 +143,52 @@ def _parse_blueprint_sections(blueprint: dict) -> list[dict]:
     for idx, section in enumerate(raw):
         if not isinstance(section, dict):
             continue
-        parsed.append(
-            {
-                "index": idx,
-                "title": str(section.get("title") or f"Section {idx + 1}").strip(),
-                "number_of_questions": max(1, int(section.get("numberOfQuestions") or section.get("number_of_questions") or 1)),
-                "question_type": _normalize_question_type(section.get("questionType") or section.get("question_type")),
-                "marks_per_question": max(1, int(section.get("marksPerQuestion") or section.get("marks_per_question") or 1)),
-            }
-        )
+
+        raw_count = section.get("numberOfQuestions") or section.get("number_of_questions") or 1
+        try:
+            number_of_questions = int(raw_count)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"Section {idx + 1}: number_of_questions must be an integer") from exc
+        if number_of_questions <= 0:
+            raise ValueError(f"Section {idx + 1}: number_of_questions must be greater than 0")
+
+        raw_types = section.get("question_types")
+        legacy_type = section.get("questionType") or section.get("question_type")
+        if raw_types is None:
+            raw_types = [legacy_type] if legacy_type is not None else ["MCQ"]
+        if not isinstance(raw_types, list):
+            raise ValueError(f"Section {idx + 1}: question_types must be a list")
+        if len(raw_types) == 0:
+            raise ValueError(f"Section {idx + 1}: question_types must not be empty")
+
+        normalized_types: list[str] = []
+        for raw_type in raw_types:
+            normalized = _normalize_question_type_strict(str(raw_type))
+            if not normalized:
+                raise ValueError(f"Section {idx + 1}: invalid question type '{raw_type}'")
+            if normalized not in normalized_types:
+                normalized_types.append(normalized)
+        if len(normalized_types) == 0:
+            raise ValueError(f"Section {idx + 1}: question_types must not be empty")
+
+        raw_title = str(section.get("title") or "").strip()
+        marks_per_question = max(1, int(section.get("marksPerQuestion") or section.get("marks_per_question") or 1))
+        for type_idx, question_type in enumerate(normalized_types):
+            allocated = _distribute_question_counts(number_of_questions, len(normalized_types))[type_idx]
+            if allocated <= 0:
+                continue
+            title = raw_title if raw_title else f"Section {len(parsed) + 1}"
+            if len(normalized_types) > 1:
+                title = f"{title} - {question_type}"
+            parsed.append(
+                {
+                    "index": len(parsed),
+                    "title": title,
+                    "number_of_questions": allocated,
+                    "question_type": question_type,
+                    "marks_per_question": marks_per_question,
+                }
+            )
     return parsed
 
 
@@ -152,11 +254,30 @@ def _serialize_quiz_settings(settings_obj: QuizSettings | None, duration_minutes
     }
 
 
+def _is_missing_quiz_settings_table_error(error: Exception) -> bool:
+    text = str(error)
+    return "relation \"quiz_settings\" does not exist" in text or "UndefinedTableError" in text
+
+
+def _serialize_legacy_quiz_settings(quiz: Quiz) -> dict:
+    raw = quiz.settings_json if isinstance(quiz.settings_json, dict) else {}
+    return _normalize_quiz_settings_payload(raw, quiz.duration_minutes)
+
+
 async def _get_owned_quiz(quiz_id: uuid.UUID, db: AsyncSession, current_user: User) -> Quiz:
     quiz = await db.get(Quiz, quiz_id)
     if not quiz:
         raise HTTPException(status_code=404, detail="Quiz not found")
     if quiz.created_by != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this quiz")
+    return quiz
+
+
+async def _get_owned_quiz_by_user_id(quiz_id: uuid.UUID, db: AsyncSession, owner_user_id: uuid.UUID) -> Quiz:
+    quiz = await db.get(Quiz, quiz_id)
+    if not quiz:
+        raise HTTPException(status_code=404, detail="Quiz not found")
+    if quiz.created_by != owner_user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this quiz")
     return quiz
 
@@ -177,12 +298,53 @@ async def _invalidate_dashboard_cache(user_id: uuid.UUID) -> None:
     await cache_delete(f"dashboard:analytics:{user_id}")
 
 
+def _get_frontend_base_url() -> str:
+    return str(getattr(settings, "FRONTEND_URL", None) or settings.APP_URL).rstrip("/")
+
+
+def _build_public_url(public_id: str) -> str:
+    if not public_id or not isinstance(public_id, str):
+        raise ValueError("public_id must be a non-empty string")
+    base_url = _get_frontend_base_url()
+    if not base_url:
+        raise ValueError("FRONTEND_URL is not configured")
+    return f"{base_url}/exam/{public_id}"
+
+
+async def _generate_unique_public_id(db: AsyncSession) -> str:
+    for _ in range(10):
+        candidate = secrets.token_urlsafe(9).replace("-", "").replace("_", "")
+        existing = await db.execute(select(Quiz.id).where(Quiz.public_id == candidate).limit(1))
+        if existing.scalar_one_or_none() is None:
+            return candidate
+    raise RuntimeError("Failed to generate a unique public quiz identifier")
+
+
+def _serialize_public_link(quiz: Quiz) -> dict:
+    public_id = quiz.public_id
+    if quiz.is_published and not public_id:
+        raise ValueError("Published quiz is missing public_id")
+
+    public_url = None
+    if public_id:
+        public_url = _build_public_url(public_id)
+        if not isinstance(public_url, str) or not public_url.strip():
+            raise ValueError("Generated public_url is invalid")
+
+    return {
+        "public_id": public_id,
+        "public_url": public_url,
+    }
+
+
 def _serialize_quiz(quiz: Quiz, question_count: int | None = None) -> dict:
+    public_link = _serialize_public_link(quiz)
     return {
         "id": str(quiz.id),
         "title": quiz.title,
         "description": quiz.description,
-        "public_slug": quiz.public_slug,
+        "public_id": public_link["public_id"],
+        "public_url": public_link["public_url"],
         "duration_minutes": quiz.duration_minutes,
         "academic_type": quiz.academic_type,
         "ai_generation_status": quiz.ai_generation_status,
@@ -276,56 +438,153 @@ async def get_quiz(
     return _serialize_quiz(quiz, question_count=question_count)
 
 
-@router.get("/{quiz_id}/settings")
+@router.get("/{quiz_id}/settings", response_model=QuizSettingsResponse)
 async def get_quiz_settings(
     quiz_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    quiz = await _get_owned_quiz(quiz_id, db, current_user)
-    settings_record = await _get_quiz_settings_record(db, quiz_id, current_user.id)
-    return _serialize_quiz_settings(settings_record, quiz.duration_minutes)
+    current_user_id = current_user.id
+    quiz = await _get_owned_quiz_by_user_id(quiz_id, db, current_user_id)
+    try:
+        settings_record = await _get_quiz_settings_record(db, quiz_id, current_user_id)
+        return {
+            "success": True,
+            "message": "Settings loaded successfully",
+            "settings": _serialize_quiz_settings(settings_record, quiz.duration_minutes),
+        }
+    except SQLAlchemyError as exc:
+        await db.rollback()
+        if _is_missing_quiz_settings_table_error(exc):
+            quiz = await _get_owned_quiz_by_user_id(quiz_id, db, current_user_id)
+            logger.warning("quiz_settings table missing; serving legacy JSON settings", extra={"quiz_id": str(quiz_id)})
+            return {
+                "success": True,
+                "message": "Settings loaded successfully",
+                "settings": _serialize_legacy_quiz_settings(quiz),
+            }
+
+        logger.exception(
+            "Failed loading quiz settings",
+            extra={"quiz_id": str(quiz_id), "owner_user_id": str(current_user_id)},
+        )
+        raise HTTPException(status_code=500, detail="Failed to load settings") from exc
 
 
-@router.patch("/{quiz_id}/settings")
+@router.patch("/{quiz_id}/settings", response_model=QuizSettingsResponse)
 async def update_quiz_settings(
     quiz_id: uuid.UUID,
-    payload: dict,
+    payload: QuizSettingsPayload,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    quiz = await _get_owned_quiz(quiz_id, db, current_user)
-    normalized = _normalize_quiz_settings_payload(payload, quiz.duration_minutes)
-    settings_record = await _get_quiz_settings_record(db, quiz_id, current_user.id)
+    current_user_id = current_user.id
+    quiz = await _get_owned_quiz_by_user_id(quiz_id, db, current_user_id)
+    payload_dict = payload.model_dump()
 
-    if not settings_record:
-        settings_record = QuizSettings(
-            quiz_id=quiz_id,
-            owner_user_id=current_user.id,
+    try:
+        settings_record = await _get_quiz_settings_record(db, quiz_id, current_user_id)
+    except SQLAlchemyError as exc:
+        if not _is_missing_quiz_settings_table_error(exc):
+            logger.exception(
+                "Failed querying quiz_settings table",
+                extra={"quiz_id": str(quiz_id), "owner_user_id": str(current_user_id)},
+            )
+            await db.rollback()
+            raise HTTPException(status_code=500, detail="Failed to query settings") from exc
+
+        logger.warning("quiz_settings table missing; serving legacy JSON settings", extra={"quiz_id": str(quiz_id)})
+        await db.rollback()
+        quiz = await _get_owned_quiz_by_user_id(quiz_id, db, current_user_id)
+
+        try:
+            normalized = _normalize_quiz_settings_payload(payload_dict, quiz.duration_minutes)
+            current_settings = _serialize_legacy_quiz_settings(quiz)
+            normalized = _validate_quiz_settings_payload(normalized, current_settings)
+
+            quiz.settings_json = normalized
+            quiz.duration_minutes = normalized["duration"]
+
+            await db.commit()
+            await db.refresh(quiz)
+            logger.warning("quiz_settings table missing; persisted settings in legacy JSON", extra={"quiz_id": str(quiz_id)})
+            return {
+                "success": True,
+                "message": "Settings saved successfully",
+                "settings": normalized,
+            }
+        except HTTPException:
+            await db.rollback()
+            raise
+        except SQLAlchemyError as db_exc:
+            logger.exception(
+                "Failed saving legacy quiz settings",
+                extra={"quiz_id": str(quiz_id), "owner_user_id": str(current_user_id)},
+            )
+            await db.rollback()
+            raise HTTPException(status_code=500, detail="Failed to save settings due to a database error") from db_exc
+        except Exception as unexpected:
+            logger.exception(
+                "Unexpected error while saving legacy quiz settings",
+                extra={"quiz_id": str(quiz_id), "owner_user_id": str(current_user_id)},
+            )
+            await db.rollback()
+            raise HTTPException(status_code=500, detail="Unexpected error while saving settings") from unexpected
+
+    try:
+        current_settings = _serialize_quiz_settings(settings_record, quiz.duration_minutes)
+        normalized = _normalize_quiz_settings_payload(payload_dict, quiz.duration_minutes)
+        normalized = _validate_quiz_settings_payload(normalized, current_settings)
+
+        if not settings_record:
+            settings_record = QuizSettings(
+                quiz_id=quiz_id,
+                owner_user_id=current_user.id,
+            )
+            db.add(settings_record)
+
+        settings_record.duration = normalized["duration"]
+        settings_record.default_marks = normalized["default_marks"]
+        settings_record.shuffle_questions = normalized["shuffle_questions"]
+        settings_record.shuffle_options = normalized["shuffle_options"]
+        settings_record.require_fullscreen = normalized["require_fullscreen"]
+        settings_record.block_tab_switch = normalized["block_tab_switch"]
+        settings_record.block_copy_paste = normalized["block_copy_paste"]
+        settings_record.violation_limit = normalized["violation_limit"]
+        settings_record.negative_marking = normalized["negative_marking"]
+        settings_record.penalty_wrong = normalized["penalty_wrong"]
+        settings_record.violation_penalty = normalized["violation_penalty"]
+        settings_record.attempts_allowed = normalized["attempts_allowed"]
+        settings_record.allow_resume = normalized["allow_resume"]
+        settings_record.prevent_duplicate = normalized["prevent_duplicate"]
+
+        quiz.duration_minutes = normalized["duration"]
+
+        await db.commit()
+        await db.refresh(settings_record)
+        await db.refresh(quiz)
+        return {
+            "success": True,
+            "message": "Settings saved successfully",
+            "settings": _serialize_quiz_settings(settings_record, quiz.duration_minutes),
+        }
+    except HTTPException:
+        await db.rollback()
+        raise
+    except SQLAlchemyError as db_exc:
+        logger.exception(
+            "Failed saving quiz settings",
+            extra={"quiz_id": str(quiz_id), "owner_user_id": str(current_user_id)},
         )
-        db.add(settings_record)
-
-    settings_record.duration = normalized["duration"]
-    settings_record.default_marks = normalized["default_marks"]
-    settings_record.shuffle_questions = normalized["shuffle_questions"]
-    settings_record.shuffle_options = normalized["shuffle_options"]
-    settings_record.require_fullscreen = normalized["require_fullscreen"]
-    settings_record.block_tab_switch = normalized["block_tab_switch"]
-    settings_record.block_copy_paste = normalized["block_copy_paste"]
-    settings_record.violation_limit = normalized["violation_limit"]
-    settings_record.negative_marking = normalized["negative_marking"]
-    settings_record.penalty_wrong = normalized["penalty_wrong"]
-    settings_record.violation_penalty = normalized["violation_penalty"]
-    settings_record.attempts_allowed = normalized["attempts_allowed"]
-    settings_record.allow_resume = normalized["allow_resume"]
-    settings_record.prevent_duplicate = normalized["prevent_duplicate"]
-
-    quiz.duration_minutes = normalized["duration"]
-
-    await db.commit()
-    await db.refresh(settings_record)
-    await db.refresh(quiz)
-    return _serialize_quiz_settings(settings_record, quiz.duration_minutes)
+        await db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to save settings due to a database error") from db_exc
+    except Exception as unexpected:
+        logger.exception(
+            "Unexpected error while saving quiz settings",
+            extra={"quiz_id": str(quiz_id), "owner_user_id": str(current_user_id)},
+        )
+        await db.rollback()
+        raise HTTPException(status_code=500, detail="Unexpected error while saving settings") from unexpected
 
 
 @router.patch("/{quiz_id}")
@@ -397,6 +656,25 @@ async def delete_quiz(
 
 
 # --------------------------------------------------
+# List Sections
+# --------------------------------------------------
+
+@router.get("/{quiz_id}/sections")
+async def list_sections(
+    quiz_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    await _get_owned_quiz(quiz_id, db, current_user)
+    result = await db.execute(
+        select(QuizSection)
+        .where(QuizSection.quiz_id == quiz_id)
+        .order_by(QuizSection.created_at.asc())
+    )
+    return result.scalars().all()
+
+
+# --------------------------------------------------
 # Create Section
 # --------------------------------------------------
 
@@ -432,39 +710,6 @@ async def create_section(
     return section
 
 
-# --------------------------------------------------
-# List Sections
-# --------------------------------------------------
-
-@router.get("/{quiz_id}/sections")
-async def list_sections(
-    quiz_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-
-    quiz = await db.get(Quiz, quiz_id)
-
-    if not quiz:
-        raise HTTPException(status_code=404, detail="Quiz not found")
-
-    if quiz.created_by != current_user.id:
-        raise HTTPException(
-            status_code=403,
-            detail="Not authorized to access this quiz",
-        )
-
-    result = await db.execute(
-        select(QuizSection).where(QuizSection.quiz_id == quiz_id).order_by(QuizSection.created_at.asc())
-    )
-
-    return result.scalars().all()
-
-
-# --------------------------------------------------
-# Reorder Sections
-# --------------------------------------------------
-
 @router.post("/{quiz_id}/sections/reorder")
 async def reorder_sections(
     quiz_id: uuid.UUID,
@@ -472,17 +717,7 @@ async def reorder_sections(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-
-    quiz = await db.get(Quiz, quiz_id)
-
-    if not quiz:
-        raise HTTPException(status_code=404, detail="Quiz not found")
-
-    if quiz.created_by != current_user.id:
-        raise HTTPException(
-            status_code=403,
-            detail="Not authorized to modify this quiz",
-        )
+    await _get_owned_quiz(quiz_id, db, current_user)
 
     section_ids = payload.get("section_ids")
     if not isinstance(section_ids, list):
@@ -544,6 +779,14 @@ async def generate_ai_quiz(
             detail="extracted_text and blueprint required",
         )
 
+    try:
+        normalized_sections = _parse_blueprint_sections(dict(blueprint))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if not normalized_sections:
+        raise HTTPException(status_code=422, detail="Blueprint sections missing or invalid")
+    blueprint = {**dict(blueprint), "sections": normalized_sections}
+
     job = AIJob(
         quiz_id=quiz_id,
         job_type="QUIZ_CREATION",
@@ -591,6 +834,14 @@ async def init_ai_quiz_stream(
     professor_note = payload.get("professor_note")
     if not extracted_text or not blueprint:
         raise HTTPException(status_code=400, detail="extracted_text and blueprint required")
+
+    try:
+        normalized_sections = _parse_blueprint_sections(dict(blueprint))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if not normalized_sections:
+        raise HTTPException(status_code=422, detail="Blueprint sections missing or invalid")
+    blueprint = {**dict(blueprint), "sections": normalized_sections}
 
     quiz.ai_generation_status = "PROCESSING"
     job = AIJob(
@@ -641,7 +892,10 @@ async def stream_ai_quiz_generation(
     extracted_text = str(job.meta.get("extracted_text") or "")
     blueprint = job.meta.get("blueprint") if isinstance(job.meta.get("blueprint"), dict) else {}
     professor_note = job.meta.get("professor_note")
-    blueprint_sections = _parse_blueprint_sections(blueprint)
+    try:
+        blueprint_sections = _parse_blueprint_sections(blueprint)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     strict_source_alignment = bool(blueprint.get("strict_source_alignment"))
     auto_detect_structure = bool(blueprint.get("auto_detect_structure"))
     if not blueprint_sections:
@@ -1152,19 +1406,33 @@ async def publish_quiz(
     if quiz.is_archived:
         raise HTTPException(status_code=400, detail="Archived quizzes cannot be published")
 
-    if not quiz.public_slug:
-        quiz.public_slug = secrets.token_urlsafe(9).replace("-", "").replace("_", "")
+    try:
+        if not quiz.public_id:
+            quiz.public_id = await _generate_unique_public_id(db)
 
-    quiz.is_published = True
-    quiz.ai_generation_status = "PUBLISHED"
+        quiz.is_published = True
+        quiz.ai_generation_status = "PUBLISHED"
+        public_link = _serialize_public_link(quiz)
 
-    await db.commit()
+        await db.commit()
+        await db.refresh(quiz)
+    except ValueError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to generate a public quiz link") from exc
+    except SQLAlchemyError as exc:
+        await db.rollback()
+        logger.exception("Failed publishing quiz", extra={"quiz_id": str(quiz_id), "user_id": str(current_user.id)})
+        raise HTTPException(status_code=500, detail="Failed to publish quiz due to a database error") from exc
+
     await _invalidate_dashboard_cache(current_user.id)
 
     return {
         "message": "Quiz published successfully",
-        "public_slug": quiz.public_slug,
-        "public_url": f"/exam/{quiz.public_slug}",
+        "public_id": public_link["public_id"],
+        "public_url": public_link["public_url"],
     }
 
 
@@ -1216,7 +1484,6 @@ async def unpublish_quiz(
         )
 
     quiz.is_published = False
-    quiz.public_slug = None
 
     if quiz.ai_generation_status == "PUBLISHED":
         quiz.ai_generation_status = "APPROVED"
