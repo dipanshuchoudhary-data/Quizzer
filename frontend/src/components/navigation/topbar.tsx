@@ -67,19 +67,19 @@ export function Topbar() {
   const initials = getInitials(displayName)
 
   return (
-    <header className="sticky top-0 z-20 border-b bg-background/90 px-4 py-3 backdrop-blur md:px-6">
-      <div className="flex items-center gap-3">
+    <header className="sticky top-0 z-20 border-b bg-background/90 px-4 py-3 backdrop-blur sm:px-6">
+      <div className="flex flex-wrap items-center gap-3">
         <Button
           size="icon"
           variant="ghost"
-          className="md:hidden"
+          className="lg:hidden"
           aria-label="Open navigation"
           onClick={toggleMobileSidebar}
         >
           <Menu className="size-4" />
         </Button>
 
-        <nav className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
+        <nav className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden text-sm text-muted-foreground">
           {breadcrumbs.map((crumb, index) => (
             <div key={`${crumb.label}-${index}`} className="flex min-w-0 items-center gap-2">
               {crumb.href ? (
@@ -100,18 +100,18 @@ export function Topbar() {
           ))}
         </nav>
 
-        <div className="hidden flex-1 px-4 lg:block">
+        <div className="order-3 hidden w-full lg:order-none lg:block lg:flex-1 lg:px-4">
           <GlobalSearch className="max-w-xl" />
         </div>
 
         <div className="ml-auto flex items-center gap-2">
-          <Button className="hidden sm:inline-flex" onClick={() => router.push("/quizzes/create")}>
+          <Button className="hidden h-11 sm:inline-flex" onClick={() => router.push("/quizzes/create")}>
             <Plus className="size-4" />
             Create Quiz
           </Button>
           <Button
             size="icon"
-            className="sm:hidden"
+            className="h-11 w-11 sm:hidden"
             aria-label="Create quiz"
             onClick={() => router.push("/quizzes/create")}
           >
@@ -170,6 +170,9 @@ export function Topbar() {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+      </div>
+      <div className="mt-3 lg:hidden">
+        <GlobalSearch />
       </div>
     </header>
   )
