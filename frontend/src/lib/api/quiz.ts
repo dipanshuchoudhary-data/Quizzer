@@ -1,3 +1,4 @@
+import axios from "axios"
 import { api } from "@/lib/api/client"
 import { env } from "@/lib/env"
 import { defaultQuizExamSettings, type Quiz, type QuizExamSettings } from "@/types/quiz"
@@ -26,6 +27,102 @@ export interface SourceReference {
   url?: string
   content?: string
   note?: string
+}
+
+interface QuizSettingsEnvelope {
+  success?: boolean
+  message?: string
+  settings?: Partial<QuizExamSettings>
+}
+
+function normalizeQuizSettingsPayload(payload: Partial<QuizExamSettings>): QuizExamSettings {
+  return {
+    duration: Number(payload.duration ?? defaultQuizExamSettings.duration),
+    default_marks: Number(payload.default_marks ?? defaultQuizExamSettings.default_marks),
+    shuffle_questions: Boolean(payload.shuffle_questions ?? defaultQuizExamSettings.shuffle_questions),
+    shuffle_options: Boolean(payload.shuffle_options ?? defaultQuizExamSettings.shuffle_options),
+    require_fullscreen: Boolean(payload.require_fullscreen ?? defaultQuizExamSettings.require_fullscreen),
+    block_tab_switch: Boolean(payload.block_tab_switch ?? defaultQuizExamSettings.block_tab_switch),
+    block_copy_paste: Boolean(payload.block_copy_paste ?? defaultQuizExamSettings.block_copy_paste),
+    violation_limit: Number(payload.violation_limit ?? defaultQuizExamSettings.violation_limit),
+    negative_marking: Boolean(payload.negative_marking ?? defaultQuizExamSettings.negative_marking),
+    penalty_wrong: Number(payload.penalty_wrong ?? defaultQuizExamSettings.penalty_wrong),
+    violation_penalty: Number(payload.violation_penalty ?? defaultQuizExamSettings.violation_penalty),
+    attempts_allowed: Number(payload.attempts_allowed ?? defaultQuizExamSettings.attempts_allowed),
+    allow_resume: Boolean(payload.allow_resume ?? defaultQuizExamSettings.allow_resume),
+    prevent_duplicate: Boolean(payload.prevent_duplicate ?? defaultQuizExamSettings.prevent_duplicate),
+  }
+}
+
+function normalizeQuizSettingsResponse(data: QuizExamSettings | QuizSettingsEnvelope): {
+  settings: QuizExamSettings
+  message: string
+  success: boolean
+} {
+  if (data && typeof data === "object" && "settings" in data) {
+    return {
+      settings: { ...defaultQuizExamSettings, ...(data.settings ?? {}) },
+      message: data.message ?? "Settings saved",
+      success: data.success ?? true,
+    }
+  }
+
+  return {
+    settings: { ...defaultQuizExamSettings, ...((data ?? {}) as QuizExamSettings) },
+    message: "Settings saved",
+    success: true,
+  }
+}
+
+async function fetchQuizSettings(id: string): Promise<{ settings: QuizExamSettings; message: string; success: boolean }> {
+  const { data } = await axios.get<QuizExamSettings | QuizSettingsEnvelope>(`/api/quizzes/${id}/settings`, {
+    withCredentials: true,
+  })
+  return normalizeQuizSettingsResponse(data)
+}
+
+function areQuizSettingsEqual(left: QuizExamSettings, right: QuizExamSettings) {
+  return (
+    left.duration === right.duration &&
+    left.default_marks === right.default_marks &&
+    left.shuffle_questions === right.shuffle_questions &&
+    left.shuffle_options === right.shuffle_options &&
+    left.require_fullscreen === right.require_fullscreen &&
+    left.block_tab_switch === right.block_tab_switch &&
+    left.block_copy_paste === right.block_copy_paste &&
+    left.violation_limit === right.violation_limit &&
+    left.negative_marking === right.negative_marking &&
+    left.penalty_wrong === right.penalty_wrong &&
+    left.violation_penalty === right.violation_penalty &&
+    left.attempts_allowed === right.attempts_allowed &&
+    left.allow_resume === right.allow_resume &&
+    left.prevent_duplicate === right.prevent_duplicate
+  )
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
+}
+
+async function verifySavedQuizSettings(id: string, expected: QuizExamSettings): Promise<QuizExamSettings | null> {
+  const retryDelaysMs = [150, 400, 900]
+
+  for (const retryDelayMs of retryDelaysMs) {
+    await delay(retryDelayMs)
+
+    try {
+      const reloaded = await fetchQuizSettings(id)
+      if (reloaded.success && areQuizSettingsEqual(reloaded.settings, expected)) {
+        return reloaded.settings
+      }
+    } catch {
+      // Ignore verification failures and continue retrying the persisted read.
+    }
+  }
+
+  return null
 }
 
 function normalizeLifecycle(quiz: Quiz): Quiz {
@@ -81,13 +178,40 @@ export const quizApi = {
   },
 
   async getSettings(id: string): Promise<QuizExamSettings> {
-    const { data } = await api.get<QuizExamSettings>(`/quizzes/${id}/settings`)
-    return { ...defaultQuizExamSettings, ...data }
+    const normalized = await fetchQuizSettings(id)
+    if (!normalized.success) {
+      throw new Error(normalized.message || "Failed to load settings")
+    }
+    return normalized.settings
   },
 
-  async updateSettings(id: string, payload: Partial<QuizExamSettings>): Promise<QuizExamSettings> {
-    const { data } = await api.patch<QuizExamSettings>(`/quizzes/${id}/settings`, payload)
-    return { ...defaultQuizExamSettings, ...data }
+  async updateSettings(id: string, payload: Partial<QuizExamSettings>): Promise<{ settings: QuizExamSettings; message: string; success: boolean }> {
+    const normalizedPayload = normalizeQuizSettingsPayload(payload)
+    try {
+      const { data } = await axios.patch<QuizExamSettings | QuizSettingsEnvelope>(`/api/quizzes/${id}/settings`, normalizedPayload, {
+        withCredentials: true,
+      })
+      const normalized = normalizeQuizSettingsResponse(data)
+      if (!normalized.success) {
+        throw new Error(normalized.message || "Settings update failed")
+      }
+      return normalized
+    } catch (error) {
+      if (!axios.isAxiosError(error) || error.response) {
+        throw error
+      }
+
+      const verifiedSettings = await verifySavedQuizSettings(id, normalizedPayload)
+      if (verifiedSettings) {
+        return {
+          settings: verifiedSettings,
+          message: "Settings saved successfully",
+          success: true,
+        }
+      }
+
+      throw error
+    }
   },
 
   async deleteById(id: string): Promise<{ message: string }> {
@@ -95,8 +219,8 @@ export const quizApi = {
     return data
   },
 
-  async publish(id: string): Promise<{ message: string; public_slug?: string; public_url?: string }> {
-    const { data } = await api.post<{ message: string; public_slug?: string; public_url?: string }>(`/quizzes/${id}/publish`)
+  async publish(id: string): Promise<{ message: string; public_id?: string; public_url?: string }> {
+    const { data } = await api.post<{ message: string; public_id?: string; public_url?: string }>(`/quizzes/${id}/publish`)
     return data
   },
 
