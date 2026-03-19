@@ -2,6 +2,7 @@ from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
+from backend.core.config import settings
 from backend.core.database import get_db
 from backend.core.security import decode_access_token
 from backend.models.user import User
@@ -14,6 +15,11 @@ async def get_current_user(
     token = request.cookies.get("access_token")
 
     if not token:
+        if settings.DEMO_MODE:
+            demo_result = await db.execute(select(User).where(User.is_active.is_(True)).limit(1))
+            demo_user = demo_result.scalar_one_or_none()
+            if demo_user:
+                return demo_user
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",

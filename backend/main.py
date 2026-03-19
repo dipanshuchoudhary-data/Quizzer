@@ -34,12 +34,13 @@ logger = logging.getLogger(__name__)
 
 def _resolve_cors_origins(raw_origins: str) -> list[str]:
     origins = [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
-    expanded = set(origins)
+    expanded = {origin.rstrip("/") for origin in origins}
 
-    # In local development Next.js may shift ports (3001, 3002, ...).
-    for port in range(3000, 3011):
-        expanded.add(f"http://localhost:{port}")
-        expanded.add(f"http://127.0.0.1:{port}")
+    if settings.is_local:
+        # In local development Next.js may shift ports (3001, 3002, ...).
+        for port in range(3000, 3011):
+            expanded.add(f"http://localhost:{port}")
+            expanded.add(f"http://127.0.0.1:{port}")
 
     return sorted(expanded)
 
@@ -59,8 +60,8 @@ def create_app() -> FastAPI:
     # CORS
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=_resolve_cors_origins(settings.CORS_ALLOW_ORIGINS),
-        allow_origin_regex=_local_dev_origin_regex(),
+        allow_origins=_resolve_cors_origins(settings.CORS_ALLOW_ORIGINS or ""),
+        allow_origin_regex=_local_dev_origin_regex() if settings.is_local else None,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -109,7 +110,7 @@ def create_app() -> FastAPI:
 
     @app.get("/health", tags=["Health"])
     async def health():
-        return {"status": "ok"}
+        return {"status": "ok", "app_env": settings.APP_ENV, "demo_mode": settings.DEMO_MODE}
 
     return app
 

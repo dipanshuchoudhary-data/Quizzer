@@ -1,7 +1,5 @@
-# backend/core/config.py
-
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field
+from pydantic import model_validator
 
 
 class Settings(BaseSettings):
@@ -15,9 +13,10 @@ class Settings(BaseSettings):
     # App
     # ----------------------
     APP_ENV: str = "local"
-    APP_URL: str = "http://localhost:3000"
-    FRONTEND_URL: str = "http://localhost:3000"
-    CORS_ALLOW_ORIGINS: str = "http://localhost:3000"
+    APP_URL: str | None = None
+    FRONTEND_URL: str | None = None
+    CORS_ALLOW_ORIGINS: str | None = None
+    DEMO_MODE: bool = False
 
     # ----------------------
     # Database
@@ -67,6 +66,37 @@ class Settings(BaseSettings):
     # ----------------------
     GCS_BUCKET_NAME: str | None = None
     GCP_PROJECT_ID: str | None = None
+
+    @property
+    def is_local(self) -> bool:
+        return self.APP_ENV.lower() in {"local", "dev", "development"}
+
+    @property
+    def cors_origins(self) -> list[str]:
+        raw = self.CORS_ALLOW_ORIGINS or ""
+        return [origin.strip().rstrip("/") for origin in raw.split(",") if origin.strip()]
+
+    @model_validator(mode="after")
+    def validate_runtime_settings(self):
+        if self.is_local:
+            self.APP_URL = (self.APP_URL or "http://localhost:8000").rstrip("/")
+            self.FRONTEND_URL = (self.FRONTEND_URL or "http://localhost:3000").rstrip("/")
+            self.CORS_ALLOW_ORIGINS = self.CORS_ALLOW_ORIGINS or self.FRONTEND_URL
+            return self
+
+        required_values = {
+            "APP_URL": self.APP_URL,
+            "FRONTEND_URL": self.FRONTEND_URL,
+            "CORS_ALLOW_ORIGINS": self.CORS_ALLOW_ORIGINS,
+        }
+        missing = [name for name, value in required_values.items() if not value]
+        if missing:
+            raise ValueError(f"Missing required production settings: {', '.join(missing)}")
+
+        self.APP_URL = self.APP_URL.rstrip("/")
+        self.FRONTEND_URL = self.FRONTEND_URL.rstrip("/")
+        self.CORS_ALLOW_ORIGINS = ",".join(self.cors_origins)
+        return self
 
 
 settings = Settings()
