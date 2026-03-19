@@ -46,7 +46,8 @@ export interface Quiz {
   id: string
   title: string
   description: string | null
-  public_slug?: string | null
+  public_id?: string | null
+  public_url?: string | null
   duration_minutes?: number
   question_count?: number | null
   academic_type: "college" | "school"
