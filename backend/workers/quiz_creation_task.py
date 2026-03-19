@@ -44,6 +44,58 @@ def default_section_title(index: int, question_type: str) -> str:
     return f"Section {index + 1}: {friendly_question_type(question_type)}"
 
 
+def _normalize_question_type_token(value: str | None) -> str | None:
+    token = str(value or "").strip().upper().replace("-", "_").replace(" ", "_").replace("/", "_")
+    aliases = {
+        "MCQ": "MCQ",
+        "TRUEFALSE": "TRUE_FALSE",
+        "TRUE_FALSE": "TRUE_FALSE",
+        "BOOLEAN": "TRUE_FALSE",
+        "TF": "TRUE_FALSE",
+        "SHORTANSWER": "SHORT_ANSWER",
+        "SHORT_ANSWER": "SHORT_ANSWER",
+        "SHORTANS": "SHORT_ANSWER",
+        "SA": "SHORT_ANSWER",
+        "LONGANSWER": "LONG_ANSWER",
+        "LONG_ANSWER": "LONG_ANSWER",
+        "LA": "LONG_ANSWER",
+    }
+    return aliases.get(token)
+
+
+def _parse_section_question_types(section: dict, section_idx: int) -> list[str]:
+    raw_types = section.get("question_types")
+    legacy_type = section.get("questionType") or section.get("question_type")
+
+    if raw_types is None:
+        if legacy_type is None:
+            return ["MCQ"]
+        raw_types = [legacy_type]
+
+    if not isinstance(raw_types, list):
+        raise ValueError(f"Section {section_idx + 1}: question_types must be a list")
+    if len(raw_types) == 0:
+        raise ValueError(f"Section {section_idx + 1}: question_types must not be empty")
+
+    normalized: list[str] = []
+    for raw in raw_types:
+        mapped = _normalize_question_type_token(str(raw))
+        if not mapped:
+            raise ValueError(f"Section {section_idx + 1}: invalid question type '{raw}'")
+        if mapped not in normalized:
+            normalized.append(mapped)
+
+    if len(normalized) == 0:
+        raise ValueError(f"Section {section_idx + 1}: question_types must not be empty")
+    return normalized
+
+
+def _distribute_question_counts(total: int, type_count: int) -> list[int]:
+    base = total // type_count
+    remainder = total % type_count
+    return [base + (1 if idx < remainder else 0) for idx in range(type_count)]
+
+
 def get_blueprint_sections(blueprint: dict) -> list[dict]:
     sections = blueprint.get("sections", [])
     if not isinstance(sections, list) or len(sections) == 0:
@@ -53,19 +105,38 @@ def get_blueprint_sections(blueprint: dict) -> list[dict]:
     for idx, section in enumerate(sections):
         if not isinstance(section, dict):
             continue
-        question_type = normalize_question_type(section.get("questionType") or section.get("question_type"))
+
+        raw_count = section.get("numberOfQuestions") or section.get("number_of_questions") or 1
+        try:
+            number_of_questions = int(raw_count)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"Section {idx + 1}: number_of_questions must be an integer") from exc
+        if number_of_questions <= 0:
+            raise ValueError(f"Section {idx + 1}: number_of_questions must be greater than 0")
+
+        question_types = _parse_section_question_types(section, idx)
         raw_title = str(section.get("title") or "").strip()
         is_generic = bool(re.fullmatch(r"section\s*\d+", raw_title, flags=re.IGNORECASE))
-        resolved_title = raw_title if raw_title and not is_generic else default_section_title(idx, question_type)
-        parsed.append(
-            {
-                "index": idx,
-                "title": resolved_title,
-                "number_of_questions": max(1, int(section.get("numberOfQuestions") or section.get("number_of_questions") or 1)),
-                "question_type": question_type,
-                "marks_per_question": max(1, int(section.get("marksPerQuestion") or section.get("marks_per_question") or 1)),
-            }
-        )
+
+        distributed_counts = _distribute_question_counts(number_of_questions, len(question_types))
+        for type_idx, question_type in enumerate(question_types):
+            allocated_count = distributed_counts[type_idx]
+            if allocated_count <= 0:
+                continue
+            if raw_title and not is_generic:
+                resolved_title = raw_title if len(question_types) == 1 else f"{raw_title} - {friendly_question_type(question_type)}"
+            else:
+                resolved_title = default_section_title(len(parsed), question_type)
+
+            parsed.append(
+                {
+                    "index": len(parsed),
+                    "title": resolved_title,
+                    "number_of_questions": allocated_count,
+                    "question_type": question_type,
+                    "marks_per_question": max(1, int(section.get("marksPerQuestion") or section.get("marks_per_question") or 1)),
+                }
+            )
     return parsed
 
 
