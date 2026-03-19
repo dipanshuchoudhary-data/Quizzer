@@ -34,3 +34,4 @@ httpx
 boto3
 pandas
 structlog
+python-multipart
