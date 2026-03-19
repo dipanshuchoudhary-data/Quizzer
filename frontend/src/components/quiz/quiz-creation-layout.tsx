@@ -24,15 +24,16 @@ export function QuizCreationLayout({
   contentClassName?: string
 }) {
   return (
-    <div className="min-h-screen space-y-6">
-      <section className="rounded-3xl border bg-gradient-to-br from-background via-background to-muted/40 p-6 shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-6">
-          <div className="min-w-[240px] space-y-2">
+    <div className="min-h-screen space-y-5 sm:space-y-6">
+      <section className="rounded-3xl border bg-gradient-to-br from-background via-background to-muted/40 p-4 shadow-sm sm:p-6">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0 space-y-2">
             <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">AI Quiz Studio</p>
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">{title}</h1>
+            <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl lg:text-3xl">{title}</h1>
             {subtitle ? <p className="text-sm text-muted-foreground">{subtitle}</p> : null}
           </div>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="-mx-1 overflow-x-auto px-1">
+            <div className="flex min-w-max items-center gap-2 sm:gap-3">
             {steps.map((item) => {
               const active = item.id === step
               const completed = item.id < step
@@ -60,11 +61,12 @@ export function QuizCreationLayout({
                 </div>
               )
             })}
+            </div>
           </div>
         </div>
       </section>
 
-      <div className={cn("rounded-3xl border bg-card/90 p-6 shadow-sm", contentClassName)}>{children}</div>
+      <div className={cn("rounded-3xl border bg-card/90 p-4 shadow-sm sm:p-6", contentClassName)}>{children}</div>
     </div>
   )
 }
