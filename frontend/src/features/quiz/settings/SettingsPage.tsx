@@ -4,13 +4,14 @@ import type { ReactNode } from "react"
 import { useEffect, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { ChevronDown, ChevronUp } from "lucide-react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { quizApi } from "@/lib/api/quiz"
+import { getApiErrorMessage } from "@/lib/api/error"
 import { defaultQuizExamSettings, type QuizExamSettings } from "@/types/quiz"
-import { LinksPage } from "@/features/quiz/links/LinksPage"
 
 function SettingRow({
   title,
@@ -73,14 +74,21 @@ export function SettingsPage({ quizId }: { quizId: string }) {
 
   const saveMutation = useMutation({
     mutationFn: (payload: QuizExamSettings) => quizApi.updateSettings(quizId, payload),
-    onSuccess: (updated) => {
+    onMutate: () => {
+      setSaveMessage("Saving settings...")
+    },
+    onSuccess: ({ settings: updated, message }) => {
       setSettings(updated)
-      setSaveMessage("Settings saved \u2713")
+      setSaveMessage(message)
+      toast.success(message)
       queryClient.setQueryData(["quiz-settings", quizId], updated)
       queryClient.invalidateQueries({ queryKey: ["quiz", quizId] })
     },
-    onError: () => {
-      setSaveMessage("Failed to save settings")
+    onError: (error: unknown) => {
+      const message = getApiErrorMessage(error, "Failed to save settings")
+      console.error("[Quiz Settings] Save failed", { quizId, error, payload: settings })
+      setSaveMessage(message)
+      toast.error(message)
     },
   })
 
