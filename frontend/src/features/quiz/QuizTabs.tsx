@@ -4,11 +4,12 @@ import { useEffect, useMemo, useState } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ReviewPage } from "@/features/quiz/review/ReviewPage"
+import { LinksPage } from "@/features/quiz/links/LinksPage"
 import { MonitoringPage } from "@/features/quiz/monitor/MonitoringPage"
 import { ResultsPage } from "@/features/quiz/results/ResultsPage"
 import { SettingsPage } from "@/features/quiz/settings/SettingsPage"
 
-const tabValues = ["questions", "monitoring", "results", "settings"] as const
+const tabValues = ["questions", "monitoring", "results", "links", "settings"] as const
 
 type QuizTab = (typeof tabValues)[number]
 
@@ -48,6 +49,7 @@ export function QuizTabs({ quizId }: { quizId: string }) {
         <TabsTrigger value="questions">Questions</TabsTrigger>
         <TabsTrigger value="monitoring">Monitoring</TabsTrigger>
         <TabsTrigger value="results">Results</TabsTrigger>
+        <TabsTrigger value="links">Links</TabsTrigger>
         <TabsTrigger value="settings">Settings</TabsTrigger>
       </TabsList>
 
@@ -59,6 +61,9 @@ export function QuizTabs({ quizId }: { quizId: string }) {
       </TabsContent>
       <TabsContent value="results">
         <ResultsPage quizId={quizId} />
+      </TabsContent>
+      <TabsContent value="links">
+        <LinksPage quizId={quizId} />
       </TabsContent>
       <TabsContent value="settings">
         <SettingsPage quizId={quizId} />
