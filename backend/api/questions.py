@@ -4,7 +4,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
 from backend.core.database import get_db
+from backend.core.llm import structured_llm_call
 from backend.api.deps import get_current_user
+from backend.ai.schemas.generation import GeneratedQuestion
 from backend.models.user import User
 from backend.models.quiz import Quiz
 from backend.models.quiz_section import QuizSection
@@ -238,10 +240,68 @@ async def regenerate_question(
 ):
     question = await _ensure_question_owner(question_id, db, current_user)
 
-    # Placeholder deterministic regeneration until dedicated per-question
-    # AI route is implemented.
+    qtype = normalize_question_type(question.question_type)
+    source_options = question.options if isinstance(question.options, list) else None
+    source_correct = question.correct_answer or ""
+
+    prompt = f"""
+You are a strict question regenerator.
+
+Task:
+Regenerate exactly one improved question equivalent in topic and difficulty.
+
+Constraints:
+- Keep question_type exactly: {qtype}
+- Keep marks exactly: {int(question.marks or 1)}
+- Keep difficulty level aligned to: {question.difficulty or 'Medium'}
+- Preserve pedagogical intent and concept
+- Do not add explanations outside schema
+
+Current question:
+Question text: {question.question_text}
+Question type: {qtype}
+Options: {source_options}
+Correct answer: {source_correct}
+
+Rules by type:
+- MCQ: provide 4 plausible options and correct_answer matching one option exactly.
+- TRUE_FALSE: options must be [\"True\", \"False\"] and correct_answer must be True or False.
+- SHORT_ANSWER / LONG_ANSWER: options must be null; correct_answer may be concise or null.
+
+Return one strict JSON object matching the schema.
+"""
+
+    try:
+        regenerated = await structured_llm_call(prompt, GeneratedQuestion)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="AI regeneration failed") from exc
+
+    sanitized = sanitize_question_candidate(
+        question_text=regenerated.question_text,
+        question_type=qtype,
+        options=regenerated.options,
+        correct_answer=regenerated.correct_answer,
+        marks=int(question.marks or 1),
+    )
+    if not sanitized:
+        raise HTTPException(status_code=422, detail="Regenerated content was invalid")
+
+    question.question_text = sanitized.question_text
+    question.question_type = qtype
+    if qtype in {"SHORT_ANSWER", "LONG_ANSWER"}:
+        question.options = None
+        question.correct_answer = None
+    elif qtype == "TRUE_FALSE":
+        question.options = ["True", "False"]
+        answer = str(sanitized.correct_answer or "").strip().lower()
+        question.correct_answer = "True" if answer in {"true", "t", "1"} else "False"
+    else:
+        question.options = sanitized.options
+        question.correct_answer = sanitized.correct_answer
+    question.marks = int(question.marks or 1)
+    question.difficulty = question.difficulty or "Medium"
     question.status = "DRAFT"
-    question.question_text = f"{question.question_text} (Regenerated)"
+
     await _mark_quiz_needs_republish(question.quiz_id, db)
     await db.commit()
     await db.refresh(question)
