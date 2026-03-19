@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo } from "react";
 import { io, type Socket } from "socket.io-client";
+import { env } from "@/lib/env";
 
 const SocketContext = createContext<Socket | null>(null);
 
@@ -12,7 +13,7 @@ export function useSocket(): Socket | null {
 export default function SocketProvider({ children }: { children: React.ReactNode }) {
   const socket = useMemo(
     () =>
-      io(process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000", {
+      io(env.apiUrl, {
         autoConnect: false,
         transports: ["websocket"],
       }),

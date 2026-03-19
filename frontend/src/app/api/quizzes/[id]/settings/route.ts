@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
+import { env } from "@/lib/env"
 
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
+const apiBaseUrl = env.apiUrl
 
 function buildApiUrl(id: string) {
   return `${apiBaseUrl.replace(/\/$/, "")}/quizzes/${id}/settings`
