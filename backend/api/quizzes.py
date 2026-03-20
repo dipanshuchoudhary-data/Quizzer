@@ -813,7 +813,8 @@ async def generate_ai_quiz(
         )
     except Exception:
         logger.exception("Failed to dispatch Celery quiz generation task; falling back to inline execution", extra={"quiz_id": str(quiz_id), "job_id": str(job.id)})
-        create_quiz_ai(
+        await asyncio.to_thread(
+            create_quiz_ai,
             str(job.id),
             str(quiz_id),
             extracted_text,
