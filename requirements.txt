@@ -12,6 +12,7 @@ pydantic[email]
 
 python-jose[cryptography]
 passlib[bcrypt]
+argon2-cffi
 
 redis
 celery[redis]
