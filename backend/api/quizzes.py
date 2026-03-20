@@ -803,13 +803,23 @@ async def generate_ai_quiz(
     await db.refresh(job)
     await _invalidate_dashboard_cache(current_user.id)
 
-    create_quiz_ai.delay(
-        str(job.id),
-        str(quiz_id),
-        extracted_text,
-        blueprint,
-        professor_note,
-    )
+    try:
+        create_quiz_ai.delay(
+            str(job.id),
+            str(quiz_id),
+            extracted_text,
+            blueprint,
+            professor_note,
+        )
+    except Exception:
+        logger.exception("Failed to dispatch Celery quiz generation task; falling back to inline execution", extra={"quiz_id": str(quiz_id), "job_id": str(job.id)})
+        create_quiz_ai(
+            str(job.id),
+            str(quiz_id),
+            extracted_text,
+            blueprint,
+            professor_note,
+        )
 
     return {"message": "AI generation started", "job_id": str(job.id)}
 
