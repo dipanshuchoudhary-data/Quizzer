@@ -1,3 +1,5 @@
+import asyncio
+import logging
 import uuid
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +14,7 @@ from backend.workers.document_task import process_document
 
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
+logger = logging.getLogger(__name__)
 
 
 # --------------------------------------------------
@@ -52,7 +55,11 @@ async def upload_document(
     await db.commit()
     await db.refresh(document)
 
-    process_document.delay(str(document.id))
+    try:
+        process_document.delay(str(document.id))
+    except Exception:
+        logger.exception("Failed to dispatch document processing task; falling back to inline execution")
+        await asyncio.to_thread(process_document, str(document.id))
 
     return {
         "message": "File uploaded. Processing started.",

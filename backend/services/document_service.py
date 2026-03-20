@@ -78,6 +78,10 @@ def extract_pptx_text(path: str) -> str:
     return "\n".join(text_parts).strip()
 
 
+def extract_txt_text(path: str) -> str:
+    return Path(path).read_text(encoding="utf-8", errors="ignore").strip()
+
+
 # ----------------------------------------
 # Unified Dispatcher
 # ----------------------------------------
@@ -101,6 +105,9 @@ def extract_text_from_file(path: str, file_type: str) -> str:
 
     if file_type == "pptx":
         return extract_pptx_text(path)
+
+    if file_type == "txt":
+        return extract_txt_text(path)
 
     if file_type in ["png", "jpg", "jpeg"]:
         return extract_text_from_image(path)

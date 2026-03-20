@@ -1,3 +1,5 @@
+import asyncio
+import logging
 import uuid
 import urllib.request
 from html.parser import HTMLParser
@@ -19,6 +21,7 @@ from backend.workers.document_task import process_document
 
 
 router = APIRouter(prefix="/ai/quiz", tags=["AI Quiz"])
+logger = logging.getLogger(__name__)
 
 
 class _HTMLTextExtractor(HTMLParser):
@@ -233,7 +236,11 @@ async def add_file_sources(
         db.add(document)
         await db.commit()
         await db.refresh(document)
-        process_document.delay(str(document.id))
+        try:
+            process_document.delay(str(document.id))
+        except Exception:
+            logger.exception("Failed to dispatch document processing task; falling back to inline execution")
+            await asyncio.to_thread(process_document, str(document.id))
         documents.append({"id": str(document.id), "file_name": document.file_name})
 
     sources = await _load_sources(str(quiz_uuid))
