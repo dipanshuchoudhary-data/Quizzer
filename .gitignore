@@ -31,3 +31,6 @@ celerybeat-schedule
 
 # User files 
 uploads
+
+# Node
+node_modules/
