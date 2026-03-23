@@ -59,13 +59,13 @@ def create_app() -> FastAPI:
 
     # CORS
     app.add_middleware(
-        CORSMiddleware,
-        allow_origins=_resolve_cors_origins(settings.CORS_ALLOW_ORIGINS or ""),
-        allow_origin_regex=_local_dev_origin_regex() if settings.is_local else None,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+    CORSMiddleware,
+    allow_origins=_resolve_cors_origins(settings.CORS_ALLOW_ORIGINS or ""),
+    allow_origin_regex=r"^https://.*\.vercel\.app$",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
     @app.middleware("http")
     async def log_slow_requests(request, call_next):
