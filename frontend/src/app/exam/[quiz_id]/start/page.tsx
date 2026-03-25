@@ -76,6 +76,8 @@ export default function StartExamPage({ params }: StartExamPageProps) {
         questions: response.questions ?? [],
         profile: payload,
         mode: resolvedMode,
+        violationLimit: response.violation_limit ?? null,
+        markDeductionPerViolation: response.mark_deduction_per_violation ?? null,
       });
       router.replace(`/exam/${quizId}/attempt`);
     },
