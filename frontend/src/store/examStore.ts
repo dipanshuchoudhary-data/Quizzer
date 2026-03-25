@@ -245,9 +245,15 @@ export const useExamStore = create<ExamStoreState>()(
       merge: (persistedState, currentState) => {
         const persisted = (persistedState as PersistedExamState | undefined) ?? initialPersistedState;
         const runtime = createRuntimeState(persisted);
+        // Ensure identity has all required fields (handles old session data)
+        const mergedIdentity = {
+          ...initialIdentity,
+          ...persisted.identity,
+        };
         return {
           ...currentState,
           ...persisted,
+          identity: mergedIdentity,
           ...runtime,
           dirtyQuestionIds: new Set<string>(),
           violationWarning: null,
