@@ -26,7 +26,7 @@ function toOptions(options: ExamQuestion["options"]): string[] {
 export function QuestionRenderer({ question, answer, onAnswerChange }: QuestionRendererProps) {
   if (!question) {
     return (
-      <section className="rounded-2xl border border-slate-200 bg-white p-6">
+      <section className="rounded-xl border border-slate-200 bg-white p-4 sm:rounded-2xl sm:p-6">
         <p className="text-sm text-slate-600">No question loaded for this attempt.</p>
       </section>
     );
@@ -36,70 +36,78 @@ export function QuestionRenderer({ question, answer, onAnswerChange }: QuestionR
   const options = toOptions(question.options);
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-      <div className="mb-4 flex items-center justify-between text-xs text-slate-500">
-        <span className="rounded-full bg-slate-100 px-2 py-1 font-semibold text-slate-600">{questionType}</span>
-        <span>{question.marks ?? 1} mark(s)</span>
+    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-2xl sm:p-6">
+      <h2 className="text-base font-semibold leading-relaxed text-slate-900 sm:text-lg">
+        {formatQuestionForDisplay(question.question_text)}
+      </h2>
+
+      <div className="mt-4 sm:mt-6">
+        {questionType === "MCQ" && (
+          <div className="space-y-2 sm:space-y-3">
+            {options.map((option, idx) => (
+              <label
+                key={`${question.id}-option-${idx}`}
+                className={`flex cursor-pointer items-center gap-3 rounded-lg border-2 px-3 py-3 transition-all sm:rounded-xl sm:px-4 sm:py-3 ${
+                  answer === option
+                    ? "border-blue-500 bg-blue-50 shadow-sm"
+                    : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name={question.id}
+                  checked={answer === option}
+                  onChange={() => onAnswerChange(option)}
+                  className="h-5 w-5 accent-blue-600"
+                />
+                <span className="text-sm text-slate-800 sm:text-base">{option}</span>
+              </label>
+            ))}
+          </div>
+        )}
+
+        {questionType === "TRUE_FALSE" && (
+          <div className="flex flex-col gap-2 sm:flex-row sm:gap-3">
+            {["True", "False"].map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => onAnswerChange(option)}
+                className={`flex-1 rounded-lg border-2 px-4 py-3 text-base font-semibold transition-all sm:rounded-xl sm:px-6 sm:py-3 ${
+                  answer === option
+                    ? "border-blue-500 bg-blue-600 text-white shadow-md"
+                    : "border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50"
+                }`}
+              >
+                {option}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {questionType === "ONE_WORD" && (
+          <input
+            value={answer}
+            onChange={(e) => onAnswerChange(e.target.value)}
+            placeholder="Type one word answer"
+            className="w-full rounded-lg border-2 border-slate-300 bg-white px-4 py-3 text-base text-slate-900 placeholder:text-slate-400 transition-colors focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            autoComplete="off"
+            spellCheck={false}
+            maxLength={120}
+          />
+        )}
+
+        {questionType === "SHORT_ANSWER" && (
+          <textarea
+            value={answer}
+            onChange={(e) => onAnswerChange(e.target.value)}
+            placeholder="Write your answer here..."
+            className="min-h-36 w-full rounded-lg border-2 border-slate-300 bg-white px-4 py-3 text-base text-slate-900 placeholder:text-slate-400 transition-colors focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 sm:min-h-40"
+            spellCheck={false}
+            maxLength={2000}
+          />
+        )}
       </div>
-
-      <h2 className="mb-6 text-lg font-semibold text-slate-900">{formatQuestionForDisplay(question.question_text)}</h2>
-
-      {questionType === "MCQ" && (
-        <div className="space-y-3">
-          {options.map((option, idx) => (
-            <label key={`${question.id}-option-${idx}`} className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2">
-              <input
-                type="radio"
-                name={question.id}
-                checked={answer === option}
-                onChange={() => onAnswerChange(option)}
-                className="h-4 w-4"
-              />
-              <span className="text-sm text-slate-800">{option}</span>
-            </label>
-          ))}
-        </div>
-      )}
-
-      {questionType === "TRUE_FALSE" && (
-        <div className="flex gap-3">
-          {["True", "False"].map((option) => (
-            <button
-              key={option}
-              type="button"
-              onClick={() => onAnswerChange(option)}
-              className={`rounded-lg border px-4 py-2 text-sm font-medium ${
-                answer === option ? "border-blue-700 bg-blue-700 text-white" : "border-slate-300 bg-white text-slate-700"
-              }`}
-            >
-              {option}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {questionType === "ONE_WORD" && (
-        <input
-          value={answer}
-          onChange={(e) => onAnswerChange(e.target.value)}
-          placeholder="Type one word answer"
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          autoComplete="off"
-          spellCheck={false}
-          maxLength={120}
-        />
-      )}
-
-      {questionType === "SHORT_ANSWER" && (
-        <textarea
-          value={answer}
-          onChange={(e) => onAnswerChange(e.target.value)}
-          placeholder="Write a concise answer"
-          className="min-h-40 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-400/30 focus:outline-none"
-          spellCheck={false}
-          maxLength={2000}
-        />
-      )}
     </section>
   );
 }
