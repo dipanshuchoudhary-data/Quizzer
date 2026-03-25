@@ -5,21 +5,21 @@ __pycache__/
 *.pyd
 *.sqlite3
 
-# Virtual env
+# Virtual environments
 .venv/
 env/
 
 # Environment variables
 .env
 
-# Alembic cache
+# Logs
 *.log
 
 # IDE
 .vscode/
 .idea/
 
-# OS
+# OS files
 .DS_Store
 Thumbs.db
 
@@ -29,8 +29,8 @@ Thumbs.db
 # Celery
 celerybeat-schedule
 
-# User files 
-uploads
+# User uploads
+uploads/
 
 # Node
 node_modules/

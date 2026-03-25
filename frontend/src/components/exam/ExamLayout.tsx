@@ -213,25 +213,22 @@ export function ExamLayout({ quizId }: ExamLayoutProps) {
       <PasteDetector enabled={!submitMutation.isPending} />
       <ContextMenuGuard enabled={!submitMutation.isPending} />
 
-      <main className="min-h-screen bg-[linear-gradient(135deg,#020617_0%,#0f172a_40%,#1e293b_100%)] p-4 text-slate-100 md:p-6">
-        <section className="mx-auto flex max-w-[1600px] flex-col gap-4">
-          <div className="flex flex-col gap-3 rounded-[1.5rem] border border-white/10 bg-white/5 px-5 py-4 backdrop-blur lg:flex-row lg:items-center lg:justify-between">
+      <main className="min-h-screen bg-[linear-gradient(135deg,#020617_0%,#0f172a_40%,#1e293b_100%)] p-2 text-slate-100 sm:p-4 md:p-6">
+        <section className="mx-auto flex max-w-[1600px] flex-col gap-3 sm:gap-4">
+          <div className="flex flex-col gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-3 backdrop-blur sm:gap-3 sm:rounded-[1.5rem] sm:px-5 sm:py-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-cyan-200/80">Secure Exam Session</p>
-              <h1 className="mt-1 text-xl font-semibold text-white">{identity.quizTitle ?? "Quizzer Assessment"}</h1>
-              <p className="mt-1 text-sm text-slate-300">
-                Stay in fullscreen. Answers autosave continuously. Backend time and submission state are authoritative.
+              <p className="text-[10px] uppercase tracking-[0.15em] text-cyan-200/80 sm:text-xs sm:tracking-[0.2em]">Secure Exam</p>
+              <h1 className="mt-0.5 text-base font-semibold text-white sm:mt-1 sm:text-xl">{identity.quizTitle ?? "Quizzer Assessment"}</h1>
+              <p className="mt-0.5 hidden text-sm text-slate-300 sm:mt-1 sm:block">
+                Stay in fullscreen. Answers autosave continuously.
               </p>
             </div>
-            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-200">
-              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
-                Attempt {identity.attemptId.slice(0, 8)}
+            <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-slate-200 sm:gap-2 sm:text-xs">
+              <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 sm:px-3 sm:py-1">
+                {answeredIds.size}/{questions.length} Saved
               </span>
-              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
-                Saved {answeredIds.size}/{questions.length}
-              </span>
-              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
-                Pending Sync {dirtyQuestionIds.size}
+              <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 sm:px-3 sm:py-1">
+                {dirtyQuestionIds.size} Pending
               </span>
             </div>
           </div>
@@ -252,33 +249,71 @@ export function ExamLayout({ quizId }: ExamLayoutProps) {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.25 }}
-            className="grid grid-cols-1 gap-4 lg:grid-cols-[19rem_minmax(0,1fr)_18rem]"
+            className="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-[minmax(0,1fr)_18rem] xl:grid-cols-[16rem_minmax(0,1fr)_18rem]"
           >
-            <QuestionNavigator
-              questionIds={questions.map((q) => q.id)}
-              currentQuestionId={currentQuestionId}
-              answeredIds={answeredIds}
-              visitedIds={visited}
-              flaggedIds={flagged}
-              onSelect={setCurrentQuestion}
-            />
+            {/* Question Navigator - hidden on mobile, shown in sidebar on xl */}
+            <div className="hidden xl:block">
+              <QuestionNavigator
+                questionIds={questions.map((q) => q.id)}
+                currentQuestionId={currentQuestionId}
+                answeredIds={answeredIds}
+                visitedIds={visited}
+                flaggedIds={flagged}
+                onSelect={setCurrentQuestion}
+              />
+            </div>
 
-            <section className="space-y-4">
-              <div className="rounded-[1.5rem] border border-white/10 bg-white/5 px-5 py-4 text-sm text-slate-200 backdrop-blur">
+            <section className="space-y-3 sm:space-y-4">
+              {/* Mobile Question Navigator - horizontal scrollable */}
+              <div className="xl:hidden">
+                <div className="rounded-xl border border-white/10 bg-white/5 p-2 backdrop-blur sm:p-3">
+                  <div className="flex gap-1.5 overflow-x-auto pb-1 sm:gap-2">
+                    {questions.map((q, idx) => {
+                      const isCurrent = q.id === currentQuestionId;
+                      const isAnswered = answeredIds.has(q.id);
+                      const isVisited = visited.has(q.id);
+                      const isFlagged = flagged.has(q.id);
+                      return (
+                        <button
+                          key={q.id}
+                          type="button"
+                          onClick={() => setCurrentQuestion(q.id)}
+                          className={`relative flex-shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition sm:px-3 sm:py-2 ${
+                            isCurrent
+                              ? "bg-blue-600 text-white"
+                              : isAnswered
+                              ? "bg-emerald-500/20 text-emerald-300"
+                              : isVisited
+                              ? "bg-amber-500/20 text-amber-300"
+                              : "bg-white/10 text-slate-300"
+                          }`}
+                        >
+                          {idx + 1}
+                          {isFlagged && (
+                            <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-rose-500" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-slate-200 backdrop-blur sm:rounded-[1.5rem] sm:px-5 sm:py-4">
                 {currentQuestion ? (
-                  <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
                     <div>
-                      <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Current Question</p>
-                      <p className="mt-1 font-medium text-white">
-                        Question {currentQuestionIndex + 1} of {questions.length}
+                      <p className="text-[10px] uppercase tracking-[0.15em] text-slate-400 sm:text-xs sm:tracking-[0.2em]">Current Question</p>
+                      <p className="mt-0.5 text-sm font-medium text-white sm:mt-1 sm:text-base">
+                        Q{currentQuestionIndex + 1} of {questions.length}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2 text-xs">
-                      <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
-                        Type {currentQuestion.question_type.replaceAll("_", " ")}
+                    <div className="flex items-center gap-1.5 text-[10px] sm:gap-2 sm:text-xs">
+                      <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 sm:px-3 sm:py-1">
+                        {currentQuestion.question_type.replaceAll("_", " ")}
                       </span>
-                      <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
-                        {currentQuestion.marks ?? 1} mark(s)
+                      <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 sm:px-3 sm:py-1">
+                        {currentQuestion.marks ?? 1} marks
                       </span>
                     </div>
                   </div>
@@ -298,27 +333,28 @@ export function ExamLayout({ quizId }: ExamLayoutProps) {
                 }}
               />
 
-              <div className="grid grid-cols-2 gap-3 rounded-[1.5rem] border border-white/10 bg-white/5 p-4 text-sm backdrop-blur md:grid-cols-4">
+              <div className="grid grid-cols-2 gap-2 rounded-xl border border-white/10 bg-white/5 p-2 text-xs backdrop-blur sm:grid-cols-4 sm:gap-3 sm:rounded-[1.5rem] sm:p-4 sm:text-sm">
                 <button
                   type="button"
                   onClick={() => gotoQuestionByOffset(-1)}
-                  className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 font-medium text-slate-100 transition duration-150 hover:brightness-110 hover:scale-[1.03] active:scale-[0.96]"
+                  className="rounded-lg border border-white/10 bg-white/5 px-2 py-2 font-medium text-slate-100 transition duration-150 hover:brightness-110 hover:scale-[1.03] active:scale-[0.96] sm:px-3"
                 >
-                  Previous Question
+                  <span className="sm:hidden">Prev</span>
+                  <span className="hidden sm:inline">Previous</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => gotoQuestionByOffset(1)}
-                  className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 font-medium text-slate-100 transition duration-150 hover:brightness-110 hover:scale-[1.03] active:scale-[0.96]"
+                  className="rounded-lg border border-white/10 bg-white/5 px-2 py-2 font-medium text-slate-100 transition duration-150 hover:brightness-110 hover:scale-[1.03] active:scale-[0.96] sm:px-3"
                 >
-                  Next Question
+                  Next
                 </button>
                 <button
                   type="button"
                   onClick={skipQuestion}
-                  className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 font-medium text-slate-100 transition duration-150 hover:brightness-110 hover:scale-[1.03] active:scale-[0.96]"
+                  className="rounded-lg border border-white/10 bg-white/5 px-2 py-2 font-medium text-slate-100 transition duration-150 hover:brightness-110 hover:scale-[1.03] active:scale-[0.96] sm:px-3"
                 >
-                  Skip Question
+                  Skip
                 </button>
                 <button
                   type="button"
@@ -326,9 +362,9 @@ export function ExamLayout({ quizId }: ExamLayoutProps) {
                     if (!currentQuestion) return;
                     queueAutosave(currentQuestion.id, "");
                   }}
-                  className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 font-medium text-slate-100 transition duration-150 hover:brightness-110 hover:scale-[1.03] active:scale-[0.96]"
+                  className="rounded-lg border border-white/10 bg-white/5 px-2 py-2 font-medium text-slate-100 transition duration-150 hover:brightness-110 hover:scale-[1.03] active:scale-[0.96] sm:px-3"
                 >
-                  Clear Answer
+                  Clear
                 </button>
               </div>
             </section>
@@ -339,6 +375,8 @@ export function ExamLayout({ quizId }: ExamLayoutProps) {
               totalQuestions={questions.length}
               pendingSyncCount={dirtyQuestionIds.size}
               violationCount={violationCount}
+              violationLimit={identity.violationLimit ?? undefined}
+              markDeductionPerViolation={identity.markDeductionPerViolation ?? undefined}
               onSubmit={() => {
                 setSubmitOpen(true);
               }}
@@ -371,7 +409,13 @@ export function ExamLayout({ quizId }: ExamLayoutProps) {
         loading={submitMutation.isPending}
       />
 
-      <ViolationWarningModal warning={violationWarning} onDismiss={clearViolationWarning} />
+      <ViolationWarningModal
+        warning={violationWarning}
+        onDismiss={clearViolationWarning}
+        violationCount={violationCount}
+        violationLimit={identity.violationLimit ?? undefined}
+        markDeductionPerViolation={identity.markDeductionPerViolation ?? undefined}
+      />
     </>
   );
 }

@@ -2,16 +2,39 @@
 
 import { useMemo, useState } from "react"
 import Link from "next/link"
-import { useQuery } from "@tanstack/react-query"
-import { Activity, Clock3, FileText, Filter, PencilLine, PlusCircle, Sparkles, Trash2 } from "lucide-react"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { toast } from "sonner"
+import {
+  Activity,
+  ArrowUpDown,
+  CheckSquare,
+  Clock3,
+  FileText,
+  Filter,
+  FolderOpen,
+  PencilLine,
+  Sparkles,
+  Square,
+  Trash2,
+  X,
+} from "lucide-react"
 import { quizApi } from "@/lib/api/quiz"
 import { dashboardApi } from "@/lib/api/dashboard"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { buttonVariants } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { PageHeader, SectionHeader, pageCardClass, pageCardInteractiveClass, pageIcons } from "@/components/page/page-system"
 import { cn } from "@/lib/utils"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Tooltip } from "@/components/ui/tooltip"
 
 function formatUpdatedAt(updatedAt?: string) {
   if (!updatedAt) return "Updated recently"
@@ -21,6 +44,7 @@ function formatUpdatedAt(updatedAt?: string) {
 }
 
 type ExamFilter = "ALL" | "LIVE" | "PUBLISHED" | "DRAFT" | "PROCESSING"
+type SortOption = "updated" | "created" | "alphabetical"
 
 function normalizeJobProgress(progress: number) {
   const normalized = progress <= 1 ? progress * 100 : progress
@@ -45,8 +69,12 @@ function getReadinessProgress(questionCount: number, hasDuration: boolean, isPub
 }
 
 export default function ExamsPage() {
+  const queryClient = useQueryClient()
   const [searchQuery, setSearchQuery] = useState("")
   const [filter, setFilter] = useState<ExamFilter>("ALL")
+  const [sortBy, setSortBy] = useState<SortOption>("updated")
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false)
 
   const { data: quizzes = [], isLoading } = useQuery({
     queryKey: ["quizzes"],
@@ -74,7 +102,7 @@ export default function ExamsPage() {
 
   const visibleQuizzes = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
-    return quizzes.filter((quiz) => {
+    const filtered = quizzes.filter((quiz) => {
       const isLive = liveQuizIds.has(quiz.id)
       const isPublished = Boolean(quiz.is_published)
       const hasProcessing = runningJobsByQuizId.has(quiz.id)
@@ -93,7 +121,64 @@ export default function ExamsPage() {
 
       return matchesFilter && matchesQuery
     })
-  }, [filter, liveQuizIds, quizzes, runningJobsByQuizId, searchQuery])
+
+    // Sort the filtered results
+    return filtered.sort((a, b) => {
+      if (sortBy === "alphabetical") {
+        return (a.title ?? "").localeCompare(b.title ?? "")
+      }
+      if (sortBy === "created") {
+        const dateA = a.created_at ? new Date(a.created_at).getTime() : 0
+        const dateB = b.created_at ? new Date(b.created_at).getTime() : 0
+        return dateB - dateA
+      }
+      // Default: updated
+      const dateA = a.updated_at ? new Date(a.updated_at).getTime() : 0
+      const dateB = b.updated_at ? new Date(b.updated_at).getTime() : 0
+      return dateB - dateA
+    })
+  }, [filter, liveQuizIds, quizzes, runningJobsByQuizId, searchQuery, sortBy])
+
+  // Bulk delete mutation
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      await Promise.all(ids.map((id) => quizApi.deleteById(id)))
+    },
+    onSuccess: () => {
+      toast.success(`${selectedIds.size} exam(s) deleted successfully`)
+      queryClient.invalidateQueries({ queryKey: ["quizzes"] })
+      queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] })
+      setSelectedIds(new Set())
+      setShowBulkDeleteDialog(false)
+    },
+    onError: () => {
+      toast.error("Failed to delete some exams")
+      setShowBulkDeleteDialog(false)
+    },
+  })
+
+  // Selection handlers
+  const toggleSelection = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }
+
+  const selectAll = () => {
+    setSelectedIds(new Set(visibleQuizzes.map((q) => q.id)))
+  }
+
+  const clearSelection = () => {
+    setSelectedIds(new Set())
+  }
+
+  const isAllSelected = visibleQuizzes.length > 0 && selectedIds.size === visibleQuizzes.length
 
   return (
     <section className="space-y-8">
@@ -103,14 +188,6 @@ export default function ExamsPage() {
         subtitle="Track live, published, processing, and draft quizzes from one operational workspace."
         actions={
           <div className="flex w-full flex-wrap items-center justify-end gap-2 lg:w-auto">
-            <Link
-              href="/quizzes/create"
-              className={cn(buttonVariants(), "bg-primary text-primary-foreground hover:bg-primary/90")}
-            >
-              <PlusCircle className="mr-2 size-4" />
-              Create Quiz
-            </Link>
-
             <div className="flex w-full items-center gap-2 sm:w-auto">
               <Input
                 value={searchQuery}
@@ -130,6 +207,17 @@ export default function ExamsPage() {
                   <SelectItem value="PUBLISHED">Published</SelectItem>
                   <SelectItem value="DRAFT">Draft</SelectItem>
                   <SelectItem value="PROCESSING">Processing</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
+                <SelectTrigger className="w-[140px]">
+                  <ArrowUpDown className="mr-2 size-4 text-muted-foreground" />
+                  <SelectValue placeholder="Sort" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="updated">Last Updated</SelectItem>
+                  <SelectItem value="created">Date Created</SelectItem>
+                  <SelectItem value="alphabetical">Alphabetical</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -193,7 +281,46 @@ export default function ExamsPage() {
       ) : null}
 
       <section className="space-y-4">
-        <SectionHeader title="Operational Snapshot" description="Exams organized by readiness, status, and immediate actions." icon={pageIcons.exams} />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <SectionHeader title="Operational Snapshot" description="Exams organized by readiness, status, and immediate actions." icon={pageIcons.exams} />
+
+          {/* Bulk Actions Bar */}
+          <div className="flex items-center gap-2">
+            {selectedIds.size > 0 ? (
+              <>
+                <span className="text-sm text-muted-foreground">
+                  {selectedIds.size} selected
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={clearSelection}
+                >
+                  <X className="mr-1.5 size-4" />
+                  Clear
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setShowBulkDeleteDialog(true)}
+                >
+                  <Trash2 className="mr-1.5 size-4" />
+                  Delete Selected
+                </Button>
+              </>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={selectAll}
+                disabled={visibleQuizzes.length === 0}
+              >
+                <CheckSquare className="mr-1.5 size-4" />
+                Select All
+              </Button>
+            )}
+          </div>
+        </div>
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
         {isLoading
           ? Array.from({ length: 6 }).map((_, index) => (
@@ -215,6 +342,23 @@ export default function ExamsPage() {
               const questionCount = quiz.question_count ?? 0
               const durationLabel = quiz.duration_minutes ? `${quiz.duration_minutes} min` : "No time limit"
               const readiness = getReadinessProgress(questionCount, Boolean(quiz.duration_minutes), isPublished)
+              const isSelected = selectedIds.has(quiz.id)
+
+              // Progress bar color: green=ready (80%+), yellow=in-progress (40-79%), red=needs attention (<40%)
+              const progressBarColor =
+                readiness >= 80
+                  ? "bg-emerald-500"
+                  : readiness >= 40
+                  ? "bg-amber-500"
+                  : "bg-rose-500"
+
+              // Tooltip content for quick preview
+              const tooltipPreview = (
+                <span>
+                  {questionCount} questions | {durationLabel} | {status}
+                  {questionCount === 0 && " - Add questions to get started"}
+                </span>
+              )
 
               return (
                 <div
@@ -222,10 +366,28 @@ export default function ExamsPage() {
                   className={cn(
                     "dashboard-fade-up group relative",
                     pageCardInteractiveClass,
-                    "hover:border-primary/30 hover:shadow-lg"
+                    "hover:border-primary/30 hover:shadow-lg",
+                    isSelected && "ring-2 ring-primary ring-offset-2"
                   )}
                   style={{ animationDelay: `${120 + index * 60}ms` }}
                 >
+                  {/* Selection checkbox */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      toggleSelection(quiz.id)
+                    }}
+                    className="absolute left-3 top-3 z-10 flex size-5 items-center justify-center rounded border bg-background transition-colors hover:bg-muted"
+                    aria-label={isSelected ? "Deselect exam" : "Select exam"}
+                  >
+                    {isSelected ? (
+                      <CheckSquare className="size-4 text-primary" />
+                    ) : (
+                      <Square className="size-4 text-muted-foreground" />
+                    )}
+                  </button>
+
                   <div className="pointer-events-none absolute right-4 top-4 flex translate-y-1 gap-2 opacity-0 transition-all duration-200 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100">
                     <Link href={`/quiz/${quiz.id}?tab=questions`} className={cn(buttonVariants({ size: "icon", variant: "outline" }), "h-8 w-8")}>
                       <PencilLine className="size-4" />
@@ -235,9 +397,11 @@ export default function ExamsPage() {
                     </button>
                   </div>
 
-                  <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start justify-between gap-3 pl-6">
                     <div className="space-y-1.5">
-                      <p className="text-base font-semibold text-foreground line-clamp-1">{quiz.title}</p>
+                      <Tooltip content={tooltipPreview}>
+                        <p className="text-base font-semibold text-foreground line-clamp-1 cursor-default">{quiz.title}</p>
+                      </Tooltip>
                       <p className="text-xs text-muted-foreground">Updated {formatUpdatedAt(quiz.updated_at)}</p>
                     </div>
 
@@ -267,7 +431,7 @@ export default function ExamsPage() {
                       <div
                         className={cn(
                           "h-full rounded-full transition-all duration-300",
-                          readiness >= 80 ? "bg-emerald-500" : readiness >= 50 ? "bg-amber-500" : "bg-sky-500"
+                          progressBarColor
                         )}
                         style={{ width: `${readiness}%` }}
                       />
@@ -303,15 +467,25 @@ export default function ExamsPage() {
 
       {!isLoading && visibleQuizzes.length === 0 ? (
         <div className="rounded-3xl border bg-background p-10 text-center">
-          <p className="text-base font-semibold text-foreground">No exams found</p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {quizzes.length === 0 ? "Create your first quiz to get started." : "Try adjusting your search or filter."}
-          </p>
-          <div className="mt-4">
-            <Link href="/quizzes/create" className={cn(buttonVariants(), "bg-primary text-primary-foreground hover:bg-primary/90")}>
-              Create your first quiz
-            </Link>
+          {/* Empty state illustration */}
+          <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-muted">
+            <FolderOpen className="size-10 text-muted-foreground" />
           </div>
+          <p className="text-lg font-semibold text-foreground">
+            {quizzes.length === 0 ? "No exams yet" : "No exams found"}
+          </p>
+          <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">
+            {quizzes.length === 0
+              ? "Create your first exam to start assessing your students with AI-powered quizzes."
+              : "Try adjusting your search or filter to find what you're looking for."}
+          </p>
+          {quizzes.length === 0 && (
+            <div className="mt-6">
+              <Link href="/quizzes/create" className={cn(buttonVariants({ size: "lg" }), "bg-primary text-primary-foreground hover:bg-primary/90")}>
+                Create your first exam
+              </Link>
+            </div>
+          )}
         </div>
       ) : null}
 
@@ -327,6 +501,35 @@ export default function ExamsPage() {
           </div>
         </div>
       ) : null}
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <Dialog open={showBulkDeleteDialog} onOpenChange={setShowBulkDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete {selectedIds.size} Exam{selectedIds.size > 1 ? "s" : ""}?</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete {selectedIds.size} selected exam{selectedIds.size > 1 ? "s" : ""}?
+              This action cannot be undone and all associated questions and results will be permanently removed.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowBulkDeleteDialog(false)}
+              disabled={bulkDeleteMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => bulkDeleteMutation.mutate(Array.from(selectedIds))}
+              disabled={bulkDeleteMutation.isPending}
+            >
+              {bulkDeleteMutation.isPending ? "Deleting..." : `Delete ${selectedIds.size} Exam${selectedIds.size > 1 ? "s" : ""}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   )
 }
