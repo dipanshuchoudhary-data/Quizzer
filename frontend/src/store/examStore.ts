@@ -11,6 +11,8 @@ interface AttemptIdentity {
   attemptToken: string | null;
   durationSeconds: number;
   quizTitle: string | null;
+  violationLimit: number | null;
+  markDeductionPerViolation: number | null;
 }
 
 interface StudentProfileState {
@@ -58,6 +60,8 @@ interface ExamStoreState extends PersistedExamState {
     questions: ExamQuestion[];
     profile: StudentProfileState;
     mode: ExamMode;
+    violationLimit?: number | null;
+    markDeductionPerViolation?: number | null;
   }) => void;
   setQuestions: (questions: ExamQuestion[]) => void;
   setCurrentQuestion: (questionId: string) => void;
@@ -77,6 +81,8 @@ const initialIdentity: AttemptIdentity = {
   attemptToken: null,
   durationSeconds: 0,
   quizTitle: null,
+  violationLimit: null,
+  markDeductionPerViolation: null,
 };
 
 const initialPersistedState: PersistedExamState = {
@@ -128,6 +134,8 @@ export const useExamStore = create<ExamStoreState>()(
             attemptToken: payload.attemptToken,
             durationSeconds: payload.durationSeconds,
             quizTitle: payload.quizTitle ?? null,
+            violationLimit: payload.violationLimit ?? null,
+            markDeductionPerViolation: payload.markDeductionPerViolation ?? null,
           },
           profile: payload.profile,
           questions: payload.questions,

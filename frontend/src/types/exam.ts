@@ -42,6 +42,8 @@ export interface StartAttemptResponse {
   quiz_title?: string;
   start_time?: string;
   end_time?: string;
+  violation_limit?: number;
+  mark_deduction_per_violation?: number;
 }
 
 export interface SaveAnswerPayload {
