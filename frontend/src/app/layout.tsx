@@ -1,4 +1,5 @@
 import "./globals.css"
+import { Analytics } from "@vercel/analytics/next"
 import { QueryProvider } from "@/components/providers/QueryProvider"
 import { ToastProvider } from "@/components/providers/ToastProvider"
 import { AuthProvider } from "@/components/providers/AuthProvider"
@@ -20,6 +21,7 @@ export default function RootLayout({
             </AuthProvider>
           </QueryProvider>
         </ThemeProvider>
+        <Analytics />
       </body>
     </html>
   )
