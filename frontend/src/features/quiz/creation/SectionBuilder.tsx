@@ -43,7 +43,10 @@ export function SectionBuilder({ sections, onChange }: Props) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">Configure section blueprint for AI generation.</p>
+        <div className="space-y-1">
+          <p className="text-sm text-muted-foreground">Configure section blueprint for AI generation.</p>
+          <p className="text-xs text-muted-foreground/70">Specify target question counts per section. AI will generate questions based on your source content.</p>
+        </div>
         <Button variant="outline" onClick={addSection}>
           <Plus className="mr-2 size-4" />
           Add section
