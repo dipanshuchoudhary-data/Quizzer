@@ -236,11 +236,28 @@ async def add_file_sources(
         db.add(document)
         await db.commit()
         await db.refresh(document)
+
+        # Dispatch to Celery with robust fallback
+        task_dispatched = False
         try:
             process_document.delay(str(document.id))
-        except Exception:
-            logger.exception("Failed to dispatch document processing task; falling back to inline execution")
-            await asyncio.to_thread(process_document, str(document.id))
+            task_dispatched = True
+            logger.info(f"Document {document.id} dispatched to Celery")
+        except Exception as celery_err:
+            logger.warning(f"Celery dispatch failed for document {document.id}: {celery_err}")
+
+        if not task_dispatched:
+            # Fallback: run synchronously in background thread
+            try:
+                logger.info(f"Running document {document.id} processing inline")
+                await asyncio.to_thread(process_document, str(document.id))
+            except Exception as fallback_err:
+                logger.exception(f"Inline processing failed for document {document.id}: {fallback_err}")
+                # Mark as failed so frontend doesn't wait forever
+                document.extraction_status = "FAILED"
+                document.extracted_metadata = {"error": f"Processing failed: {str(fallback_err)}"}
+                await db.commit()
+
         documents.append({"id": str(document.id), "file_name": document.file_name})
 
     sources = await _load_sources(str(quiz_uuid))

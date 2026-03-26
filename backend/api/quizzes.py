@@ -803,6 +803,7 @@ async def generate_ai_quiz(
     await db.refresh(job)
     await _invalidate_dashboard_cache(current_user.id)
 
+    task_dispatched = False
     try:
         create_quiz_ai.delay(
             str(job.id),
@@ -811,16 +812,29 @@ async def generate_ai_quiz(
             blueprint,
             professor_note,
         )
-    except Exception:
-        logger.exception("Failed to dispatch Celery quiz generation task; falling back to inline execution", extra={"quiz_id": str(quiz_id), "job_id": str(job.id)})
-        await asyncio.to_thread(
-            create_quiz_ai,
-            str(job.id),
-            str(quiz_id),
-            extracted_text,
-            blueprint,
-            professor_note,
-        )
+        task_dispatched = True
+        logger.info(f"Quiz generation task dispatched to Celery: job_id={job.id}")
+    except Exception as celery_err:
+        logger.warning(f"Celery dispatch failed for quiz {quiz_id}: {celery_err}")
+
+    if not task_dispatched:
+        try:
+            logger.info(f"Running quiz generation inline for job_id={job.id}")
+            await asyncio.to_thread(
+                create_quiz_ai,
+                str(job.id),
+                str(quiz_id),
+                extracted_text,
+                blueprint,
+                professor_note,
+            )
+        except Exception as fallback_err:
+            logger.exception(f"Inline quiz generation failed: {fallback_err}")
+            # Mark as failed so frontend doesn't wait forever
+            job.status = "FAILED"
+            job.meta = {"error": str(fallback_err)}
+            quiz.ai_generation_status = "FAILED"
+            await db.commit()
 
     return {"message": "AI generation started", "job_id": str(job.id)}
 
