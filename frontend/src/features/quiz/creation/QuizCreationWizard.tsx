@@ -117,7 +117,12 @@ export function QuizCreationWizard({ onDone }: { onDone: () => void }) {
     queryKey: ["quiz", createdQuizId],
     queryFn: () => quizApi.getById(createdQuizId as string),
     enabled: Boolean(createdQuizId),
-    refetchInterval: 3000,
+    refetchInterval: (query) => {
+      if (step !== 2) return false
+      const status = query.state.data?.ai_generation_status
+      if (status === "COMPLETED" || status === "FAILED") return false
+      return 3000
+    },
   })
 
   const { data: questions = [], refetch: refetchQuestions } = useQuery({
