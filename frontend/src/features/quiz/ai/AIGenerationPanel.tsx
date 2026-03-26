@@ -15,21 +15,35 @@ export function AIGenerationPanel({ quizId }: Props) {
 
   const startGeneration = async () => {
     setLoading(true)
-    const res = await aiApi.triggerGeneration(quizId, {
-      extracted_text: "Manual trigger",
-      blueprint: { mode: "manual" },
-    })
-    setStatus(res.message)
-    setLoading(false)
+    try {
+      const res = await aiApi.triggerGeneration(quizId, {
+        extracted_text: "Manual trigger",
+        blueprint: { mode: "manual" },
+      })
+      setStatus(res.message)
+    } catch {
+      setStatus("FAILED")
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => {
     let interval: NodeJS.Timeout
+    let errorCount = 0
 
-    if (status === "processing") {
+    if (status === "PROCESSING") {
       interval = setInterval(async () => {
-        const job = await aiApi.getJobStatus(quizId)
-        setStatus(job.status)
+        try {
+          const job = await aiApi.getJobStatus(quizId)
+          setStatus(job.status)
+          errorCount = 0
+        } catch {
+          errorCount++
+          if (errorCount >= 3) {
+            setStatus("FAILED")
+          }
+        }
       }, 3000)
     }
 
