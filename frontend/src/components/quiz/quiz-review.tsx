@@ -16,9 +16,11 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { useReviewUIStore } from "@/stores/useReviewUIStore"
 import { questionApi } from "@/lib/api/question"
 import { sectionApi } from "@/lib/api/section"
 import { quizApi } from "@/lib/api/quiz"
@@ -111,11 +113,42 @@ function getQuestionErrors(question: Question) {
 
 export function QuizReview({ quizId }: { quizId: string }) {
   const queryClient = useQueryClient()
+  const { focusMode, toggleFocus, setFocusMode } = useReviewUIStore()
   const [hasLoaded, setHasLoaded] = useState(false)
   const [filterSection, setFilterSection] = useState<string>("all")
   const [filterType, setFilterType] = useState<string>("all")
   const [searchQuery, setSearchQuery] = useState("")
   const [hasChangesSincePublish, setHasChangesSincePublish] = useState(false)
+  const [publishedUrl, setPublishedUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    document.body.classList.toggle("review-focus", focusMode)
+    return () => {
+      document.body.classList.remove("review-focus")
+    }
+  }, [focusMode])
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.repeat || event.defaultPrevented) return
+      if (event.ctrlKey || event.metaKey || event.altKey) return
+      if (event.key.toLowerCase() !== "f") return
+      const target = event.target as HTMLElement | null
+      const isTypingContext =
+        target?.tagName === "INPUT" ||
+        target?.tagName === "TEXTAREA" ||
+        target?.isContentEditable
+      if (isTypingContext) return
+      event.preventDefault()
+      toggleFocus()
+    }
+
+    window.addEventListener("keydown", onKeyDown)
+    return () => {
+      window.removeEventListener("keydown", onKeyDown)
+      setFocusMode(false)
+    }
+  }, [setFocusMode, toggleFocus])
 
   const { data: questions = [], refetch: refetchQuestions, isLoading } = useQuery({
     queryKey: ["questions", quizId],
@@ -205,6 +238,7 @@ export function QuizReview({ quizId }: { quizId: string }) {
     mutationFn: () => quizApi.publish(quizId),
     onSuccess: (data) => {
       toast.success("Quiz published")
+      setPublishedUrl(data.public_url ?? null)
       queryClient.setQueryData(["quiz", quizId], (current: typeof quiz) =>
         current
           ? {
@@ -298,13 +332,21 @@ export function QuizReview({ quizId }: { quizId: string }) {
   }, [questions])
 
   return (
-    <div className="flex min-h-[calc(100vh-260px)] flex-col space-y-5">
+    <div
+      className={cn(
+        "flex flex-col space-y-5 overflow-hidden rounded-2xl border bg-background/95",
+        focusMode ? "min-h-screen rounded-none border-none" : "min-h-[calc(100vh-260px)]"
+      )}
+    >
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-background/80 p-4 shadow-sm">
         <div className="space-y-1">
           <p className="text-sm font-semibold text-foreground">Question review workspace</p>
           <p className="text-xs text-muted-foreground">Approve, edit, and publish once everything looks perfect.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={toggleFocus} title="Shortcut: F">
+            {focusMode ? "Exit focus mode" : "Focus mode"}
+          </Button>
           <Button variant="outline" onClick={() => createManualQuestionMutation.mutate()} disabled={!sections[0]}>
             Add question
           </Button>
@@ -327,89 +369,91 @@ export function QuizReview({ quizId }: { quizId: string }) {
         </div>
       </div>
 
-      <div className="grid flex-1 gap-6 lg:grid-cols-[300px_minmax(0,1fr)]">
-        <aside className="space-y-4">
-          <div className="sticky top-24 space-y-4 rounded-2xl border bg-background/70 p-4 shadow-sm">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Question types</p>
-              <div className="mt-3 space-y-2">
-                {REVIEW_TYPES.map((type) => {
-                  const isActive = filterType === type.value
-                  const stat = sidebarStats[type.value as keyof typeof sidebarStats]
-                  return (
-                    <button
-                      key={type.value}
-                      type="button"
-                      onClick={() => setFilterType(type.value)}
-                      className={cn(
-                        "flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left text-sm transition",
-                        isActive
-                          ? "border-primary/40 bg-primary/5 text-primary"
-                          : "border-muted bg-background hover:border-primary/30"
-                      )}
-                    >
-                      <span>{type.label}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {stat.approved}/{stat.total}
-                      </span>
-                    </button>
-                  )
-                })}
-                <button
-                  type="button"
-                  onClick={() => setFilterType("all")}
-                  className={cn(
-                    "flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left text-sm transition",
-                    filterType === "all"
-                      ? "border-primary/40 bg-primary/5 text-primary"
-                      : "border-muted bg-background hover:border-primary/30"
-                  )}
-                >
-                  <span>All questions</span>
-                  <span className="text-xs text-muted-foreground">{questions.length}</span>
-                </button>
+      <div className={cn("grid flex-1 gap-6", focusMode ? "lg:grid-cols-[minmax(0,1fr)]" : "lg:grid-cols-[300px_minmax(0,1fr)]")}>
+        {!focusMode && (
+          <aside className="space-y-4">
+            <div className="sticky top-24 space-y-4 rounded-2xl border bg-background/70 p-4 shadow-sm">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Question types</p>
+                <div className="mt-3 space-y-2">
+                  {REVIEW_TYPES.map((type) => {
+                    const isActive = filterType === type.value
+                    const stat = sidebarStats[type.value as keyof typeof sidebarStats]
+                    return (
+                      <button
+                        key={type.value}
+                        type="button"
+                        onClick={() => setFilterType(type.value)}
+                        className={cn(
+                          "flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left text-sm transition",
+                          isActive
+                            ? "border-primary/40 bg-primary/5 text-primary"
+                            : "border-muted bg-background hover:border-primary/30"
+                        )}
+                      >
+                        <span>{type.label}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {stat.approved}/{stat.total}
+                        </span>
+                      </button>
+                    )
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => setFilterType("all")}
+                    className={cn(
+                      "flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left text-sm transition",
+                      filterType === "all"
+                        ? "border-primary/40 bg-primary/5 text-primary"
+                        : "border-muted bg-background hover:border-primary/30"
+                    )}
+                  >
+                    <span>All questions</span>
+                    <span className="text-xs text-muted-foreground">{questions.length}</span>
+                  </button>
+                </div>
               </div>
-            </div>
 
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Sections</p>
-              <div className="mt-3 space-y-2">
-                <button
-                  type="button"
-                  onClick={() => setFilterSection("all")}
-                  className={cn(
-                    "flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left text-sm transition",
-                    filterSection === "all"
-                      ? "border-primary/40 bg-primary/5 text-primary"
-                      : "border-muted bg-background hover:border-primary/30"
-                  )}
-                >
-                  <span>All sections</span>
-                  <span className="text-xs text-muted-foreground">{sections.length}</span>
-                </button>
-                {sections.map((section) => {
-                  const count = questions.filter((q) => q.section_id === section.id).length
-                  return (
-                    <button
-                      key={section.id}
-                      type="button"
-                      onClick={() => setFilterSection(section.id)}
-                      className={cn(
-                        "flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left text-sm transition",
-                        filterSection === section.id
-                          ? "border-primary/40 bg-primary/5 text-primary"
-                          : "border-muted bg-background hover:border-primary/30"
-                      )}
-                    >
-                      <span>{section.title}</span>
-                      <span className="text-xs text-muted-foreground">{count}</span>
-                    </button>
-                  )
-                })}
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Sections</p>
+                <div className="mt-3 space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => setFilterSection("all")}
+                    className={cn(
+                      "flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left text-sm transition",
+                      filterSection === "all"
+                        ? "border-primary/40 bg-primary/5 text-primary"
+                        : "border-muted bg-background hover:border-primary/30"
+                    )}
+                  >
+                    <span>All sections</span>
+                    <span className="text-xs text-muted-foreground">{sections.length}</span>
+                  </button>
+                  {sections.map((section) => {
+                    const count = questions.filter((q) => q.section_id === section.id).length
+                    return (
+                      <button
+                        key={section.id}
+                        type="button"
+                        onClick={() => setFilterSection(section.id)}
+                        className={cn(
+                          "flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left text-sm transition",
+                          filterSection === section.id
+                            ? "border-primary/40 bg-primary/5 text-primary"
+                            : "border-muted bg-background hover:border-primary/30"
+                        )}
+                      >
+                        <span>{section.title}</span>
+                        <span className="text-xs text-muted-foreground">{count}</span>
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
             </div>
-          </div>
-        </aside>
+          </aside>
+        )}
 
         <section className="flex min-h-0 flex-col space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -789,6 +833,30 @@ export function QuizReview({ quizId }: { quizId: string }) {
           <p className="mt-1 text-xs text-muted-foreground">Publish the quiz to generate a student link.</p>
         )}
       </div>
+
+      <Dialog open={Boolean(publishedUrl)} onOpenChange={(open) => !open && setPublishedUrl(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Quiz Published</DialogTitle>
+          </DialogHeader>
+          <Input value={publishedUrl ?? ""} readOnly />
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (!publishedUrl) return
+                void navigator.clipboard.writeText(publishedUrl)
+                toast.success("Link copied")
+              }}
+            >
+              Copy link
+            </Button>
+            <Button onClick={() => setPublishedUrl(null)}>
+              Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
