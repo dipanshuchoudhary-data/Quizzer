@@ -804,7 +804,7 @@ async def generate_ai_quiz(
     await _invalidate_dashboard_cache(current_user.id)
 
     # Dispatch quiz generation task
-    dispatch_quiz_task(
+    await dispatch_quiz_task(
         str(job.id),
         str(quiz_id),
         extracted_text,

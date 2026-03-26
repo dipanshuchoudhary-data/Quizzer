@@ -100,7 +100,7 @@ async def export_quiz_results(
             detail="format must be 'csv' or 'excel'",
         )
 
-    task = dispatch_export_task(str(quiz_id), format_type, str(current_user.id))
+    task = await dispatch_export_task(str(quiz_id), format_type, str(current_user.id))
 
     return {
         "message": "Export started",

@@ -56,7 +56,7 @@ async def upload_document(
     await db.refresh(document)
 
     # Dispatch document processing task
-    dispatch_document_task(str(document.id))
+    await dispatch_document_task(str(document.id))
 
     return {
         "message": "File uploaded. Processing started.",

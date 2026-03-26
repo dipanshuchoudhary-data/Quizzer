@@ -238,7 +238,7 @@ async def add_file_sources(
         await db.refresh(document)
 
         # Dispatch document processing task
-        dispatch_document_task(str(document.id))
+        await dispatch_document_task(str(document.id))
 
         documents.append({"id": str(document.id), "file_name": document.file_name})
 
