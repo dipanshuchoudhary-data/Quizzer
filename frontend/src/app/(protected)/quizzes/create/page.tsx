@@ -85,14 +85,26 @@ export default function QuizCreatePage() {
     queryKey: ["ai-source-documents", quizId],
     queryFn: () => aiApi.getSourceDocuments(quizId as string),
     enabled: Boolean(quizId),
-    refetchInterval: sourceMode === "files" ? 3000 : false,
+    refetchInterval: (query) => {
+      if (sourceMode !== "files") return false
+      if (step !== 1) return false
+      const docs = (query.state.data as { documents?: Document[] } | undefined)?.documents ?? []
+      if (docs.length === 0) return 3000
+      const allCompleted = docs.every((doc) => doc.extraction_status === "COMPLETED" || doc.extraction_status === "FAILED")
+      return allCompleted ? false : 3000
+    },
   })
 
   const { data: jobStatus } = useQuery({
     queryKey: ["ai-job", jobId],
     queryFn: () => aiApi.getJobStatus(jobId as string),
     enabled: Boolean(jobId),
-    refetchInterval: jobId ? 3000 : false,
+    refetchInterval: (query) => {
+      if (!jobId) return false
+      const status = query.state.data?.status
+      if (status === "COMPLETED" || status === "FAILED") return false
+      return 3000
+    },
   })
 
   const generateMutation = useMutation({
@@ -124,17 +136,23 @@ export default function QuizCreatePage() {
         professor_note: "AI workflow generation",
         source_mode: sourceMode,
       })
+
+      if (!response || !response.job_id) {
+        throw new Error("Invalid response: missing job_id")
+      }
+
       return response
     },
     onSuccess: (data) => {
       setJobId(data.job_id)
-      setStep(3)
       setProcessingError(null)
       toast.success("AI processing started")
+      setStep(3)
     },
     onError: (error: unknown) => {
-      setProcessingError(getApiErrorMessage(error, "Failed to start processing"))
-      toast.error(getApiErrorMessage(error, "Failed to start processing"))
+      const errorMessage = getApiErrorMessage(error, "Failed to start processing")
+      setProcessingError(errorMessage)
+      toast.error(errorMessage)
     },
   })
 
@@ -380,12 +398,12 @@ export default function QuizCreatePage() {
               className={`rounded-2xl border p-4 text-left transition-all ${generationMode === "auto" ? "border-primary/40 bg-primary/5" : "hover:-translate-y-1 hover:border-primary/30 hover:bg-muted/40"}`}
             >
               <p className="text-sm font-semibold text-foreground">Start AI Processing</p>
-              <p className="text-xs text-muted-foreground">Set total questions and let AI distribute selected question types automatically.</p>
+              <p className="text-xs text-muted-foreground">AI will analyze your content and generate questions based on detected topics.</p>
               {generationMode === "auto" ? (
                 <div className="mt-4 space-y-4">
                   <div className="space-y-2">
                     <label htmlFor="total-questions" className="text-xs font-medium text-foreground">
-                      Total Questions
+                      Questions to Generate
                     </label>
                     <Input
                       id="total-questions"
@@ -393,8 +411,11 @@ export default function QuizCreatePage() {
                       min={1}
                       value={questionTarget}
                       onChange={(event) => setQuestionTarget(Math.max(1, Number(event.target.value || 1)))}
-                      placeholder="Total questions"
+                      placeholder="Number of questions"
                     />
+                    <p className="text-xs text-muted-foreground">
+                      Target number of questions AI will create from your content. Actual count may vary based on source material.
+                    </p>
                   </div>
 
                   <div className="space-y-2">
@@ -449,8 +470,15 @@ export default function QuizCreatePage() {
               Back
             </Button>
             <Button
-              onClick={() => generateMutation.mutate()}
-              disabled={generateMutation.isPending || (generationMode === "auto" && (questionTarget <= 0 || selectedTypes.length === 0))}
+              onClick={() => {
+                if (generateMutation.isPending) return
+                generateMutation.mutate()
+              }}
+              disabled={
+                generateMutation.isPending ||
+                (generationMode === "auto" && (questionTarget <= 0 || selectedTypes.length === 0)) ||
+                (generationMode === "custom" && sections.length === 0)
+              }
               className="h-11 w-full sm:w-auto"
             >
               {generateMutation.isPending ? "Starting..." : "Start AI Processing"}
