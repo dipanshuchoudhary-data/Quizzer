@@ -1,5 +1,6 @@
 import "./globals.css"
 import { Analytics } from "@vercel/analytics/next"
+import { SpeedInsights } from "@vercel/speed-insights/next"
 import { QueryProvider } from "@/components/providers/QueryProvider"
 import { ToastProvider } from "@/components/providers/ToastProvider"
 import { AuthProvider } from "@/components/providers/AuthProvider"
@@ -22,6 +23,7 @@ export default function RootLayout({
           </QueryProvider>
         </ThemeProvider>
         <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   )
