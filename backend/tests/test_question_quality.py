@@ -1,5 +1,8 @@
 from backend.services.question_quality import normalize_math_text, sanitize_question_candidate
-from backend.workers.quiz_creation_task import parse_questions_from_source
+from backend.workers.quiz_creation_task import (
+    parse_questions_from_source,
+    should_replace_blueprint_with_inferred_sections,
+)
 
 
 def test_normalize_math_text_collapses_ocr_duplicates():
@@ -63,3 +66,57 @@ Answer: B
         "u \\cot\\theta",
     ]
     assert question.correct_answer == "u \\cos\\theta"
+
+
+def test_auto_detect_structure_does_not_expand_requested_question_count():
+    requested_sections = [
+        {
+            "index": 0,
+            "title": "Section 1",
+            "number_of_questions": 20,
+            "question_type": "MCQ",
+            "marks_per_question": 1,
+        }
+    ]
+    inferred_sections = [
+        {
+            "index": 0,
+            "title": "MCQ",
+            "number_of_questions": 46,
+            "question_type": "MCQ",
+            "marks_per_question": 1,
+        }
+    ]
+
+    assert should_replace_blueprint_with_inferred_sections(
+        requested_sections,
+        inferred_sections,
+        default_5_mcq=False,
+    ) is False
+
+
+def test_auto_detect_structure_can_replace_placeholder_blueprint():
+    requested_sections = [
+        {
+            "index": 0,
+            "title": "Section 1",
+            "number_of_questions": 5,
+            "question_type": "MCQ",
+            "marks_per_question": 1,
+        }
+    ]
+    inferred_sections = [
+        {
+            "index": 0,
+            "title": "MCQ",
+            "number_of_questions": 18,
+            "question_type": "MCQ",
+            "marks_per_question": 1,
+        }
+    ]
+
+    assert should_replace_blueprint_with_inferred_sections(
+        requested_sections,
+        inferred_sections,
+        default_5_mcq=True,
+    ) is True
