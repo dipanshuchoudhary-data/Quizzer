@@ -4,6 +4,7 @@ import { env } from "@/lib/env"
 export const api = axios.create({
   baseURL: env.apiUrl,
   withCredentials: true,
+  timeout: 30000,
 })
 
 api.interceptors.request.use((config) => {
