@@ -4,7 +4,6 @@ from typing import TypedDict, Optional, List, Dict, Any
 from backend.ai.agents.summarization_agent import summarize_document
 from backend.ai.agents.prompt_enchancer_agent import enhance_prompt
 from backend.ai.agents.quiz_generator_agent import generate_quiz
-from backend.ai.agents.answer_key_agent import generate_missing_answers
 
 
 class QuizGraphState(TypedDict):
@@ -72,37 +71,6 @@ async def generate_node(state: QuizGraphState):
     }
 
 
-async def answer_key_node(state: QuizGraphState):
-
-    if not state.get("questions"):
-        raise ValueError("No questions available for answer key generation")
-
-    output = await generate_missing_answers(state["questions"])
-
-    if output is None or not getattr(output, "questions", None):
-        raise ValueError("Answer key agent failed")
-
-    return {
-        "questions": output.questions
-    }
-
-
-def needs_answer_key(state: QuizGraphState):
-
-    questions = state.get("questions") or []
-
-    for q in questions:
-        qtype = str(getattr(q, "question_type", "") or "").strip().upper().replace("-", "_").replace(" ", "_")
-        if qtype in {"SHORT_ANSWER", "LONG_ANSWER"}:
-            continue
-        answer = getattr(q, "correct_answer", None)
-        normalized = str(answer or "").strip().lower()
-        if normalized in {"", "answer_unavailable", "null", "none"}:
-            return "answer_key"
-
-    return END
-
-
 # -------------------------
 # Graph Builder
 # -------------------------
@@ -115,22 +83,11 @@ def build_quiz_creation_graph():
     graph.add_node("summarize", summarize_node)
     graph.add_node("enhance", enhance_node)
     graph.add_node("generate", generate_node)
-    graph.add_node("answer_key", answer_key_node)
 
     # Flow
     graph.add_edge(START, "summarize")
     graph.add_edge("summarize", "enhance")
     graph.add_edge("enhance", "generate")
-
-    graph.add_conditional_edges(
-        "generate",
-        needs_answer_key,
-        {
-            "answer_key": "answer_key",
-            END: END,
-        },
-    )
-
-    graph.add_edge("answer_key", END)
+    graph.add_edge("generate", END)
 
     return graph.compile()

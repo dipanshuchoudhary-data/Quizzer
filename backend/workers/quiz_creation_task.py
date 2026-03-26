@@ -692,7 +692,7 @@ def create_quiz_ai(
                 for _ in range(3):
                     if selected_pairs:
                         break
-                    job.meta = {**(job.meta or {}), "stage": "question_generation", "progress": 50}
+                    job.meta = {**(job.meta or {}), "stage": "question_generation", "progress": 35}
                     await db.commit()
                     result = await graph.ainvoke(
                         {
@@ -701,6 +701,8 @@ def create_quiz_ai(
                             "professor_note": retry_note,
                         }
                     )
+                    job.meta = {**(job.meta or {}), "stage": "question_generation", "progress": 60}
+                    await db.commit()
                     cleaned_questions = sanitize_generated_questions(result["questions"])
 
                     if from_source:
@@ -725,9 +727,11 @@ def create_quiz_ai(
                     break
 
                 if selected_pairs and missing_answers_count(selected_pairs) > 0:
-                    job.meta = {**(job.meta or {}), "stage": "answer_generation", "progress": 70}
+                    job.meta = {**(job.meta or {}), "stage": "answer_generation", "progress": 75}
                     await db.commit()
                     selected_pairs = await enrich_missing_answers(selected_pairs)
+                    job.meta = {**(job.meta or {}), "stage": "answer_generation", "progress": 85}
+                    await db.commit()
 
                 if not selected_pairs:
                     if strict_source_alignment:
