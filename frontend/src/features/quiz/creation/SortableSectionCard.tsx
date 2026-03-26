@@ -64,13 +64,14 @@ export function SortableSectionCard({ section, index, total, onUpdate, onMove, o
 
         <div className="grid gap-3 md:grid-cols-2">
           <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">Number of questions</label>
+            <label className="text-xs text-muted-foreground">Questions to generate</label>
             <Input
               type="number"
               min={1}
               value={section.numberOfQuestions}
               onChange={(event) => onUpdate({ ...section, numberOfQuestions: Number(event.target.value || 1) })}
             />
+            <p className="text-xs text-muted-foreground/70">AI target for this section</p>
           </div>
 
           <div className="space-y-1">
