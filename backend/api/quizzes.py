@@ -20,7 +20,7 @@ from backend.models.quiz_settings import QuizSettings
 from backend.models.question import Question
 from backend.models.ai_job import AIJob
 from backend.models.user import User
-from backend.workers.quiz_creation_task import create_quiz_ai
+from backend.services.task_dispatcher import dispatch_quiz_task
 from backend.workers.quiz_creation_task import (
     parse_questions_from_source,
     infer_blueprint_sections_from_source,
@@ -803,38 +803,14 @@ async def generate_ai_quiz(
     await db.refresh(job)
     await _invalidate_dashboard_cache(current_user.id)
 
-    task_dispatched = False
-    try:
-        create_quiz_ai.delay(
-            str(job.id),
-            str(quiz_id),
-            extracted_text,
-            blueprint,
-            professor_note,
-        )
-        task_dispatched = True
-        logger.info(f"Quiz generation task dispatched to Celery: job_id={job.id}")
-    except Exception as celery_err:
-        logger.warning(f"Celery dispatch failed for quiz {quiz_id}: {celery_err}")
-
-    if not task_dispatched:
-        try:
-            logger.info(f"Running quiz generation inline for job_id={job.id}")
-            await asyncio.to_thread(
-                create_quiz_ai,
-                str(job.id),
-                str(quiz_id),
-                extracted_text,
-                blueprint,
-                professor_note,
-            )
-        except Exception as fallback_err:
-            logger.exception(f"Inline quiz generation failed: {fallback_err}")
-            # Mark as failed so frontend doesn't wait forever
-            job.status = "FAILED"
-            job.meta = {"error": str(fallback_err)}
-            quiz.ai_generation_status = "FAILED"
-            await db.commit()
+    # Dispatch quiz generation task
+    dispatch_quiz_task(
+        str(job.id),
+        str(quiz_id),
+        extracted_text,
+        blueprint,
+        professor_note,
+    )
 
     return {"message": "AI generation started", "job_id": str(job.id)}
 

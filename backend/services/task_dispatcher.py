@@ -1,0 +1,162 @@
+"""
+Task Execution Abstraction Layer
+
+This module provides a unified interface for dispatching tasks that can run either
+synchronously (inline) or asynchronously (via Celery), based on configuration.
+
+Supports:
+- Render Free Tier: USE_CELERY=false (inline execution, no worker required)
+- GCP/Production: USE_CELERY=true (Celery worker execution)
+
+Switching modes requires ONLY config change - no code changes needed.
+"""
+
+import asyncio
+import logging
+import uuid
+from backend.core.config import settings
+from backend.workers.document_task import process_document as celery_process_document
+from backend.workers.quiz_creation_task import create_quiz_ai as celery_create_quiz_ai
+from backend.workers.export_task import export_results as celery_export_results
+
+logger = logging.getLogger(__name__)
+
+
+class SimpleTask:
+    """Simple task object for inline execution to mimic Celery task.id."""
+
+    def __init__(self):
+        self.id = str(uuid.uuid4())
+
+
+def dispatch_document_task(document_id: str) -> None:
+    """
+    Dispatch document processing task.
+
+    Routes to either Celery queue or inline execution based on USE_CELERY config.
+
+    Args:
+        document_id: UUID of the document to process
+    """
+    if settings.USE_CELERY:
+        logger.info(f"[Celery] Dispatching document task: {document_id}")
+        celery_process_document.delay(document_id)
+    else:
+        logger.info(f"[Inline] Executing document task: {document_id}")
+        # Run synchronously in thread pool to avoid blocking API
+        asyncio.create_task(_run_document_task(document_id))
+
+
+def dispatch_quiz_task(
+    job_id: str,
+    quiz_id: str,
+    extracted_text: str,
+    blueprint: dict,
+    professor_note: str | None,
+) -> None:
+    """
+    Dispatch quiz generation task.
+
+    Routes to either Celery queue or inline execution based on USE_CELERY config.
+
+    Args:
+        job_id: UUID of the AI job
+        quiz_id: UUID of the quiz
+        extracted_text: Extracted text from sources
+        blueprint: Quiz generation blueprint
+        professor_note: Additional notes from professor
+    """
+    if settings.USE_CELERY:
+        logger.info(f"[Celery] Dispatching quiz task: job_id={job_id}, quiz_id={quiz_id}")
+        celery_create_quiz_ai.delay(
+            job_id,
+            quiz_id,
+            extracted_text,
+            blueprint,
+            professor_note,
+        )
+    else:
+        logger.info(f"[Inline] Executing quiz task: job_id={job_id}, quiz_id={quiz_id}")
+        asyncio.create_task(
+            _run_quiz_task(
+                job_id,
+                quiz_id,
+                extracted_text,
+                blueprint,
+                professor_note,
+            )
+        )
+
+
+def dispatch_export_task(quiz_id: str, format_type: str, owner_id: str | None = None) -> SimpleTask:
+    """
+    Dispatch export results task.
+
+    Routes to either Celery queue or inline execution based on USE_CELERY config.
+
+    Args:
+        quiz_id: UUID of the quiz
+        format_type: Export format ('csv' or 'excel')
+        owner_id: Optional user ID for owner filtering
+
+    Returns:
+        Task object with id attribute (Celery task or SimpleTask)
+    """
+    simple_task = SimpleTask()
+
+    if settings.USE_CELERY:
+        logger.info(f"[Celery] Dispatching export task: quiz_id={quiz_id}, format={format_type}")
+        return celery_export_results.delay(quiz_id, format_type, owner_id)
+    else:
+        logger.info(f"[Inline] Executing export task: quiz_id={quiz_id}, format={format_type}")
+        asyncio.create_task(_run_export_task(quiz_id, format_type, owner_id, simple_task.id))
+        return simple_task
+
+
+# ============================================================================
+# Internal task runners for inline execution
+# ============================================================================
+
+
+async def _run_document_task(document_id: str) -> None:
+    """Run document processing task inline."""
+    try:
+        celery_process_document(document_id)
+    except Exception as e:
+        logger.error(f"[FAILED] Document task execution failed: {document_id}, error={e}")
+
+
+async def _run_quiz_task(
+    job_id: str,
+    quiz_id: str,
+    extracted_text: str,
+    blueprint: dict,
+    professor_note: str | None,
+) -> None:
+    """Run quiz generation task inline."""
+    try:
+        celery_create_quiz_ai(
+            job_id,
+            quiz_id,
+            extracted_text,
+            blueprint,
+            professor_note,
+        )
+    except Exception as e:
+        logger.error(f"[FAILED] Quiz task execution failed: job_id={job_id}, error={e}")
+
+
+async def _run_export_task(
+    quiz_id: str,
+    format_type: str,
+    owner_id: str | None,
+    task_id: str,
+) -> None:
+    """Run export task inline."""
+    try:
+        logger.info(f"[START] Exporting results: quiz_id={quiz_id}, format={format_type}, task_id={task_id}")
+        celery_export_results(quiz_id, format_type, owner_id)
+        logger.info(f"[SUCCESS] Export task completed: task_id={task_id}")
+    except Exception as e:
+        logger.error(f"[FAILED] Export task execution failed: task_id={task_id}, error={e}")
+

@@ -10,7 +10,7 @@ from backend.api.deps import require_staff
 from backend.models.quiz import Quiz
 from backend.models.document import Document
 from backend.utils.file_utils import save_upload_file
-from backend.workers.document_task import process_document
+from backend.services.task_dispatcher import dispatch_document_task
 
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
@@ -55,11 +55,8 @@ async def upload_document(
     await db.commit()
     await db.refresh(document)
 
-    try:
-        process_document.delay(str(document.id))
-    except Exception:
-        logger.exception("Failed to dispatch document processing task; falling back to inline execution")
-        await asyncio.to_thread(process_document, str(document.id))
+    # Dispatch document processing task
+    dispatch_document_task(str(document.id))
 
     return {
         "message": "File uploaded. Processing started.",

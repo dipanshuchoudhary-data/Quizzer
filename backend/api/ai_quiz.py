@@ -17,7 +17,7 @@ from backend.models.document import Document
 from backend.models.quiz import Quiz
 from backend.models.user import User
 from backend.utils.file_utils import save_upload_file
-from backend.workers.document_task import process_document
+from backend.services.task_dispatcher import dispatch_document_task
 
 
 router = APIRouter(prefix="/ai/quiz", tags=["AI Quiz"])
@@ -237,26 +237,8 @@ async def add_file_sources(
         await db.commit()
         await db.refresh(document)
 
-        # Dispatch to Celery with robust fallback
-        task_dispatched = False
-        try:
-            process_document.delay(str(document.id))
-            task_dispatched = True
-            logger.info(f"Document {document.id} dispatched to Celery")
-        except Exception as celery_err:
-            logger.warning(f"Celery dispatch failed for document {document.id}: {celery_err}")
-
-        if not task_dispatched:
-            # Fallback: run synchronously in background thread
-            try:
-                logger.info(f"Running document {document.id} processing inline")
-                await asyncio.to_thread(process_document, str(document.id))
-            except Exception as fallback_err:
-                logger.exception(f"Inline processing failed for document {document.id}: {fallback_err}")
-                # Mark as failed so frontend doesn't wait forever
-                document.extraction_status = "FAILED"
-                document.extracted_metadata = {"error": f"Processing failed: {str(fallback_err)}"}
-                await db.commit()
+        # Dispatch document processing task
+        dispatch_document_task(str(document.id))
 
         documents.append({"id": str(document.id), "file_name": document.file_name})
 

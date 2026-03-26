@@ -559,16 +559,15 @@ SOURCE TEXT:
     return result.questions
 
 
-@celery_app.task(name="create_quiz_ai", bind=True, max_retries=1)
+@celery_app.task(name="create_quiz_ai")
 def create_quiz_ai(
-    self,
     job_id: str,
     quiz_id: str,
     extracted_text: str,
     blueprint: dict,
     professor_note: str | None,
 ):
-    logger.info(f"Starting quiz generation: job_id={job_id}, quiz_id={quiz_id}")
+    logger.info(f"[START] Quiz generation: job_id={job_id}, quiz_id={quiz_id}")
 
     async def _run():
         graph = build_quiz_creation_graph()
@@ -816,10 +815,10 @@ def create_quiz_ai(
                     "progress": 100,
                 }
                 await db.commit()
-                logger.info(f"Quiz generation COMPLETED: job_id={job_id}, questions={len(selected_pairs)}")
+                logger.info(f"[SUCCESS] Quiz generation completed: job_id={job_id}, questions={len(selected_pairs)}")
 
             except Exception as e:
-                logger.exception(f"Quiz generation FAILED: job_id={job_id}, error={e}")
+                logger.error(f"[FAILED] Quiz generation failed: job_id={job_id}, error={e}")
                 if quiz:
                     quiz.ai_generation_status = "FAILED"
                 job.status = "FAILED"
@@ -830,7 +829,7 @@ def create_quiz_ai(
     try:
         asyncio.run(_run())
     except Exception as e:
-        logger.exception(f"Fatal error in quiz generation: job_id={job_id}, error={e}")
+        logger.error(f"[FAILED] Fatal error in quiz generation: job_id={job_id}, error={e}")
         # Try to mark as failed even on fatal error
         try:
             async def _mark_failed():

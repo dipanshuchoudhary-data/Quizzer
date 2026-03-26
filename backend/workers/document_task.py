@@ -23,9 +23,9 @@ if sys.platform.startswith("win"):
 # Celery Task
 # --------------------------------------------------
 
-@celery_app.task(name="process_document", bind=True, max_retries=2)
-def process_document(self, document_id: str):
-    logger.info(f"Starting document processing for {document_id}")
+@celery_app.task(name="process_document")
+def process_document(document_id: str):
+    logger.info(f"[START] Processing document {document_id}")
 
     async def _run():
 
@@ -78,11 +78,11 @@ def process_document(self, document_id: str):
 
                 doc.extraction_status = "COMPLETED"
                 await db.commit()
-                logger.info(f"Document {document_id} processing COMPLETED")
+                logger.info(f"[SUCCESS] Document {document_id} processing completed")
 
             except Exception as e:
                 # Failure handling
-                logger.exception(f"Document {document_id} processing FAILED: {e}")
+                logger.error(f"[FAILED] Document {document_id} processing failed: {e}")
                 doc.extraction_status = "FAILED"
                 doc.extracted_metadata = {
                     "error": str(e),
@@ -93,7 +93,7 @@ def process_document(self, document_id: str):
     try:
         asyncio.run(_run())
     except Exception as e:
-        logger.exception(f"Fatal error processing document {document_id}: {e}")
+        logger.error(f"[FAILED] Fatal error processing document {document_id}: {e}")
         # Try to mark as failed even on fatal error
         try:
             async def _mark_failed():

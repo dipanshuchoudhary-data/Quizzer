@@ -62,10 +62,15 @@ class Settings(BaseSettings):
     QUIZ_STREAM_TIMEOUT_SECONDS: int = 300
 
     # ----------------------
-    # Storage 
+    # Storage
     # ----------------------
     GCS_BUCKET_NAME: str | None = None
     GCP_PROJECT_ID: str | None = None
+
+    # ----------------------
+    # Background Tasks
+    # ----------------------
+    USE_CELERY: bool = False  # Set to True when using Celery worker (GCP/Paid tier)
 
     @property
     def is_local(self) -> bool:

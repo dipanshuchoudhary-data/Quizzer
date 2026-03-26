@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.database import get_db
 from backend.services.export_service import load_export_file
+from backend.services.task_dispatcher import dispatch_export_task
 from backend.models.attempt import Attempt
 from backend.models.result import Result
 from backend.models.student_profile import StudentProfile
@@ -16,7 +17,6 @@ from backend.models.quiz import Quiz
 from backend.api.deps import get_current_user, require_staff
 from backend.models.user import User
 from backend.workers.celery_app import celery_app
-from backend.workers.export_task import export_results
 
 
 router = APIRouter(prefix="/results", tags=["Results"])
@@ -100,7 +100,7 @@ async def export_quiz_results(
             detail="format must be 'csv' or 'excel'",
         )
 
-    task = export_results.delay(str(quiz_id), format_type, str(current_user.id))
+    task = dispatch_export_task(str(quiz_id), format_type, str(current_user.id))
 
     return {
         "message": "Export started",
