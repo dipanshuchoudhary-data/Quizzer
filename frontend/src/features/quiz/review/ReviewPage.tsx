@@ -85,6 +85,11 @@ export function ReviewPage({ quizId }: { quizId: string }) {
     queryFn: () => questionApi.getByQuiz(quizId),
   })
 
+  const { data: quiz } = useQuery({
+    queryKey: ["quiz", quizId],
+    queryFn: () => quizApi.getById(quizId),
+  })
+
   const sections = useMemo<Section[]>(() => {
     if (Array.isArray(rawSections) && rawSections.length > 0) return rawSections
     const uniqueIds = Array.from(new Set(questions.map((question) => question.section_id).filter(Boolean)))
@@ -129,6 +134,10 @@ export function ReviewPage({ quizId }: { quizId: string }) {
   const saveQuestion = useMutation({
     mutationFn: ({ questionId, payload }: { questionId: string; payload: Partial<Question> }) =>
       questionApi.update(questionId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["quiz", quizId] })
+      queryClient.invalidateQueries({ queryKey: ["quizzes"] })
+    },
     onError: () => toast.error("Autosave failed"),
   })
 
@@ -139,6 +148,8 @@ export function ReviewPage({ quizId }: { quizId: string }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["questions", quizId] })
+      queryClient.invalidateQueries({ queryKey: ["quiz", quizId] })
+      queryClient.invalidateQueries({ queryKey: ["quizzes"] })
       toast.success("Question approved")
     },
     onError: () => toast.error("Failed to approve question"),
@@ -152,6 +163,8 @@ export function ReviewPage({ quizId }: { quizId: string }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["questions", quizId] })
+      queryClient.invalidateQueries({ queryKey: ["quiz", quizId] })
+      queryClient.invalidateQueries({ queryKey: ["quizzes"] })
       toast.success("Question deleted")
     },
     onError: () => toast.error("Failed to delete question"),
@@ -165,6 +178,8 @@ export function ReviewPage({ quizId }: { quizId: string }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["questions", quizId] })
+      queryClient.invalidateQueries({ queryKey: ["quiz", quizId] })
+      queryClient.invalidateQueries({ queryKey: ["quizzes"] })
       toast.success("Question regenerated")
     },
     onError: () => toast.error("Failed to regenerate question"),
@@ -183,6 +198,8 @@ export function ReviewPage({ quizId }: { quizId: string }) {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["questions", quizId] })
+      queryClient.invalidateQueries({ queryKey: ["quiz", quizId] })
+      queryClient.invalidateQueries({ queryKey: ["quizzes"] })
       toast.success("Manual question added")
     },
     onError: () => toast.error("Failed to add question"),
@@ -193,6 +210,8 @@ export function ReviewPage({ quizId }: { quizId: string }) {
     onSuccess: () => {
       clear()
       queryClient.invalidateQueries({ queryKey: ["questions", quizId] })
+      queryClient.invalidateQueries({ queryKey: ["quiz", quizId] })
+      queryClient.invalidateQueries({ queryKey: ["quizzes"] })
       toast.success("All questions approved")
     },
     onError: () => toast.error("Approve all failed"),
@@ -222,6 +241,10 @@ export function ReviewPage({ quizId }: { quizId: string }) {
 
   const hasSearch = debouncedSearchQuery.length > 0
   const allVisibleSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedIds.includes(id))
+  const isPublished = Boolean(quiz?.is_published)
+  const hasPendingApprovals = unapprovedIds.length > 0
+  const canApproveAll = questions.length > 0 && hasPendingApprovals
+  const canPublish = !isPublished && questions.length > 0 && !hasPendingApprovals
 
   return (
     <div
@@ -244,12 +267,14 @@ export function ReviewPage({ quizId }: { quizId: string }) {
             <Button size="sm" variant="outline" onClick={toggleFocus} title="Shortcut: F" className="h-11 w-full lg:w-auto">
               {focusMode ? "Exit focus mode" : "Focus mode"}
             </Button>
-            <Button size="sm" onClick={() => approveAll.mutate()} disabled={questions.length === 0 || approveAll.isPending} className="h-11 w-full lg:w-auto">
-              {approveAll.isPending ? "Approving..." : `Approve all (${questions.length})`}
+            <Button size="sm" onClick={() => approveAll.mutate()} disabled={!canApproveAll || approveAll.isPending} className="h-11 w-full lg:w-auto">
+              {approveAll.isPending ? "Approving..." : `Approve all (${unapprovedIds.length})`}
             </Button>
-            <Button size="sm" onClick={() => publishQuiz.mutate()} disabled={publishQuiz.isPending || questions.length === 0} className="h-11 w-full sm:col-span-2 lg:w-auto">
-              {publishQuiz.isPending ? "Publishing..." : "Publish"}
-            </Button>
+            {!isPublished && (
+              <Button size="sm" onClick={() => publishQuiz.mutate()} disabled={publishQuiz.isPending || !canPublish} className="h-11 w-full sm:col-span-2 lg:w-auto">
+                {publishQuiz.isPending ? "Publishing..." : "Publish"}
+              </Button>
+            )}
           </div>
         </div>
 
