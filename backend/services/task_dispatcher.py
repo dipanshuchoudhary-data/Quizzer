@@ -57,11 +57,12 @@ async def dispatch_quiz_task(
     professor_note: str | None,
 ) -> None:
     """
-    Dispatch quiz generation task.
+    Dispatch quiz generation task (LONG-RUNNING - non-blocking).
 
-    Routes to either Celery queue or inline execution based on USE_CELERY config.
+    Routes to either Celery queue or background thread based on USE_CELERY config.
 
-    NOTE: This function is async. Call with: await dispatch_quiz_task(...)
+    IMPORTANT: This does NOT wait for task completion. Task runs in background.
+    Frontend polls job status to track progress.
 
     Args:
         job_id: UUID of the AI job
@@ -80,15 +81,16 @@ async def dispatch_quiz_task(
             professor_note,
         )
     else:
-        logger.info(f"[Inline] Executing quiz task: job_id={job_id}, quiz_id={quiz_id}")
-        # Run synchronously in thread pool - blocks until complete
-        await asyncio.to_thread(
-            celery_create_quiz_ai,
-            job_id,
-            quiz_id,
-            extracted_text,
-            blueprint,
-            professor_note,
+        logger.info(f"[Background] Queuing quiz task: job_id={job_id}, quiz_id={quiz_id}")
+        # Run in background thread - API returns immediately, task runs in parallel
+        asyncio.create_task(
+            _run_quiz_task_background(
+                job_id,
+                quiz_id,
+                extracted_text,
+                blueprint,
+                professor_note,
+            )
         )
 
 
@@ -129,3 +131,29 @@ async def dispatch_export_task(
         return simple_task
 
 
+# ============================================================================
+# Background Task Runners (for inline execution without blocking API)
+# ============================================================================
+
+
+async def _run_quiz_task_background(
+    job_id: str,
+    quiz_id: str,
+    extracted_text: str,
+    blueprint: dict,
+    professor_note: str | None,
+) -> None:
+    """Run quiz generation task in background (non-blocking)."""
+    try:
+        logger.info(f"[START] Background quiz generation: job_id={job_id}, quiz_id={quiz_id}")
+        await asyncio.to_thread(
+            celery_create_quiz_ai,
+            job_id,
+            quiz_id,
+            extracted_text,
+            blueprint,
+            professor_note,
+        )
+        logger.info(f"[SUCCESS] Quiz generation completed: job_id={job_id}")
+    except Exception as e:
+        logger.error(f"[FAILED] Quiz generation failed: job_id={job_id}, error={e}")

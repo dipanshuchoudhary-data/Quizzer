@@ -803,7 +803,7 @@ async def generate_ai_quiz(
     await db.refresh(job)
     await _invalidate_dashboard_cache(current_user.id)
 
-    # Dispatch quiz generation task
+    # Dispatch quiz generation task (background - returns immediately)
     await dispatch_quiz_task(
         str(job.id),
         str(quiz_id),
