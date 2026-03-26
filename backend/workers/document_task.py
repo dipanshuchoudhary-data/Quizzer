@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import sys
 from backend.workers.task_db import get_task_sessionmaker
 from backend.workers.celery_app import celery_app
@@ -6,6 +7,8 @@ from backend.models.document import Document
 from backend.services.document_service import extract_text_from_file
 from backend.ai.agents.summarization_agent import summarize_document
 
+
+logger = logging.getLogger(__name__)
 
 # --------------------------------------------------
 # Windows Async Fix (Required for psycopg + asyncio)
@@ -20,8 +23,9 @@ if sys.platform.startswith("win"):
 # Celery Task
 # --------------------------------------------------
 
-@celery_app.task(name="process_document")
-def process_document(document_id: str):
+@celery_app.task(name="process_document", bind=True, max_retries=2)
+def process_document(self, document_id: str):
+    logger.info(f"Starting document processing for {document_id}")
 
     async def _run():
 
@@ -32,16 +36,19 @@ def process_document(document_id: str):
             doc = await db.get(Document, document_id)
 
             if not doc:
+                logger.error(f"Document {document_id} not found")
                 return
 
             # Mark processing
             doc.extraction_status = "PROCESSING"
             await db.commit()
+            logger.info(f"Document {document_id} marked as PROCESSING")
 
             try:
                 # -----------------------------------
                 # Extract text from file
                 # -----------------------------------
+                logger.info(f"Extracting text from {doc.storage_path}")
                 extracted_text = extract_text_from_file(
                     doc.storage_path,
                     doc.file_type,
@@ -50,9 +57,12 @@ def process_document(document_id: str):
                 if not extracted_text or len(extracted_text.strip()) == 0:
                     raise Exception("No text extracted")
 
+                logger.info(f"Extracted {len(extracted_text)} chars from document {document_id}")
+
                 # -----------------------------------
                 # Summarize using AI agent
                 # -----------------------------------
+                logger.info(f"Summarizing document {document_id}")
                 summary_data = await summarize_document(extracted_text)
 
                 # -----------------------------------
@@ -68,9 +78,11 @@ def process_document(document_id: str):
 
                 doc.extraction_status = "COMPLETED"
                 await db.commit()
+                logger.info(f"Document {document_id} processing COMPLETED")
 
             except Exception as e:
                 # Failure handling
+                logger.exception(f"Document {document_id} processing FAILED: {e}")
                 doc.extraction_status = "FAILED"
                 doc.extracted_metadata = {
                     "error": str(e),
@@ -78,4 +90,21 @@ def process_document(document_id: str):
                 await db.commit()
 
     # Run async workflow inside Celery worker
-    asyncio.run(_run())
+    try:
+        asyncio.run(_run())
+    except Exception as e:
+        logger.exception(f"Fatal error processing document {document_id}: {e}")
+        # Try to mark as failed even on fatal error
+        try:
+            async def _mark_failed():
+                SessionLocal = get_task_sessionmaker()
+                async with SessionLocal() as db:
+                    doc = await db.get(Document, document_id)
+                    if doc:
+                        doc.extraction_status = "FAILED"
+                        doc.extracted_metadata = {"error": f"Fatal: {str(e)}"}
+                        await db.commit()
+            asyncio.run(_mark_failed())
+        except Exception:
+            logger.exception(f"Could not mark document {document_id} as failed")
+        raise

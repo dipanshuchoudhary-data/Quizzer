@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import re
 import sys
 import uuid
@@ -18,6 +19,8 @@ from backend.models.question import Question
 from backend.models.ai_job import AIJob
 from backend.core.llm import structured_llm_call
 from backend.ai.schemas.generation import QuizGenerationOutput
+
+logger = logging.getLogger(__name__)
 
 if sys.platform.startswith("win"):
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
@@ -556,14 +559,16 @@ SOURCE TEXT:
     return result.questions
 
 
-@celery_app.task(name="create_quiz_ai")
+@celery_app.task(name="create_quiz_ai", bind=True, max_retries=1)
 def create_quiz_ai(
+    self,
     job_id: str,
     quiz_id: str,
     extracted_text: str,
     blueprint: dict,
     professor_note: str | None,
 ):
+    logger.info(f"Starting quiz generation: job_id={job_id}, quiz_id={quiz_id}")
 
     async def _run():
         graph = build_quiz_creation_graph()
@@ -811,8 +816,10 @@ def create_quiz_ai(
                     "progress": 100,
                 }
                 await db.commit()
+                logger.info(f"Quiz generation COMPLETED: job_id={job_id}, questions={len(selected_pairs)}")
 
             except Exception as e:
+                logger.exception(f"Quiz generation FAILED: job_id={job_id}, error={e}")
                 if quiz:
                     quiz.ai_generation_status = "FAILED"
                 job.status = "FAILED"
@@ -820,4 +827,24 @@ def create_quiz_ai(
                 await db.commit()
                 raise
 
-    asyncio.run(_run())
+    try:
+        asyncio.run(_run())
+    except Exception as e:
+        logger.exception(f"Fatal error in quiz generation: job_id={job_id}, error={e}")
+        # Try to mark as failed even on fatal error
+        try:
+            async def _mark_failed():
+                SessionLocal = get_task_sessionmaker()
+                async with SessionLocal() as db:
+                    job = await db.get(AIJob, job_id)
+                    quiz = await db.get(Quiz, quiz_id)
+                    if job:
+                        job.status = "FAILED"
+                        job.meta = {**(job.meta or {}), "error": f"Fatal: {str(e)}"}
+                    if quiz:
+                        quiz.ai_generation_status = "FAILED"
+                    await db.commit()
+            asyncio.run(_mark_failed())
+        except Exception:
+            logger.exception(f"Could not mark job {job_id} as failed")
+        raise
