@@ -1,14 +1,24 @@
-import backend.models 
+import backend.models
 import os
 import sys
 from celery import Celery
 from backend.core.config import settings
 
 
+def _get_redis_url_with_ssl(url: str) -> str:
+    """Add SSL parameters for rediss:// URLs if not already present."""
+    if url.startswith("rediss://") and "ssl_cert_reqs" not in url:
+        separator = "&" if "?" in url else "?"
+        return f"{url}{separator}ssl_cert_reqs=CERT_NONE"
+    return url
+
+
+redis_url = _get_redis_url_with_ssl(settings.REDIS_URL)
+
 celery_app = Celery(
     "quiz_platform",
-    broker=settings.REDIS_URL,
-    backend=settings.REDIS_URL,
+    broker=redis_url,
+    backend=redis_url,
 )
 
 celery_app.conf.update(
