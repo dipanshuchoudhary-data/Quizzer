@@ -8,7 +8,7 @@ from collections.abc import AsyncIterator
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import ProgrammingError, SQLAlchemyError
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -28,6 +28,7 @@ from backend.workers.quiz_creation_task import (
     extract_questions_verbatim_with_llm,
     extract_all_questions_with_llm,
     enrich_missing_answers,
+    should_replace_blueprint_with_inferred_sections,
 )
 from backend.ai.agents.summarization_agent import summarize_document
 from backend.ai.agents.prompt_enchancer_agent import enhance_prompt
@@ -945,11 +946,11 @@ async def stream_ai_quiz_generation(
             if auto_detect_structure and source_questions:
                 inferred_sections = infer_blueprint_sections_from_source(source_questions)
                 if inferred_sections:
-                    requested_total = sum(section["number_of_questions"] for section in blueprint_sections)
-                    inferred_total = sum(section["number_of_questions"] for section in inferred_sections)
-                    requested_types = {section["question_type"] for section in blueprint_sections}
-                    inferred_types = {section["question_type"] for section in inferred_sections}
-                    if inferred_total > requested_total or len(inferred_types) > len(requested_types) or default_5_mcq:
+                    if should_replace_blueprint_with_inferred_sections(
+                        blueprint_sections,
+                        inferred_sections,
+                        default_5_mcq=default_5_mcq,
+                    ):
                         blueprint_sections[:] = inferred_sections
                         total_required = sum(section["number_of_questions"] for section in blueprint_sections)
 
@@ -1015,6 +1016,9 @@ async def stream_ai_quiz_generation(
                     if await request.is_disconnected():
                         disconnected = True
                         raise asyncio.CancelledError()
+
+                await db.execute(delete(Question).where(Question.quiz_id == quiz_id))
+                await db.commit()
 
                 section_result = await db.execute(
                     select(QuizSection).where(QuizSection.quiz_id == quiz_id).order_by(QuizSection.created_at.asc())

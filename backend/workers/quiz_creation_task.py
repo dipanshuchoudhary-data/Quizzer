@@ -5,7 +5,7 @@ import sys
 import uuid
 from types import SimpleNamespace
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from backend.workers.celery_app import celery_app
 from backend.ai.graphs.quiz_creation_graph import build_quiz_creation_graph
@@ -335,6 +335,25 @@ def infer_blueprint_sections_from_source(source_questions: list[SimpleNamespace]
     return inferred
 
 
+def should_replace_blueprint_with_inferred_sections(
+    requested_sections: list[dict],
+    inferred_sections: list[dict],
+    *,
+    default_5_mcq: bool,
+) -> bool:
+    if not inferred_sections:
+        return False
+    if default_5_mcq:
+        return True
+
+    requested_total = sum(section["number_of_questions"] for section in requested_sections)
+    inferred_total = sum(section["number_of_questions"] for section in inferred_sections)
+    requested_types = {section["question_type"] for section in requested_sections}
+    inferred_types = {section["question_type"] for section in inferred_sections}
+
+    return inferred_total <= requested_total and len(inferred_types) > len(requested_types)
+
+
 def parse_questions_from_source(extracted_text: str) -> list[SimpleNamespace]:
     raw = extracted_text.replace("\r\n", "\n")
     if not raw.strip():
@@ -638,14 +657,10 @@ def create_quiz_ai(
                 if auto_detect_structure and source_questions:
                     inferred_sections = infer_blueprint_sections_from_source(source_questions)
                     if inferred_sections:
-                        requested_total = sum(section["number_of_questions"] for section in blueprint_sections)
-                        inferred_total = sum(section["number_of_questions"] for section in inferred_sections)
-                        requested_types = {section["question_type"] for section in blueprint_sections}
-                        inferred_types = {section["question_type"] for section in inferred_sections}
-                        if (
-                            inferred_total > requested_total
-                            or len(inferred_types) > len(requested_types)
-                            or default_5_mcq
+                        if should_replace_blueprint_with_inferred_sections(
+                            blueprint_sections,
+                            inferred_sections,
+                            default_5_mcq=default_5_mcq,
                         ):
                             blueprint_sections = inferred_sections
 
@@ -729,6 +744,9 @@ def create_quiz_ai(
                             setattr(q, "correct_answer", "answer_unavailable")
                         normalized_pairs.append((section_spec, q))
                     selected_pairs = normalized_pairs
+
+                await db.execute(delete(Question).where(Question.quiz_id == quiz.id))
+                await db.commit()
 
                 sections_result = await db.execute(
                     select(QuizSection).where(QuizSection.quiz_id == quiz_id).order_by(QuizSection.created_at.asc())
