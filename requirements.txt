@@ -36,3 +36,4 @@ boto3
 pandas
 structlog
 python-multipart
+cloudinary>=1.44.1
