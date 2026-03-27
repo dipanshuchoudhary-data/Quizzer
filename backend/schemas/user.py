@@ -3,6 +3,7 @@ from pydantic import BaseModel, EmailStr, Field
 
 class UserProfileUpdateRequest(BaseModel):
     full_name: str | None = Field(default=None, min_length=2, max_length=255)
+    display_name: str | None = Field(default=None, min_length=2, max_length=255)
     email: EmailStr | None = None
     phone_number: str | None = Field(default=None, min_length=8, max_length=20)
     institution: str | None = None
