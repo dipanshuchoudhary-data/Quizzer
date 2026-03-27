@@ -4,6 +4,7 @@ import sys
 import time
 
 from fastapi import FastAPI, Request
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -89,6 +90,8 @@ def create_app() -> FastAPI:
             status_code=500,
             content={"detail": "Internal server error"},
         )
+
+    app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
     # Routers
     app.include_router(auth_router)
