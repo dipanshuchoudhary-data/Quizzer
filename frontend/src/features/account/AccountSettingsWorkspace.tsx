@@ -448,8 +448,8 @@ export function AccountSettingsWorkspace() {
                           <div className="flex items-center justify-between gap-3">
                             <div>
                               <p className="text-sm font-medium text-slate-900 dark:text-[var(--text-primary)]">{session.is_current ? "Current session" : session.device}</p>
-                              <p className="mt-1 text-sm text-slate-500 dark:text-[var(--text-secondary)]">{session.device} • {session.ip_address}</p>
-                              <p className="mt-1 text-xs text-slate-500 dark:text-[var(--text-muted)]">Started {formatSessionTime(session.created_at)} • Last seen {formatSessionTime(session.last_seen_at)}</p>
+                              <p className="mt-1 text-sm text-slate-500 dark:text-[var(--text-secondary)]">{session.device} â€¢ {session.ip_address}</p>
+                              <p className="mt-1 text-xs text-slate-500 dark:text-[var(--text-muted)]">Started {formatSessionTime(session.created_at)} â€¢ Last seen {formatSessionTime(session.last_seen_at)}</p>
                             </div>
                             <span className={cn("rounded-full px-2.5 py-1 text-xs font-medium", session.status === "active" ? "bg-emerald-50 text-emerald-700 dark:bg-[var(--brand-accent-soft)] dark:text-[var(--brand-accent)]" : "bg-slate-200 text-slate-700 dark:bg-[var(--bg-tertiary)] dark:text-[var(--text-secondary)]")}>{session.status === "active" ? (session.is_current ? "Active now" : "Active") : "Expired"}</span>
                           </div>
