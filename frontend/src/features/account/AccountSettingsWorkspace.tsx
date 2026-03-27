@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react"
+import Image from "next/image"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { AnimatePresence, motion } from "framer-motion"
 import { useTheme } from "next-themes"
@@ -10,9 +11,13 @@ import {
   Bell,
   BriefcaseBusiness,
   CheckCircle2,
+  Eye,
+  EyeOff,
   KeyRound,
+  LoaderCircle,
   Paintbrush2,
   PlugZap,
+  RefreshCw,
   ShieldCheck,
   Upload,
   UserRound,
@@ -27,6 +32,9 @@ import { Separator } from "@/components/ui/separator"
 import { PageHeader } from "@/components/page/page-system"
 import { cn } from "@/lib/utils"
 import { getDisplayName } from "@/lib/user"
+import { getApiErrorMessage } from "@/lib/api/error"
+import { userApi, type AuthSession } from "@/lib/api/user"
+import { compressAvatar } from "@/lib/images/avatar"
 
 const tabs = [
   { value: "profile", label: "Profile", icon: UserRound, description: "Identity and account details" },
@@ -66,24 +74,14 @@ function Field({ label, helper, error, children }: { label: string; helper: stri
   )
 }
 
-function ToggleRow({
-  title,
-  description,
-  checked,
-  onCheckedChange,
-}: {
-  title: string
-  description: string
-  checked: boolean
-  onCheckedChange: (checked: boolean) => void
-}) {
+function ToggleRow({ title, description, checked, onCheckedChange, disabled = false }: { title: string; description: string; checked: boolean; onCheckedChange: (checked: boolean) => void; disabled?: boolean }) {
   return (
     <div className="flex flex-col gap-3 rounded-2xl border border-slate-200/80 bg-white/85 p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)]">
       <div>
         <p className="text-sm font-medium text-slate-900 dark:text-[var(--text-primary)]">{title}</p>
         <p className="mt-1 text-sm text-slate-500 dark:text-[var(--text-secondary)]">{description}</p>
       </div>
-      <Switch checked={checked} onCheckedChange={onCheckedChange} />
+      <Switch checked={checked} onCheckedChange={onCheckedChange} disabled={disabled} />
     </div>
   )
 }
@@ -105,13 +103,22 @@ function ChoicePill({ active, label, onClick }: { active: boolean; label: string
   )
 }
 
+function PasswordField({ label, helper, value, onChange, error, visible, onToggle }: { label: string; helper: string; value: string; onChange: (value: string) => void; error?: string; visible: boolean; onToggle: () => void }) {
+  return (
+    <Field label={label} helper={helper} error={error}>
+      <div className="relative">
+        <Input type={visible ? "text" : "password"} value={value} onChange={(event) => onChange(event.target.value)} className={cn("bg-white pr-10 dark:bg-[var(--bg-secondary)]", error ? "border-rose-300" : "")} />
+        <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 dark:text-[var(--text-muted)]" aria-label={visible ? "Hide password" : "Show password"} onClick={onToggle}>
+          {visible ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+        </button>
+      </div>
+    </Field>
+  )
+}
+
 function getInitials(name: string, email: string) {
   const source = name.trim() || email.trim() || "Q"
-  return source
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? "")
-    .join("")
+  return source.split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase() ?? "").join("")
 }
 
 function validateProfile(profile: { name: string; email: string; institution: string; timezone: string }): ProfileErrors {
@@ -124,16 +131,21 @@ function validateProfile(profile: { name: string; email: string; institution: st
   return errors
 }
 
+function formatSessionTime(value: string) {
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value))
+}
+
 export function AccountSettingsWorkspace() {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const { setTheme } = useTheme()
-  const { user, logout } = useAuthStore()
-  const { hydrated, saveState, profile, preferences, notifications, workspace, security, hydrate, setSaveState, patchProfile, patchPreferences, patchNotifications, patchWorkspace, patchSecurity } =
-    useAccountSettingsStore()
+  const { user, logout, setUser } = useAuthStore()
+  const { hydrated, saveState, profile, preferences, notifications, workspace, hydrate, setSaveState, patchProfile, patchPreferences, patchNotifications, patchWorkspace } = useAccountSettingsStore()
 
   const saveTimer = useRef<number | null>(null)
+  const profileSaveTimer = useRef<number | null>(null)
+  const profileRequestId = useRef(0)
   const avatarInputRef = useRef<HTMLInputElement | null>(null)
   const routeTab = searchParams.get("tab")
   const initialTab: SettingsTab = isSettingsTab(routeTab) ? routeTab : "profile"
@@ -142,46 +154,63 @@ export function AccountSettingsWorkspace() {
   const [passwordDraft, setPasswordDraft] = useState({ current: "", next: "", confirm: "" })
   const [passwordError, setPasswordError] = useState<string | null>(null)
   const [passwordState, setPasswordState] = useState<"idle" | "saving" | "saved">("idle")
+  const [showPasswords, setShowPasswords] = useState({ current: false, next: false, confirm: false })
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null)
+  const [avatarUploading, setAvatarUploading] = useState(false)
+  const [sessions, setSessions] = useState<AuthSession[]>([])
+  const [sessionsLoading, setSessionsLoading] = useState(false)
+  const [sessionsLoaded, setSessionsLoaded] = useState(false)
 
-  useEffect(() => {
-    hydrate(user)
-  }, [hydrate, user])
-
-  useEffect(() => {
-    setActiveTab(initialTab)
-  }, [initialTab])
-
-  useEffect(() => {
-    setProfileErrors(validateProfile(profile))
-  }, [profile])
-
-  useEffect(() => {
-    return () => {
-      if (saveTimer.current) window.clearTimeout(saveTimer.current)
-    }
-  }, [])
+  useEffect(() => { hydrate(user) }, [hydrate, user])
+  useEffect(() => { setActiveTab(initialTab) }, [initialTab])
+  useEffect(() => { setProfileErrors(validateProfile(profile)) }, [profile])
+  useEffect(() => () => {
+    if (saveTimer.current) window.clearTimeout(saveTimer.current)
+    if (profileSaveTimer.current) window.clearTimeout(profileSaveTimer.current)
+    if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl)
+  }, [avatarPreviewUrl])
 
   const displayName = getDisplayName(user)
-
-  const saveLabel = useMemo(() => {
-    if (Object.keys(profileErrors).length > 0) return "Needs attention"
-    if (saveState === "saving") return "Syncing..."
-    if (saveState === "saved") return "Saved"
-    return "All changes saved locally"
-  }, [profileErrors, saveState])
-
-  const saveTone = useMemo(() => {
-    if (Object.keys(profileErrors).length > 0) return "border-rose-200 bg-rose-50 text-rose-700"
-    if (saveState === "saving") return "border-amber-200 bg-amber-50 text-amber-700"
-    if (saveState === "saved") return "border-emerald-200 bg-emerald-50 text-emerald-700"
-    return "border-slate-200 bg-white text-slate-600 dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)] dark:text-[var(--text-secondary)]"
-  }, [profileErrors, saveState])
+  const saveLabel = useMemo(() => Object.keys(profileErrors).length > 0 ? "Needs attention" : saveState === "saving" ? "Syncing..." : saveState === "saved" ? "Saved" : "All changes saved", [profileErrors, saveState])
+  const saveTone = useMemo(() => Object.keys(profileErrors).length > 0 ? "border-rose-200 bg-rose-50 text-rose-700" : saveState === "saving" ? "border-amber-200 bg-amber-50 text-amber-700" : saveState === "saved" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white text-slate-600 dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)] dark:text-[var(--text-secondary)]", [profileErrors, saveState])
 
   const updateTab = (tab: SettingsTab) => {
     const next = new URLSearchParams(searchParams.toString())
     next.set("tab", tab)
     router.replace(`${pathname}?${next.toString()}`)
     setActiveTab(tab)
+  }
+
+  const syncUserState = (updatedUser: typeof user) => {
+    setUser(updatedUser)
+    hydrate(updatedUser)
+  }
+
+  const persistProfile = async (nextProfile: typeof profile, successMessage = "Profile updated") => {
+    const requestId = ++profileRequestId.current
+    setSaveState("saving")
+
+    const payload = {
+      full_name: nextProfile.name.trim(),
+      email: nextProfile.email.trim(),
+      institution: nextProfile.institution.trim(),
+      timezone: nextProfile.timezone.trim(),
+      avatar_url: nextProfile.avatar_url.trim(),
+    }
+
+    try {
+      const updatedUser = await userApi.updateProfile(payload)
+      if (requestId !== profileRequestId.current) return
+      syncUserState(updatedUser)
+      setSaveState("saved")
+      toast.success(successMessage)
+      window.setTimeout(() => setSaveState("idle"), 1400)
+    } catch (error) {
+      if (requestId !== profileRequestId.current) return
+      if (user) hydrate(user)
+      setSaveState("idle")
+      toast.error(getApiErrorMessage(error, "Failed to update profile"))
+    }
   }
 
   const commit = (action: () => void, successMessage?: string) => {
@@ -196,34 +225,100 @@ export function AccountSettingsWorkspace() {
   }
 
   const handleProfileField = (field: keyof typeof profile, value: string, successMessage?: string) => {
-    commit(() => patchProfile({ [field]: value } as Partial<typeof profile>), successMessage)
+    const nextProfile = { ...profile, [field]: value }
+    patchProfile({ [field]: value } as Partial<typeof profile>)
+
+    if (profileSaveTimer.current) window.clearTimeout(profileSaveTimer.current)
+    if (Object.keys(validateProfile(nextProfile)).length > 0) {
+      setSaveState("idle")
+      return
+    }
+    setSaveState("saving")
+    profileSaveTimer.current = window.setTimeout(() => {
+      void persistProfile(nextProfile, successMessage ?? "Profile updated")
+    }, 500)
   }
 
-  const handleAvatarUpload = (event: ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => handleProfileField("avatar_url", String(reader.result ?? ""), "Avatar updated")
-    reader.readAsDataURL(file)
+
+    const previewUrl = URL.createObjectURL(file)
+    if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl)
+    setAvatarPreviewUrl(previewUrl)
+    setAvatarUploading(true)
+    setSaveState("saving")
+
+    try {
+      const compressedFile = await compressAvatar(file)
+      const updatedUser = await userApi.uploadAvatar(compressedFile)
+      setAvatarPreviewUrl(null)
+      syncUserState(updatedUser)
+      setSaveState("saved")
+      toast.success("Avatar updated")
+      window.setTimeout(() => setSaveState("idle"), 1400)
+    } catch (error) {
+      setAvatarPreviewUrl(null)
+      if (user) hydrate(user)
+      setSaveState("idle")
+      toast.error(getApiErrorMessage(error, "Failed to upload avatar"))
+    } finally {
+      setAvatarUploading(false)
+      event.target.value = ""
+    }
   }
 
-  const handlePasswordSave = () => {
+  const loadSessions = async () => {
+    setSessionsLoading(true)
+    try {
+      const nextSessions = await userApi.getSessions()
+      setSessions(nextSessions)
+      setSessionsLoaded(true)
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Failed to load sessions"))
+    } finally {
+      setSessionsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab !== "security" || !user || sessionsLoaded || sessionsLoading) return
+    void loadSessions()
+  }, [activeTab, sessionsLoaded, sessionsLoading, user])
+
+  const handlePasswordSave = async () => {
     if (!passwordDraft.current || !passwordDraft.next || !passwordDraft.confirm) return setPasswordError("Complete all password fields.")
     if (passwordDraft.next.length < 8) return setPasswordError("New password must be at least 8 characters.")
     if (passwordDraft.next !== passwordDraft.confirm) return setPasswordError("Passwords do not match.")
+
     setPasswordError(null)
     setPasswordState("saving")
-    window.setTimeout(() => {
+
+    try {
+      await userApi.changePassword({ current_password: passwordDraft.current, new_password: passwordDraft.next })
       setPasswordState("saved")
-      toast.success("Password update queued")
-      window.setTimeout(() => setPasswordState("idle"), 1200)
-    }, 600)
+      setPasswordDraft({ current: "", next: "", confirm: "" })
+      setUser(null)
+      toast.success("Password updated. Please sign in again.")
+      router.replace("/login")
+    } catch (error) {
+      setPasswordState("idle")
+      setPasswordError(getApiErrorMessage(error, "Failed to update password"))
+    }
   }
 
-  const sessionCards = [
-    { label: "Current session", detail: "Chrome on Windows â€¢ Kolkata", status: "Active now" },
-    { label: "Previous login", detail: "Safari on iPhone â€¢ Yesterday", status: "Trusted" },
-  ]
+  const handleLogoutAllSessions = async () => {
+    try {
+      await userApi.logoutAllSessions()
+      setUser(null)
+      toast.success("All sessions ended")
+      router.replace("/login")
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Failed to end sessions"))
+    }
+  }
+
+  const avatarSrc = avatarPreviewUrl || profile.avatar_thumbnail_url || profile.avatar_url
 
   return (
     <div className="space-y-8 pb-8">
@@ -239,21 +334,9 @@ export function AccountSettingsWorkspace() {
               const Icon = tab.icon
               const active = activeTab === tab.value
               return (
-                <button
-                  key={tab.value}
-                  type="button"
-                  onClick={() => updateTab(tab.value)}
-                  className={cn(
-                    "min-w-[170px] flex-1 rounded-[18px] border px-4 py-3 text-left transition-all duration-150",
-                    active
-                      ? "border-emerald-300 bg-white shadow-[0_18px_40px_-28px_rgba(16,185,129,0.8)] dark:border-[var(--brand-accent)] dark:bg-[var(--card-hover)] dark:text-[var(--text-primary)] dark:shadow-[0_0_20px_rgba(74,222,128,0.15)]"
-                      : "border-transparent text-slate-600 hover:border-slate-200 hover:bg-white/80 hover:text-slate-900 dark:text-[var(--text-secondary)] dark:hover:border-[var(--border-color)] dark:hover:bg-[var(--card-hover)] dark:hover:text-[var(--text-primary)]"
-                  )}
-                >
+                <button key={tab.value} type="button" onClick={() => updateTab(tab.value)} className={cn("min-w-[170px] flex-1 rounded-[18px] border px-4 py-3 text-left transition-all duration-150", active ? "border-emerald-300 bg-white shadow-[0_18px_40px_-28px_rgba(16,185,129,0.8)] dark:border-[var(--brand-accent)] dark:bg-[var(--card-hover)] dark:text-[var(--text-primary)] dark:shadow-[0_0_20px_rgba(74,222,128,0.15)]" : "border-transparent text-slate-600 hover:border-slate-200 hover:bg-white/80 hover:text-slate-900 dark:text-[var(--text-secondary)] dark:hover:border-[var(--border-color)] dark:hover:bg-[var(--card-hover)] dark:hover:text-[var(--text-primary)]") }>
                   <div className="flex items-center gap-2">
-                    <div className={cn("rounded-full p-2", active ? "bg-emerald-50 text-emerald-700 dark:bg-[var(--brand-accent-soft)] dark:text-[var(--brand-accent)]" : "bg-slate-100 text-slate-500 dark:bg-[var(--bg-tertiary)] dark:text-[var(--text-secondary)]")}>
-                      <Icon className="size-4" />
-                    </div>
+                    <div className={cn("rounded-full p-2", active ? "bg-emerald-50 text-emerald-700 dark:bg-[var(--brand-accent-soft)] dark:text-[var(--brand-accent)]" : "bg-slate-100 text-slate-500 dark:bg-[var(--bg-tertiary)] dark:text-[var(--text-secondary)]")}><Icon className="size-4" /></div>
                     <div>
                       <p className="text-sm font-semibold dark:text-[var(--text-primary)]">{tab.label}</p>
                       <p className="text-xs text-slate-500 dark:text-[var(--text-muted)]">{tab.description}</p>
@@ -276,12 +359,12 @@ export function AccountSettingsWorkspace() {
                   {!hydrated ? <p className="text-sm text-slate-500 dark:text-[var(--text-muted)]">Loading profile...</p> : null}
                   <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
                     <div className="rounded-3xl border border-slate-200 bg-slate-50/80 p-5 text-center shadow-inner dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)]">
-                      {profile.avatar_url ? <img src={profile.avatar_url} alt="Profile avatar" className="mx-auto size-24 rounded-full border border-slate-200 object-cover shadow-sm dark:border-[var(--border-color)]" /> : <div className="mx-auto flex size-24 items-center justify-center rounded-full bg-slate-900 text-xl font-semibold text-white dark:bg-[var(--bg-tertiary)] dark:text-[var(--text-primary)]">{getInitials(profile.name, profile.email)}</div>}
+                      {avatarSrc ? <Image src={avatarSrc} alt="Profile avatar" width={96} height={96} className="mx-auto size-24 rounded-full border border-slate-200 object-cover shadow-sm dark:border-[var(--border-color)]" unoptimized /> : <div className="mx-auto flex size-24 items-center justify-center rounded-full bg-slate-900 text-xl font-semibold text-white dark:bg-[var(--bg-tertiary)] dark:text-[var(--text-primary)]">{getInitials(profile.name, profile.email)}</div>}
                       <p className="mt-4 text-sm font-medium text-slate-900 dark:text-[var(--text-primary)]">{profile.name || displayName}</p>
                       <p className="text-xs text-slate-500 dark:text-[var(--text-secondary)]">{profile.email || "No email set"}</p>
-                      <Button variant="outline" className="mt-4 w-full" onClick={() => avatarInputRef.current?.click()}><Upload className="size-4" />Upload avatar</Button>
-                      <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
-                      <p className="mt-2 text-xs leading-5 text-slate-500 dark:text-[var(--text-muted)]">PNG or JPG up to 5MB. Upload is local-preview for now.</p>
+                      <Button variant="outline" className="mt-4 w-full" onClick={() => avatarInputRef.current?.click()} disabled={avatarUploading}>{avatarUploading ? <LoaderCircle className="size-4 animate-spin" /> : <Upload className="size-4" />}{avatarUploading ? "Uploading..." : "Upload avatar"}</Button>
+                      <input ref={avatarInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={handleAvatarUpload} />
+                      <p className="mt-2 text-xs leading-5 text-slate-500 dark:text-[var(--text-muted)]">PNG, JPG, or WebP. Images are compressed before upload, resized to 512px max, and stored in Cloudinary.</p>
                     </div>
                     <div className="grid gap-5 md:grid-cols-2">
                       <Field label="Display name" helper="Used for display across quizzes." error={profileErrors.name}><Input value={profile.name} onChange={(e) => handleProfileField("name", e.target.value)} className={cn("bg-white dark:bg-[var(--bg-secondary)]", profileErrors.name ? "border-rose-300" : "focus-visible:ring-emerald-100 dark:focus-visible:ring-[color:var(--brand-accent)]/35")} /></Field>
@@ -291,21 +374,12 @@ export function AccountSettingsWorkspace() {
                       <div className="md:col-span-2"><Field label="Avatar URL" helper="Optional direct image URL if you prefer linking to a hosted avatar."><Input value={profile.avatar_url} onChange={(e) => handleProfileField("avatar_url", e.target.value)} className="bg-white focus-visible:ring-emerald-100 dark:bg-[var(--bg-secondary)] dark:focus-visible:ring-[color:var(--brand-accent)]/35" /></Field></div>
                     </div>
                   </div>
-                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)]">
-                    <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-[var(--text-secondary)]">{Object.keys(profileErrors).length > 0 ? <AlertCircle className="size-4 text-rose-500" /> : <CheckCircle2 className="size-4 text-emerald-600 dark:text-[var(--brand-accent)]" />}<span>{Object.keys(profileErrors).length > 0 ? "Resolve the highlighted fields to keep your profile trustworthy." : "Profile details are valid and syncing locally."}</span></div>
-                    <Button onClick={() => handleProfileField("name", displayName, "Profile refreshed")}>Use account display name</Button>
-                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)]"><div className="flex items-center gap-2 text-sm text-slate-600 dark:text-[var(--text-secondary)]">{Object.keys(profileErrors).length > 0 ? <AlertCircle className="size-4 text-rose-500" /> : <CheckCircle2 className="size-4 text-emerald-600 dark:text-[var(--brand-accent)]" />}<span>{Object.keys(profileErrors).length > 0 ? "Resolve the highlighted fields to keep your profile trustworthy." : "Profile details are valid and syncing to your account."}</span></div><Button onClick={() => handleProfileField("name", displayName, "Profile refreshed")}>Use account display name</Button></div>
                 </CardContent>
               </Card>
               <Card className="border-slate-200/80 bg-white/95 shadow-[0_18px_60px_-46px_rgba(15,23,42,0.6)] dark:border-[var(--border-color)] dark:bg-[var(--card-bg)]">
                 <CardHeader><SectionIntro title="Account details" description="Keep your most important identity signals visible and easy to verify." /></CardHeader>
-                <CardContent className="grid gap-4 md:grid-cols-3">
-                  {[
-                    { label: "Account role", value: user?.role ?? "Educator" },
-                    { label: "Account status", value: user?.is_active === false ? "Restricted" : "Active" },
-                    { label: "Team visibility", value: "Private workspace" },
-                  ].map((item) => <div key={item.label} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)]"><p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-[var(--text-muted)]">{item.label}</p><p className="mt-2 text-lg font-semibold text-slate-900 dark:text-[var(--text-primary)]">{item.value}</p></div>)}
-                </CardContent>
+                <CardContent className="grid gap-4 md:grid-cols-3">{[{ label: "Account role", value: user?.role ?? "Educator" }, { label: "Account status", value: user?.is_active === false ? "Restricted" : "Active" }, { label: "Team visibility", value: "Private workspace" }].map((item) => <div key={item.label} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)]"><p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-[var(--text-muted)]">{item.label}</p><p className="mt-2 text-lg font-semibold text-slate-900 dark:text-[var(--text-primary)]">{item.value}</p></div>)}</CardContent>
               </Card>
             </>
           ) : null}
@@ -351,22 +425,43 @@ export function AccountSettingsWorkspace() {
                 <CardHeader><SectionIntro eyebrow="Security" title="Password and account protection" description="Reinforce access controls and make authentication changes with immediate feedback." /></CardHeader>
                 <CardContent className="space-y-6">
                   <div className="grid gap-5 md:grid-cols-3">
-                    <Field label="Current password" helper="Required before replacing your password."><Input type="password" value={passwordDraft.current} onChange={(e) => setPasswordDraft((current) => ({ ...current, current: e.target.value }))} className="bg-white dark:bg-[var(--bg-secondary)]" /></Field>
-                    <Field label="New password" helper="Use at least 8 characters for stronger protection."><Input type="password" value={passwordDraft.next} onChange={(e) => setPasswordDraft((current) => ({ ...current, next: e.target.value }))} className="bg-white dark:bg-[var(--bg-secondary)]" /></Field>
-                    <Field label="Confirm password" helper={passwordError ?? "Repeat the new password exactly."} error={passwordError ?? undefined}><Input type="password" value={passwordDraft.confirm} onChange={(e) => setPasswordDraft((current) => ({ ...current, confirm: e.target.value }))} className={cn("bg-white dark:bg-[var(--bg-secondary)]", passwordError ? "border-rose-300" : "")} /></Field>
+                    <PasswordField label="Current password" helper="Required before replacing your password." value={passwordDraft.current} onChange={(value) => setPasswordDraft((current) => ({ ...current, current: value }))} visible={showPasswords.current} onToggle={() => setShowPasswords((current) => ({ ...current, current: !current.current }))} />
+                    <PasswordField label="New password" helper="Use at least 8 characters for stronger protection." value={passwordDraft.next} onChange={(value) => setPasswordDraft((current) => ({ ...current, next: value }))} visible={showPasswords.next} onToggle={() => setShowPasswords((current) => ({ ...current, next: !current.next }))} />
+                    <PasswordField label="Confirm password" helper={passwordError ?? "Repeat the new password exactly."} error={passwordError ?? undefined} value={passwordDraft.confirm} onChange={(value) => setPasswordDraft((current) => ({ ...current, confirm: value }))} visible={showPasswords.confirm} onToggle={() => setShowPasswords((current) => ({ ...current, confirm: !current.confirm }))} />
                   </div>
                   <div className="flex flex-wrap items-center gap-3">
-                    <Button onClick={handlePasswordSave} disabled={passwordState === "saving"}><KeyRound className="size-4" />{passwordState === "saving" ? "Updating..." : passwordState === "saved" ? "Updated" : "Change password"}</Button>
-                    <p className="text-sm text-slate-500 dark:text-[var(--text-muted)]">Password changes are prepared here and ready for backend wiring.</p>
+                    <Button onClick={() => void handlePasswordSave()} disabled={passwordState === "saving"}>{passwordState === "saving" ? <LoaderCircle className="size-4 animate-spin" /> : <KeyRound className="size-4" />}{passwordState === "saving" ? "Updating..." : passwordState === "saved" ? "Updated" : "Change password"}</Button>
+                    <p className="text-sm text-slate-500 dark:text-[var(--text-muted)]">A successful password change invalidates every active session and requires a new login.</p>
                   </div>
-                  <ToggleRow title="Two-factor authentication" description="Future-ready MFA control to add a second verification step during sign-in." checked={security.two_factor_enabled} onCheckedChange={(checked) => commit(() => patchSecurity({ two_factor_enabled: checked }), "Two-factor preference updated")} />
+                  <ToggleRow title="Two-factor authentication" description="Enrollment is not active in the backend yet, so this control is intentionally read-only." checked={false} onCheckedChange={() => undefined} disabled />
                 </CardContent>
               </Card>
               <Card className="border-slate-200/80 bg-white/95 shadow-[0_18px_60px_-46px_rgba(15,23,42,0.6)] dark:border-[var(--border-color)] dark:bg-[var(--card-bg)]">
                 <CardHeader><SectionIntro title="Login sessions" description="Review where your account is active and clear access when needed." /></CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="grid gap-4 md:grid-cols-2">{sessionCards.map((session) => <div key={session.label} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)]"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-medium text-slate-900 dark:text-[var(--text-primary)]">{session.label}</p><p className="mt-1 text-sm text-slate-500 dark:text-[var(--text-secondary)]">{session.detail}</p></div><span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:bg-[var(--brand-accent-soft)] dark:text-[var(--brand-accent)]">{session.status}</span></div></div>)}</div>
-                  <div className="flex flex-wrap gap-3"><Button variant="outline">View active sessions</Button><Button variant="outline" onClick={() => void logout().then(() => router.replace("/login"))}>Logout from all sessions</Button></div>
+                  {sessionsLoading ? <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-sm text-slate-600 dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)] dark:text-[var(--text-secondary)]"><LoaderCircle className="size-4 animate-spin" />Loading real session data...</div> : null}
+                  {!sessionsLoading && sessions.length === 0 ? <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-sm text-slate-600 dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)] dark:text-[var(--text-secondary)]">No active or historical sessions are available for this account yet.</div> : null}
+                  {sessions.length > 0 ? (
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {sessions.map((session) => (
+                        <div key={session.id} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)]">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-medium text-slate-900 dark:text-[var(--text-primary)]">{session.is_current ? "Current session" : session.device}</p>
+                              <p className="mt-1 text-sm text-slate-500 dark:text-[var(--text-secondary)]">{session.device} • {session.ip_address}</p>
+                              <p className="mt-1 text-xs text-slate-500 dark:text-[var(--text-muted)]">Started {formatSessionTime(session.created_at)} • Last seen {formatSessionTime(session.last_seen_at)}</p>
+                            </div>
+                            <span className={cn("rounded-full px-2.5 py-1 text-xs font-medium", session.status === "active" ? "bg-emerald-50 text-emerald-700 dark:bg-[var(--brand-accent-soft)] dark:text-[var(--brand-accent)]" : "bg-slate-200 text-slate-700 dark:bg-[var(--bg-tertiary)] dark:text-[var(--text-secondary)]")}>{session.status === "active" ? (session.is_current ? "Active now" : "Active") : "Expired"}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                  <div className="flex flex-wrap gap-3">
+                    <Button variant="outline" onClick={() => void loadSessions()} disabled={sessionsLoading}><RefreshCw className={cn("size-4", sessionsLoading ? "animate-spin" : "")} />Refresh sessions</Button>
+                    <Button variant="outline" onClick={() => void handleLogoutAllSessions()}>Logout from all sessions</Button>
+                    <Button variant="outline" onClick={() => void logout().then(() => router.replace("/login"))}>Logout from this session</Button>
+                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -375,26 +470,12 @@ export function AccountSettingsWorkspace() {
           {activeTab === "notifications" ? (
             <Card className="border-slate-200/80 bg-white/95 shadow-[0_18px_60px_-46px_rgba(15,23,42,0.6)] dark:border-[var(--border-color)] dark:bg-[var(--card-bg)]">
               <CardHeader><SectionIntro eyebrow="Notifications" title="Alert routing" description="Decide which product events deserve attention and keep the signal-to-noise ratio under control." /></CardHeader>
-              <CardContent className="space-y-4">
-                {[
-                  { key: "attempts_email", title: "New attempt notifications", description: "Receive email alerts when students start a new attempt." },
-                  { key: "integrity_alerts", title: "Integrity alerts", description: "Get notified when violations or suspicious activity increase." },
-                  { key: "generation_complete", title: "Generation complete", description: "Be alerted when AI quiz generation finishes." },
-                  { key: "export_complete", title: "Export completion", description: "Receive updates when result exports are ready to download." },
-                ].map((item) => <ToggleRow key={item.key} title={item.title} description={item.description} checked={Boolean(notifications[item.key as keyof typeof notifications])} onCheckedChange={(checked) => commit(() => patchNotifications({ [item.key]: checked } as Partial<typeof notifications>), "Notification preference updated")} />)}
-              </CardContent>
+              <CardContent className="space-y-4">{[{ key: "attempts_email", title: "New attempt notifications", description: "Receive email alerts when students start a new attempt." }, { key: "integrity_alerts", title: "Integrity alerts", description: "Get notified when violations or suspicious activity increase." }, { key: "generation_complete", title: "Generation complete", description: "Be alerted when AI quiz generation finishes." }, { key: "export_complete", title: "Export completion", description: "Receive updates when result exports are ready to download." }].map((item) => <ToggleRow key={item.key} title={item.title} description={item.description} checked={Boolean(notifications[item.key as keyof typeof notifications])} onCheckedChange={(checked) => commit(() => patchNotifications({ [item.key]: checked } as Partial<typeof notifications>), "Notification preference updated")} />)}</CardContent>
             </Card>
           ) : null}
 
           {activeTab === "integrations" ? (
-            <div className="grid gap-5 md:grid-cols-2">
-              {[
-                { title: "Google Classroom", description: "Sync rosters and assignment context once the classroom bridge is enabled.", badge: "Planned" },
-                { title: "Slack notifications", description: "Route quiz alerts and publishing updates directly into your teaching channels.", badge: "Beta-ready" },
-                { title: "Webhook integrations", description: "Push attempt and result events into your own systems with signed payloads.", badge: "Coming soon" },
-                { title: "API keys", description: "Manage future programmatic access for exports, automation, and reporting pipelines.", badge: "Future-ready" },
-              ].map((item) => <Card key={item.title} className="border-slate-200/80 bg-white/95 shadow-[0_18px_60px_-46px_rgba(15,23,42,0.6)] dark:border-[var(--border-color)] dark:bg-[var(--card-bg)]"><CardHeader><div className="flex items-start justify-between gap-3"><div><CardTitle className="text-lg text-slate-950 dark:text-[var(--text-primary)]">{item.title}</CardTitle><CardDescription className="mt-2 leading-6 dark:text-[var(--text-secondary)]">{item.description}</CardDescription></div><span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600 dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)] dark:text-[var(--text-secondary)]">{item.badge}</span></div></CardHeader><CardContent><Button variant="outline" className="w-full">Request access</Button></CardContent></Card>)}
-            </div>
+            <div className="grid gap-5 md:grid-cols-2">{[{ title: "Google Classroom", description: "Sync rosters and assignment context once the classroom bridge is enabled.", badge: "Planned" }, { title: "Slack notifications", description: "Route quiz alerts and publishing updates directly into your teaching channels.", badge: "Beta-ready" }, { title: "Webhook integrations", description: "Push attempt and result events into your own systems with signed payloads.", badge: "Coming soon" }, { title: "API keys", description: "Manage future programmatic access for exports, automation, and reporting pipelines.", badge: "Future-ready" }].map((item) => <Card key={item.title} className="border-slate-200/80 bg-white/95 shadow-[0_18px_60px_-46px_rgba(15,23,42,0.6)] dark:border-[var(--border-color)] dark:bg-[var(--card-bg)]"><CardHeader><div className="flex items-start justify-between gap-3"><div><CardTitle className="text-lg text-slate-950 dark:text-[var(--text-primary)]">{item.title}</CardTitle><CardDescription className="mt-2 leading-6 dark:text-[var(--text-secondary)]">{item.description}</CardDescription></div><span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600 dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)] dark:text-[var(--text-secondary)]">{item.badge}</span></div></CardHeader><CardContent><Button variant="outline" className="w-full">Request access</Button></CardContent></Card>)}</div>
           ) : null}
         </motion.div>
       </AnimatePresence>

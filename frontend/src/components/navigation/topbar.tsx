@@ -10,7 +10,7 @@ import { NAV_SECTIONS } from "./nav-config"
 import { useUIStore } from "@/stores/useUIStore"
 import { useAuthStore } from "@/stores/useAuthStore"
 import { useAccountSettingsStore } from "@/stores/useAccountSettingsStore"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -65,6 +65,7 @@ export function Topbar() {
   const displayName = getDisplayName(user)
   const displayEmail = profile.email || user?.email || "-"
   const initials = getInitials(displayName)
+  const avatarUrl = user?.avatar_thumbnail_url || user?.avatar_url || profile.avatar_thumbnail_url || profile.avatar_url || ""
 
   return (
     <header className="sticky top-0 z-20 border-b bg-background/90 px-4 py-3 backdrop-blur sm:px-6">
@@ -141,6 +142,7 @@ export function Topbar() {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="px-2" aria-label="Open account menu">
                 <Avatar className="h-9 w-9">
+                  {avatarUrl ? <AvatarImage src={avatarUrl} alt={displayName} /> : null}
                   <AvatarFallback>{initials}</AvatarFallback>
                 </Avatar>
               </Button>

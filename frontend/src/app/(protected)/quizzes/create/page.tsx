@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
@@ -23,6 +23,7 @@ type GenerationMode = "auto" | "custom"
 type SupportedQuestionType = "MCQ" | "True/False" | "Short Answer" | "Long Answer"
 
 const AUTO_QUESTION_TYPES: SupportedQuestionType[] = ["MCQ", "True/False", "Short Answer", "Long Answer"]
+const EMPTY_DOCUMENTS: Document[] = []
 
 const defaultSection: DraftSection = {
   id: crypto.randomUUID(),
@@ -51,6 +52,19 @@ export default function QuizCreatePage() {
   const [processingError, setProcessingError] = useState<string | null>(null)
   const [ingestState, setIngestState] = useState<"idle" | "processing" | "ready" | "failed">("idle")
   const [ingestMessage, setIngestMessage] = useState("")
+  const trackedUploadIdsRef = useRef<Set<string>>(new Set())
+  const fileToastStateRef = useRef({
+    uploadNotified: false,
+    started: false,
+    completed: false,
+    failed: false,
+  })
+  const previousJobStatusRef = useRef<string | null>(null)
+  const jobToastStateRef = useRef({
+    started: false,
+    completed: false,
+    failed: false,
+  })
 
   useEffect(() => {
     const source = searchParams.get("source")
@@ -146,7 +160,12 @@ export default function QuizCreatePage() {
     onSuccess: (data) => {
       setJobId(data.job_id)
       setProcessingError(null)
-      toast.success("AI processing started")
+      previousJobStatusRef.current = null
+      jobToastStateRef.current = {
+        started: false,
+        completed: false,
+        failed: false,
+      }
       setStep(3)
     },
     onError: (error: unknown) => {
@@ -173,12 +192,27 @@ export default function QuizCreatePage() {
 
   useEffect(() => {
     if (!jobStatus) return
-    if (jobStatus.status === "COMPLETED") {
+    const status = jobStatus.status
+    const previousStatus = previousJobStatusRef.current
+
+    if (status === "PROCESSING" && !jobToastStateRef.current.started) {
+      toast.success("AI processing started")
+      jobToastStateRef.current.started = true
+    }
+
+    if (status === "COMPLETED" && previousStatus !== "COMPLETED" && !jobToastStateRef.current.completed) {
+      toast.success("AI processing completed successfully")
+      jobToastStateRef.current.completed = true
       setStep(4)
     }
-    if (jobStatus.status === "FAILED") {
+
+    if (status === "FAILED" && previousStatus !== "FAILED" && !jobToastStateRef.current.failed) {
       setProcessingError("AI processing failed. Review sources and retry.")
+      toast.error(String(jobStatus.metadata?.error || "AI processing failed"))
+      jobToastStateRef.current.failed = true
     }
+
+    previousJobStatusRef.current = status
   }, [jobStatus])
 
   const handleNextFromMetadata = () => {
@@ -230,7 +264,7 @@ export default function QuizCreatePage() {
     }
   }
 
-  const documents = (documentsQuery.data as { documents?: Document[] } | undefined)?.documents ?? []
+  const documents = (documentsQuery.data as { documents?: Document[] } | undefined)?.documents ?? EMPTY_DOCUMENTS
 
   const canProceedSources =
     (sourceMode === "paste" && sourceText.trim().length > 20) ||
@@ -263,6 +297,43 @@ export default function QuizCreatePage() {
     setIngestState("ready")
     setIngestMessage("All files processed successfully.")
   }, [documents.length, filesFailed, filesProcessing, sourceMode])
+
+  useEffect(() => {
+    if (sourceMode !== "files") return
+
+    const trackedIds = trackedUploadIdsRef.current
+    if (trackedIds.size === 0) return
+
+    const trackedDocuments = documents.filter((doc) => trackedIds.has(doc.id))
+    if (trackedDocuments.length === 0) return
+
+    if (!fileToastStateRef.current.uploadNotified) {
+      toast.success(trackedIds.size === 1 ? "File uploaded successfully" : "Files uploaded successfully")
+      fileToastStateRef.current.uploadNotified = true
+    }
+
+    const hasFailure = trackedDocuments.some((doc) => doc.extraction_status === "FAILED")
+    const hasProcessing = trackedDocuments.some((doc) => doc.extraction_status === "PROCESSING")
+    const allFinished = trackedDocuments.every((doc) => doc.extraction_status === "COMPLETED")
+
+    if (hasFailure && !fileToastStateRef.current.failed) {
+      toast.error("File processing failed. Remove or re-upload the affected file.")
+      fileToastStateRef.current.failed = true
+      trackedUploadIdsRef.current = new Set()
+      return
+    }
+
+    if (hasProcessing && !fileToastStateRef.current.started && !allFinished) {
+      toast.success("File processing started")
+      fileToastStateRef.current.started = true
+    }
+
+    if (allFinished && !fileToastStateRef.current.completed) {
+      toast.success("File processing completed successfully")
+      fileToastStateRef.current.completed = true
+      trackedUploadIdsRef.current = new Set()
+    }
+  }, [documents, sourceMode])
 
   return (
     <QuizCreationLayout
@@ -340,10 +411,16 @@ export default function QuizCreatePage() {
               if (files.length === 0) return
               setIngestState("processing")
               setIngestMessage("Uploading files and starting extraction…")
-              await aiApi.uploadSourceFiles(quizId, files)
+              const response = await aiApi.uploadSourceFiles(quizId, files)
+              trackedUploadIdsRef.current = new Set(response.documents.map((document) => document.id))
+              fileToastStateRef.current = {
+                uploadNotified: false,
+                started: false,
+                completed: false,
+                failed: false,
+              }
               setIngestState("processing")
               setIngestMessage("Files uploaded. Extraction running…")
-              toast.success("Files uploaded. Processing started.")
             }}
           />
           <div className="rounded-2xl border bg-background/70 p-4 text-sm">

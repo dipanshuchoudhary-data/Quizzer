@@ -11,7 +11,7 @@ import { useUIStore } from "@/stores/useUIStore"
 import { useAccountSettingsStore } from "@/stores/useAccountSettingsStore"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { getDisplayName, getInitials } from "@/lib/user"
 
 export function Topbar() {
@@ -28,6 +28,7 @@ export function Topbar() {
   const displayName = getDisplayName(user)
   const displayEmail = profile.email || user?.email || "-"
   const initials = getInitials(displayName)
+  const avatarUrl = user?.avatar_thumbnail_url || user?.avatar_url || profile.avatar_thumbnail_url || profile.avatar_url || ""
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
 
   const goto = (href: string) => {
@@ -92,6 +93,7 @@ export function Topbar() {
             }}
           >
             <Avatar className="h-8 w-8">
+              {avatarUrl ? <AvatarImage src={avatarUrl} alt={displayName} /> : null}
               <AvatarFallback>{initials}</AvatarFallback>
             </Avatar>
           </Button>
@@ -106,6 +108,7 @@ export function Topbar() {
               <div className="rounded-md border bg-muted/30 p-3">
                 <div className="flex items-center gap-3">
                   <Avatar className="h-10 w-10">
+                    {avatarUrl ? <AvatarImage src={avatarUrl} alt={displayName} /> : null}
                     <AvatarFallback>{initials}</AvatarFallback>
                   </Avatar>
                   <div className="min-w-0">
