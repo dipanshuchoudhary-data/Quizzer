@@ -10,6 +10,7 @@ type ProfileState = {
   name: string
   email: string
   avatar_url: string
+  avatar_thumbnail_url: string
   institution: string
   timezone: string
 }
@@ -69,6 +70,7 @@ const defaults = {
     name: "Professor",
     email: "",
     avatar_url: "",
+    avatar_thumbnail_url: "",
     institution: "",
     timezone: "Asia/Kolkata",
   },
@@ -117,7 +119,6 @@ function saveSnapshot(getState: () => AccountSettingsState) {
   window.localStorage.setItem(
     STORAGE_KEY,
     JSON.stringify({
-      profile: state.profile,
       preferences: state.preferences,
       notifications: state.notifications,
       workspace: state.workspace,
@@ -149,7 +150,10 @@ export const useAccountSettingsStore = create<AccountSettingsState>((set, get) =
         ...defaults.profile,
         name: derivedName,
         email,
-        ...(parsed?.profile ?? {}),
+        avatar_url: typeof user === "string" ? "" : user?.avatar_url ?? "",
+        avatar_thumbnail_url: typeof user === "string" ? "" : user?.avatar_thumbnail_url ?? user?.avatar_url ?? "",
+        institution: typeof user === "string" ? "" : user?.institution ?? "",
+        timezone: typeof user === "string" ? defaults.profile.timezone : user?.timezone ?? defaults.profile.timezone,
       },
 
       preferences: {
@@ -180,7 +184,6 @@ export const useAccountSettingsStore = create<AccountSettingsState>((set, get) =
     set((state) => ({
       profile: { ...state.profile, ...patch },
     }))
-    saveSnapshot(get)
   },
 
   patchPreferences: (patch) => {

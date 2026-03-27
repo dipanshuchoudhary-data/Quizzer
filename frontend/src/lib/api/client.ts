@@ -1,4 +1,4 @@
-import axios, { AxiosHeaders } from "axios"
+import axios from "axios"
 import { env } from "@/lib/env"
 
 export const api = axios.create({
@@ -10,15 +10,6 @@ export const api = axios.create({
 api.interceptors.request.use((config) => {
   if (config.url) {
     config.url = config.url.replace(/([^:]\/)\/+/g, "$1")
-  }
-
-  if (typeof window !== "undefined") {
-    const token = window.localStorage.getItem("access_token") || window.sessionStorage.getItem("access_token")
-    if (token && !config.headers?.Authorization) {
-      const headers = AxiosHeaders.from(config.headers)
-      headers.set("Authorization", `Bearer ${token}`)
-      config.headers = headers
-    }
   }
   return config
 })
