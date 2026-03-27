@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     JWT_SECRET_KEY: str
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 60
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
     # ----------------------
     # Email / SMS
@@ -66,6 +67,10 @@ class Settings(BaseSettings):
     # ----------------------
     GCS_BUCKET_NAME: str | None = None
     GCP_PROJECT_ID: str | None = None
+    CLOUDINARY_CLOUD_NAME: str | None = None
+    CLOUDINARY_API_KEY: str | None = None
+    CLOUDINARY_API_SECRET: str | None = None
+    CLOUDINARY_AVATAR_FOLDER: str = "quizzer/avatars"
 
     # ----------------------
     # Background Tasks

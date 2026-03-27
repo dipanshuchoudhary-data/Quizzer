@@ -9,33 +9,28 @@ dependencies = [
     # Core API
     "fastapi",
     "uvicorn[standard]",
-
     # Database
     "sqlalchemy>=2.0",
     "asyncpg",
     "psycopg[binary]",
     "alembic",
-
     # Settings & Validation
     "pydantic>=2.0",
     "pydantic-settings",
     "pydantic[email]",
-
+    "python-multipart",
     # Authentication & Security
     "python-jose[cryptography]",
     "passlib[bcrypt]",
-
     # Background Jobs & Cache
     "redis",
     "celery[redis]",
-
     # AI / LLM Stack
     "langchain-core",
     "langchain-openai",
     "langgraph",
     "tiktoken",
     "tenacity",
-
     # File Processing
     "pdfplumber",
     "pymupdf",
@@ -44,12 +39,12 @@ dependencies = [
     "pytesseract",
     "Pillow",
     "openpyxl",
-
     # Networking & Utilities
     "httpx",
     "boto3",
     "pandas",
     "structlog",
+    "cloudinary>=1.44.1",
 ]
 
 [tool.uv]
