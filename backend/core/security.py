@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from fastapi import HTTPException, status
@@ -27,35 +27,32 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 # JWT Token Handling
 # --------------------------------------------------
 
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 1 day
+ALGORITHM = settings.JWT_ALGORITHM
+
+
+def _create_token(data: dict, expires_delta: timedelta) -> str:
+    to_encode = data.copy()
+    expire = datetime.now(timezone.utc) + expires_delta
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=ALGORITHM)
 
 
 def create_access_token(data: dict) -> str:
-    to_encode = data.copy()
-
-    expire = datetime.utcnow() + timedelta(
-        minutes=ACCESS_TOKEN_EXPIRE_MINUTES
-    )
-
-    to_encode.update({"exp": expire})
-
-    encoded_jwt = jwt.encode(
-        to_encode,
-        settings.JWT_SECRET_KEY,
-        algorithm=ALGORITHM,
-    )
-
-    return encoded_jwt
+    return _create_token(data, timedelta(minutes=settings.JWT_EXPIRE_MINUTES))
 
 
-def decode_access_token(token: str) -> dict:
+def create_refresh_token(data: dict) -> str:
+    return _create_token(data, timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS))
+
+
+def decode_token(token: str, *, expected_type: str | None = None) -> dict:
     try:
-        payload = jwt.decode(
-            token,
-            settings.JWT_SECRET_KEY,
-            algorithms=[ALGORITHM],
-        )
+        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[ALGORITHM])
+        if expected_type and payload.get("typ") != expected_type:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token type",
+            )
         return payload
 
     except JWTError:
