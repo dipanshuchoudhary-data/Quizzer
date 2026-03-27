@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import sys
+import time
 from backend.workers.task_db import get_task_sessionmaker
 from backend.workers.celery_app import celery_app
 from backend.models.document import Document
@@ -28,6 +29,7 @@ def process_document(document_id: str):
     logger.info(f"[START] Processing document {document_id}")
 
     async def _run():
+        total_started_at = time.perf_counter()
 
         SessionLocal = get_task_sessionmaker()
         async with SessionLocal() as db:
@@ -49,35 +51,68 @@ def process_document(document_id: str):
                 # Extract text from file
                 # -----------------------------------
                 logger.info(f"Extracting text from {doc.storage_path}")
-                extracted_text = extract_text_from_file(
+                parse_started_at = time.perf_counter()
+                extracted_text = await asyncio.to_thread(
+                    extract_text_from_file,
                     doc.storage_path,
                     doc.file_type,
                 )
+                parsing_time = time.perf_counter() - parse_started_at
 
                 if not extracted_text or len(extracted_text.strip()) == 0:
                     raise Exception("No text extracted")
 
                 logger.info(f"Extracted {len(extracted_text)} chars from document {document_id}")
+                logger.info(
+                    "document_processing_timing document_id=%s stage=parsing elapsed_s=%.3f chars=%s",
+                    document_id,
+                    parsing_time,
+                    len(extracted_text),
+                )
 
                 # -----------------------------------
                 # Summarize using AI agent
                 # -----------------------------------
                 logger.info(f"Summarizing document {document_id}")
+                summary_started_at = time.perf_counter()
                 summary_data = await summarize_document(extracted_text)
+                summary_time = time.perf_counter() - summary_started_at
+                logger.info(
+                    "document_processing_timing document_id=%s stage=topic_detection elapsed_s=%.3f",
+                    document_id,
+                    summary_time,
+                )
 
                 # -----------------------------------
                 # Store structured metadata
                 # -----------------------------------
+                db_started_at = time.perf_counter()
                 doc.extracted_metadata = {
                     "extracted_text": extracted_text,
                     "summary": summary_data.summary,
                     "key_topics": summary_data.key_topics,
                     "difficulty_level": summary_data.difficulty_level,
                     "text_length": len(extracted_text),
+                    "timings": {
+                        "parsing": round(parsing_time, 3),
+                        "topic_detection": round(summary_time, 3),
+                    },
                 }
 
                 doc.extraction_status = "COMPLETED"
                 await db.commit()
+                db_time = time.perf_counter() - db_started_at
+                total_time = time.perf_counter() - total_started_at
+                logger.info(
+                    "document_processing_timing document_id=%s stage=db_write elapsed_s=%.3f",
+                    document_id,
+                    db_time,
+                )
+                logger.info(
+                    "document_processing_timing document_id=%s stage=total elapsed_s=%.3f",
+                    document_id,
+                    total_time,
+                )
                 logger.info(f"[SUCCESS] Document {document_id} processing completed")
 
             except Exception as e:
