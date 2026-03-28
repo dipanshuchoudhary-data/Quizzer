@@ -8,6 +8,7 @@ from backend.models.violation import Violation
 from backend.models.result import Result
 from backend.models.attempt import Attempt
 from backend.ai.agents.short_answer_evaluator import evaluate_short_answers
+from backend.ai.agents.answer_key_agent import generate_missing_answers
 from backend.services.question_quality import normalize_question_type, normalize_math_text
 
 
@@ -25,6 +26,54 @@ class ResultGraphState(TypedDict):
     review_required: bool
 
 
+def _is_missing_answer_key(value: object) -> bool:
+    token = str(value or "").strip().lower()
+    return token in {"", "answer_unavailable", "null", "none"}
+
+
+async def _build_short_answer_payload(snapshot: list[dict], answers_map: dict[str, str]) -> tuple[list[dict], bool]:
+    payload: list[dict] = []
+    fallback_candidates: list[dict] = []
+    fallback_indexes: list[int] = []
+
+    for question in snapshot:
+        question_id = str(question.get("id") or "")
+        payload_item = {
+            "question_id": question_id,
+            "question_text": str(question.get("question_text") or ""),
+            "student_answer": answers_map.get(question_id, ""),
+            "correct_answer": str(question.get("correct_answer") or ""),
+            "max_marks": int(question.get("marks") or 1),
+        }
+        payload.append(payload_item)
+        if _is_missing_answer_key(payload_item["correct_answer"]):
+            fallback_candidates.append(
+                {
+                    "question_text": payload_item["question_text"],
+                    "question_type": str(question.get("question_type") or "SHORT_ANSWER"),
+                    "correct_answer": None,
+                    "marks": payload_item["max_marks"],
+                }
+            )
+            fallback_indexes.append(len(payload) - 1)
+
+    review_required = False
+    if fallback_candidates:
+        generated = await generate_missing_answers(fallback_candidates)
+        generated_questions = getattr(generated, "questions", []) or []
+        for idx, generated_question in zip(fallback_indexes, generated_questions):
+            candidate_answer = str(getattr(generated_question, "correct_answer", "") or "").strip()
+            if _is_missing_answer_key(candidate_answer):
+                review_required = True
+                continue
+            payload[idx]["correct_answer"] = candidate_answer
+
+        if any(_is_missing_answer_key(payload[idx]["correct_answer"]) for idx in fallback_indexes):
+            review_required = True
+
+    return payload, review_required
+
+
 # --------------------------------------------------
 # Nodes
 # --------------------------------------------------
@@ -35,7 +84,7 @@ async def objective_node(state: ResultGraphState):
     attempt_id = state["attempt_id"]
 
     total_score = 0
-    short_answer_payload = []
+    short_answer_questions = []
     review_required = False
 
     attempt = await db.get(Attempt, attempt_id)
@@ -74,15 +123,11 @@ async def objective_node(state: ResultGraphState):
                 total_score += marks
                 correct_answers += 1
 
-        elif normalized_qtype == "SHORT_ANSWER":
-            short_answer_payload.append(
-                {
-                    "question_id": question_id,
-                    "student_answer": student_answer,
-                    "correct_answer": correct_answer,
-                    "max_marks": marks,
-                }
-            )
+        elif normalized_qtype in {"SHORT_ANSWER", "LONG_ANSWER"}:
+            short_answer_questions.append(question)
+
+    short_answer_payload, short_answer_review_required = await _build_short_answer_payload(short_answer_questions, answers_map)
+    review_required = review_required or short_answer_review_required
 
     logger.info(
         "Grading attempt %s | Questions: %s | Answers Stored: %s | Correct answers: %s | Final score pre-subjective: %s",
