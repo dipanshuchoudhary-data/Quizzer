@@ -24,10 +24,10 @@ export function ResultsFilters({
   onStatusChange,
 }: Props) {
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <Input className="w-full max-w-sm" placeholder="Search student/token..." value={search} onChange={(event) => onSearchChange(event.target.value)} />
+    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_170px_auto_auto] xl:items-center">
+      <Input className="w-full min-w-0" placeholder="Search student/token..." value={search} onChange={(event) => onSearchChange(event.target.value)} />
       <Select value={status} onValueChange={onStatusChange}>
-        <SelectTrigger className="w-[170px]">
+        <SelectTrigger className="w-full min-w-0 xl:w-[170px]">
           <SelectValue placeholder="Result status" />
         </SelectTrigger>
         <SelectContent>
@@ -37,10 +37,10 @@ export function ResultsFilters({
           <SelectItem value="FAILED">Failed</SelectItem>
         </SelectContent>
       </Select>
-      <Button variant="outline" onClick={onExportCsv} disabled={exportBusy}>
+      <Button variant="outline" className="w-full sm:w-auto" onClick={onExportCsv} disabled={exportBusy}>
         Export CSV
       </Button>
-      <Button variant="outline" onClick={onExportExcel} disabled={exportBusy}>
+      <Button variant="outline" className="w-full sm:w-auto" onClick={onExportExcel} disabled={exportBusy}>
         Export Excel
       </Button>
     </div>
