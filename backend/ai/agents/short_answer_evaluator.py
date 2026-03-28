@@ -85,6 +85,8 @@ GRADING PRINCIPLES:
    - Do NOT penalize different structuring of answer.
 
 INPUT QUESTIONS WITH STUDENT ANSWERS:
+- Each item includes question_text, student_answer, correct_answer, and max_marks.
+- Use question_text plus correct_answer together when judging relevance and completeness.
 {json.dumps(questions, indent=2)}
 
 Return structured evaluation JSON only.
