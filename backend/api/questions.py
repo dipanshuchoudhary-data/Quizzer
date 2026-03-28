@@ -45,7 +45,7 @@ def _sanitize_question_payload(payload: dict, current: Question | None = None) -
     }
     if normalized_type in {"SHORT_ANSWER", "LONG_ANSWER"}:
         updates["options"] = None
-        updates["correct_answer"] = None
+        updates["correct_answer"] = sanitized.correct_answer
     else:
         updates["options"] = sanitized.options
         updates["correct_answer"] = sanitized.correct_answer
@@ -290,7 +290,7 @@ Return one strict JSON object matching the schema.
     question.question_type = qtype
     if qtype in {"SHORT_ANSWER", "LONG_ANSWER"}:
         question.options = None
-        question.correct_answer = None
+        question.correct_answer = sanitized.correct_answer
     elif qtype == "TRUE_FALSE":
         question.options = ["True", "False"]
         answer = str(sanitized.correct_answer or "").strip().lower()

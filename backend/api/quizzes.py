@@ -1071,7 +1071,6 @@ async def stream_ai_quiz_generation(
                             correct_answer = "answer_unavailable"
                     elif q_type in {"SHORT_ANSWER", "LONG_ANSWER"}:
                         options = None
-                        correct_answer = ""
                     elif q_type == "MCQ" and not correct_answer:
                         correct_answer = "answer_unavailable"
 
@@ -1178,7 +1177,6 @@ async def stream_ai_quiz_generation(
                                 correct_answer = "answer_unavailable"
                         elif q_type in {"SHORT_ANSWER", "LONG_ANSWER"}:
                             options = None
-                            correct_answer = ""
                         elif q_type == "MCQ" and not correct_answer:
                             correct_answer = "answer_unavailable"
 
