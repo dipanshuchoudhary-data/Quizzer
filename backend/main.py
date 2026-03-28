@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from backend.core.config import settings
+from backend.core.security import ensure_password_backend_available
 from backend.api.auth import router as auth_router
 from backend.api.quizzes import router as quiz_router
 from backend.api.attemps import router as attempt_router
@@ -51,6 +52,8 @@ def _local_dev_origin_regex() -> str:
 
 
 def create_app() -> FastAPI:
+    ensure_password_backend_available()
+
     app = FastAPI(
         title="Quizzer API",
         version="1.0.0",

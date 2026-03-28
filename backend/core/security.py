@@ -23,6 +23,11 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 
+def ensure_password_backend_available() -> None:
+    # Fail fast at startup if the Argon2 backend is missing in production.
+    pwd_context.hash("__quizzer_startup_password_check__")
+
+
 # --------------------------------------------------
 # JWT Token Handling
 # --------------------------------------------------

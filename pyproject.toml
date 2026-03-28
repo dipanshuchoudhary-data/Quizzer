@@ -22,6 +22,7 @@ dependencies = [
     # Authentication & Security
     "python-jose[cryptography]",
     "passlib[bcrypt]",
+    "argon2-cffi",
     # Background Jobs & Cache
     "redis",
     "celery[redis]",
