@@ -57,7 +57,7 @@ Pin in this order:
 3. **RAG application** — core AI/ML skill signal
 4. **LLM Eval Bench** — shows engineering rigor
 5. **One clean data/ML notebook** — if you have strong ML fundamentals work
-6. **Your profile README repo** — pin `dipanshuchoudhary-data` if it is public
+6. **Your profile README repo** — pin the `<your-github-username>` repo (e.g. `dipanshuchoudhary-data`) if it is public
 
 ### How to Make Repositories Look Production-Level
 
@@ -267,7 +267,7 @@ The GitHub profile README lives in a **special repository** named exactly after 
 Steps to activate it:
 
 1. Create a new repository at: `github.com/new`
-2. Name it exactly: `dipanshuchoudhary-data`
+2. Name it exactly: `dipanshuchoudhary-data` (must match your GitHub username exactly)
 3. Make it **Public**
 4. Check "Add a README file"
 5. Replace the README content with `profile/README.md` from this repository
