@@ -6,6 +6,7 @@
 
 I build AI systems that go beyond demos — production-grade pipelines, multi-agent workflows, and LLM applications that solve real problems at scale.
 
+<!-- TODO: Replace the three URLs below with your actual LinkedIn, email, and portfolio links -->
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-0A66C2?style=flat&logo=linkedin&logoColor=white)](https://linkedin.com/in/your-linkedin)
 [![Email](https://img.shields.io/badge/Email-EA4335?style=flat&logo=gmail&logoColor=white)](mailto:your-email@example.com)
 [![Portfolio](https://img.shields.io/badge/Portfolio-000000?style=flat&logo=vercel&logoColor=white)](https://your-portfolio.dev)
@@ -140,6 +141,7 @@ Currently focused on:
 
 I am open to discussing AI/ML engineering roles, technical collaborations, and interesting problem spaces.
 
+<!-- TODO: Replace the three links below with your actual contact details (keep them consistent with the header badges above) -->
 - **LinkedIn:** [linkedin.com/in/your-linkedin](https://linkedin.com/in/your-linkedin)
 - **Email:** [your-email@example.com](mailto:your-email@example.com)
 - **Portfolio:** [your-portfolio.dev](https://your-portfolio.dev)
