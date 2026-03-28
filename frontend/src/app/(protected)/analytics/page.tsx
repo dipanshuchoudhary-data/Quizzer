@@ -365,19 +365,19 @@ export default function AnalyticsPage() {
 
       <section className="grid gap-6 2xl:grid-cols-[1.25fr_1fr]">
         <Card className={pageCardClass}>
-          <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
+          <CardHeader className="flex flex-col gap-4 space-y-0 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <CardTitle className="text-lg dark:text-[var(--text-primary)]">Score Distribution</CardTitle>
               <p className="mt-1 text-sm text-slate-500 dark:text-[var(--text-secondary)]">Switch between overall score buckets and quiz-group performance.</p>
             </div>
-            <div className="inline-flex rounded-full border border-slate-200 bg-slate-50 p-1 dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)]">
+            <div className="inline-flex w-full flex-wrap rounded-full border border-slate-200 bg-slate-50 p-1 sm:w-auto dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)]">
               {(["overall", "quiz"] as DistributionMode[]).map((mode) => (
                 <button
                   key={mode}
                   type="button"
                   onClick={() => setDistributionMode(mode)}
                   className={cn(
-                    "rounded-full px-3 py-1.5 text-xs font-medium capitalize transition",
+                    "flex-1 rounded-full px-3 py-1.5 text-xs font-medium capitalize transition sm:flex-none",
                     distributionMode === mode
                       ? "bg-slate-950 text-white shadow-sm dark:border dark:border-[var(--border-color)] dark:bg-[var(--card-hover)] dark:text-[var(--text-primary)] dark:shadow-[0_0_20px_rgba(74,222,128,0.15)]"
                       : "text-slate-600 dark:text-[var(--text-secondary)]"
@@ -392,29 +392,32 @@ export default function AnalyticsPage() {
             {isLoading ? (
               <Skeleton className="h-[320px] w-full" />
             ) : (
-              <div className="h-[320px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={scoreChartData}>
-                    <CartesianGrid strokeDasharray="4 4" stroke={chartGridStroke} vertical={false} />
-                    <XAxis
-                      dataKey={distributionMode === "overall" ? "range" : "quiz_name"}
-                      tickLine={false}
-                      axisLine={false}
-                      minTickGap={20}
-                      tick={chartTick}
-                    />
-                    <YAxis tickLine={false} axisLine={false} tick={chartTick} />
-                    <RechartsTooltip
-                      cursor={{ fill: chartCursorFill }}
-                      contentStyle={chartTooltipStyle}
-                    />
-                    <Bar dataKey={distributionMode === "overall" ? "students" : "average_score"} radius={[10, 10, 0, 0]} animationDuration={420}>
-                      {scoreChartData.map((entry, index) => (
-                        <Cell key={`${distributionMode}-${index}`} fill={getDistributionFill(distributionMode, entry)} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+              <div className="overflow-x-auto">
+                <div className="h-[280px] min-w-[520px] sm:h-[320px] sm:min-w-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={scoreChartData} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="4 4" stroke={chartGridStroke} vertical={false} />
+                      <XAxis
+                        dataKey={distributionMode === "overall" ? "range" : "quiz_name"}
+                        tickLine={false}
+                        axisLine={false}
+                        minTickGap={20}
+                        interval="preserveStartEnd"
+                        tick={chartTick}
+                      />
+                      <YAxis tickLine={false} axisLine={false} tick={chartTick} width={32} />
+                      <RechartsTooltip
+                        cursor={{ fill: chartCursorFill }}
+                        contentStyle={chartTooltipStyle}
+                      />
+                      <Bar dataKey={distributionMode === "overall" ? "students" : "average_score"} radius={[10, 10, 0, 0]} animationDuration={420}>
+                        {scoreChartData.map((entry, index) => (
+                          <Cell key={`${distributionMode}-${index}`} fill={getDistributionFill(distributionMode, entry)} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
             )}
           </CardContent>
@@ -429,25 +432,27 @@ export default function AnalyticsPage() {
             {isLoading ? (
               <Skeleton className="h-[320px] w-full" />
             ) : (
-              <div className="h-[320px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={data?.completion_trend ?? []}>
-                    <defs>
-                      <linearGradient id="completionArea" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="rgba(16,185,129,0.42)" />
-                        <stop offset="100%" stopColor="rgba(16,185,129,0.04)" />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="4 4" stroke={chartGridStroke} vertical={false} />
-                    <XAxis dataKey="label" tickLine={false} axisLine={false} minTickGap={20} tick={chartTick} />
-                    <YAxis tickLine={false} axisLine={false} domain={[0, 100]} tick={chartTick} />
-                    <RechartsTooltip
-                      formatter={(value, name) => [`${Number(value ?? 0)}${name === "completion_rate" ? "%" : ""}`, name === "completion_rate" ? "Completion rate" : "Attempts"]}
-                      contentStyle={chartTooltipStyle}
-                    />
-                    <Area type="monotone" dataKey="completion_rate" stroke="rgb(5,150,105)" strokeWidth={3} fill="url(#completionArea)" animationDuration={420} />
-                  </AreaChart>
-                </ResponsiveContainer>
+              <div className="overflow-x-auto">
+                <div className="h-[280px] min-w-[520px] sm:h-[320px] sm:min-w-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={data?.completion_trend ?? []} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="completionArea" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="rgba(16,185,129,0.42)" />
+                          <stop offset="100%" stopColor="rgba(16,185,129,0.04)" />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="4 4" stroke={chartGridStroke} vertical={false} />
+                      <XAxis dataKey="label" tickLine={false} axisLine={false} minTickGap={20} interval="preserveStartEnd" tick={chartTick} />
+                      <YAxis tickLine={false} axisLine={false} domain={[0, 100]} tick={chartTick} width={32} />
+                      <RechartsTooltip
+                        formatter={(value, name) => [`${Number(value ?? 0)}${name === "completion_rate" ? "%" : ""}`, name === "completion_rate" ? "Completion rate" : "Attempts"]}
+                        contentStyle={chartTooltipStyle}
+                      />
+                      <Area type="monotone" dataKey="completion_rate" stroke="rgb(5,150,105)" strokeWidth={3} fill="url(#completionArea)" animationDuration={420} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
             )}
           </CardContent>
@@ -464,20 +469,22 @@ export default function AnalyticsPage() {
             {isLoading ? (
               <Skeleton className="h-[300px] w-full" />
             ) : (
-              <div className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={data?.violations_by_quiz ?? []} layout="vertical" margin={{ left: 20 }}>
-                    <CartesianGrid strokeDasharray="4 4" stroke={chartGridStroke} horizontal={false} />
-                    <XAxis type="number" tickLine={false} axisLine={false} allowDecimals={false} tick={chartTick} />
-                    <YAxis type="category" dataKey="quiz_name" tickLine={false} axisLine={false} width={140} tick={chartTick} />
-                    <RechartsTooltip contentStyle={chartTooltipStyle} />
-                    <Bar dataKey="violations" radius={[0, 10, 10, 0]} animationDuration={420}>
-                      {(data?.violations_by_quiz ?? []).map((entry, index) => (
-                        <Cell key={`violation-${index}`} fill={entry.violations > 3 ? "rgba(244,63,94,0.82)" : entry.violations > 0 ? "rgba(245,158,11,0.82)" : "rgba(34,197,94,0.82)"} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+              <div className="overflow-x-auto">
+                <div className="h-[280px] min-w-[560px] sm:h-[300px] sm:min-w-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={data?.violations_by_quiz ?? []} layout="vertical" margin={{ left: 20, right: 12 }}>
+                      <CartesianGrid strokeDasharray="4 4" stroke={chartGridStroke} horizontal={false} />
+                      <XAxis type="number" tickLine={false} axisLine={false} allowDecimals={false} tick={chartTick} />
+                      <YAxis type="category" dataKey="quiz_name" tickLine={false} axisLine={false} width={140} tick={chartTick} />
+                      <RechartsTooltip contentStyle={chartTooltipStyle} />
+                      <Bar dataKey="violations" radius={[0, 10, 10, 0]} animationDuration={420}>
+                        {(data?.violations_by_quiz ?? []).map((entry, index) => (
+                          <Cell key={`violation-${index}`} fill={entry.violations > 3 ? "rgba(244,63,94,0.82)" : entry.violations > 0 ? "rgba(245,158,11,0.82)" : "rgba(34,197,94,0.82)"} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
             )}
           </CardContent>
@@ -492,7 +499,7 @@ export default function AnalyticsPage() {
             {isLoading ? (
               <Skeleton className="h-[300px] w-full" />
             ) : (
-              <table className="min-w-full border-separate border-spacing-y-2 text-sm">
+              <table className="min-w-[720px] border-separate border-spacing-y-2 text-sm sm:min-w-full">
                 <thead>
                   <tr className="text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-[var(--text-muted)]">
                     {[
@@ -502,7 +509,7 @@ export default function AnalyticsPage() {
                       { key: "completion_rate", label: "Completion Rate" },
                       { key: "violations", label: "Violations" },
                     ].map((column) => (
-                      <th key={column.key} className="px-3 py-2">
+                      <th key={column.key} className="px-3 py-2 first:min-w-[220px]">
                         <button
                           type="button"
                           className="inline-flex items-center gap-1 transition hover:text-slate-900 dark:hover:text-[var(--text-primary)]"
@@ -526,7 +533,7 @@ export default function AnalyticsPage() {
                       )}
                     >
                       <td className="rounded-l-2xl px-3 py-3">
-                        <Link href={`/quiz/${row.quiz_id}?tab=results`} className="font-medium text-slate-900 transition hover:text-emerald-700 dark:text-[var(--text-primary)] dark:hover:text-[var(--brand-accent)]">
+                        <Link href={`/quiz/${row.quiz_id}?tab=results`} className="line-clamp-2 min-w-0 font-medium text-slate-900 transition hover:text-emerald-700 dark:text-[var(--text-primary)] dark:hover:text-[var(--brand-accent)]">
                           {row.quiz_name}
                         </Link>
                       </td>
