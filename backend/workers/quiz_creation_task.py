@@ -697,7 +697,7 @@ Rules:
 3. Do not include explanations, reasoning, markdown, or extra fields.
 4. For MCQ include options and correct_answer.
 5. For TRUE_FALSE use options ["True","False"] and include correct_answer.
-6. For SHORT_ANSWER and LONG_ANSWER keep options as null and correct_answer as null.
+6. For SHORT_ANSWER and LONG_ANSWER keep options as null and include a concise correct_answer when determinable.
 7. Respect question_type and marks_per_question exactly for every section.
 8. Keep wording concise and exam-ready.
 9. Avoid duplicates.
@@ -990,9 +990,6 @@ def create_quiz_ai(
                             correct_answer = "True"
                         elif lowered in {"false", "f", "0"}:
                             correct_answer = "False"
-                    elif target_type in {"SHORT_ANSWER", "LONG_ANSWER"}:
-                        correct_answer = None
-
                     next_order_index = order_cursor.get(section_index, 0) + 1
                     order_cursor[section_index] = next_order_index
                     question_rows.append(
