@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { env } from "@/lib/env"
 
-const apiBaseUrl = env.apiUrl
+const apiBaseUrl = env.backendOrigin
 
 function buildApiUrl(id: string) {
   return `${apiBaseUrl.replace(/\/$/, "")}/quizzes/${id}/settings`
