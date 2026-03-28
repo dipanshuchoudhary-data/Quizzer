@@ -45,7 +45,7 @@ export function QuizTabs({ quizId }: { quizId: string }) {
 
   return (
     <Tabs value={activeTab} onValueChange={updateTab} className="w-full">
-      <TabsList className="flex h-auto flex-wrap gap-2">
+      <TabsList className="flex h-auto w-full flex-wrap gap-2 overflow-x-auto whitespace-nowrap rounded-xl">
         <TabsTrigger value="questions">Questions</TabsTrigger>
         <TabsTrigger value="monitoring">Monitoring</TabsTrigger>
         <TabsTrigger value="results">Results</TabsTrigger>
