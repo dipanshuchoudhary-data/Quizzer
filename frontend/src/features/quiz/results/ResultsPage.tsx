@@ -9,6 +9,7 @@ import { resultsApi } from "@/lib/api/results"
 import { ResultsFilters } from "@/features/quiz/results/ResultsFilters"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { StatusBadge } from "@/components/common/StatusBadge"
+import { cn } from "@/lib/utils"
 
 function ScoreTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: { student_name?: string; final_score: number; violation_count: number } }> }) {
   if (!active || !payload?.length) return null
@@ -121,25 +122,34 @@ export function ResultsPage({ quizId }: { quizId: string }) {
           <CardTitle className="text-base">Score Trend</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={240}>
-            <LineChart data={filtered}>
-              <CartesianGrid stroke="rgba(148, 163, 184, 0.2)" vertical={false} />
-              <XAxis dataKey="student_name" tick={{ fill: "#cbd5e1", fontSize: 12 }} axisLine={{ stroke: "#64748b" }} tickLine={{ stroke: "#64748b" }} />
-              <YAxis tick={{ fill: "#cbd5e1", fontSize: 12 }} axisLine={{ stroke: "#64748b" }} tickLine={{ stroke: "#64748b" }} />
-              <Tooltip content={<ScoreTooltip />} />
-              <Line
-                dataKey="final_score"
-                type="monotone"
-                stroke="#38bdf8"
-                strokeWidth={2.5}
-                isAnimationActive
-                animationDuration={300}
-                animationEasing="ease-out"
-                dot={{ r: 3, fill: "#38bdf8", strokeWidth: 0 }}
-                activeDot={{ r: 6, fill: "#7dd3fc", stroke: "#e0f2fe", strokeWidth: 2 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
+          <div className="h-[220px] w-full sm:h-[240px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={filtered} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid stroke="rgba(148, 163, 184, 0.2)" vertical={false} />
+                <XAxis
+                  dataKey="student_name"
+                  tick={{ fill: "#cbd5e1", fontSize: 11 }}
+                  axisLine={{ stroke: "#64748b" }}
+                  tickLine={{ stroke: "#64748b" }}
+                  minTickGap={24}
+                  interval="preserveStartEnd"
+                />
+                <YAxis tick={{ fill: "#cbd5e1", fontSize: 11 }} axisLine={{ stroke: "#64748b" }} tickLine={{ stroke: "#64748b" }} width={32} />
+                <Tooltip content={<ScoreTooltip />} />
+                <Line
+                  dataKey="final_score"
+                  type="monotone"
+                  stroke="#38bdf8"
+                  strokeWidth={2.5}
+                  isAnimationActive
+                  animationDuration={300}
+                  animationEasing="ease-out"
+                  dot={{ r: 3, fill: "#38bdf8", strokeWidth: 0 }}
+                  activeDot={{ r: 6, fill: "#7dd3fc", stroke: "#e0f2fe", strokeWidth: 2 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
         </CardContent>
       </Card>
 
@@ -148,30 +158,74 @@ export function ResultsPage({ quizId }: { quizId: string }) {
           <CardTitle className="text-base">Results</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
-          <div className="grid grid-cols-7 gap-3 rounded-md border bg-muted/30 p-2 text-xs font-medium uppercase text-muted-foreground">
-            <span>Student</span>
-            <span>Enrollment</span>
-            <span>Score</span>
-            <span>Violations</span>
-            <span>Integrity</span>
-            <span>Submitted</span>
-            <span>Status</span>
-          </div>
-          {filtered.map((result, index) => (
-            <div key={`${result.attempt_token ?? index}`} className="grid grid-cols-7 gap-3 rounded-md border p-2 text-sm">
-              <span>
-                <span className="block font-medium">{result.student_name ?? "-"}</span>
-              </span>
-              <span>{result.enrollment_number ?? "-"}</span>
-              <span>{result.final_score}</span>
-              <span className="font-medium">{result.violation_count}</span>
-              <span className={result.violation_count > 5 ? "text-red-500" : result.integrity_flag ? "text-orange-500" : "text-emerald-500"}>
-                {result.violation_count > 5 ? "High Violation" : result.integrity_flag ? "Flagged" : "Clean"}
-              </span>
-              <span>{formatLocalDate(result.submitted_at)}</span>
-              <StatusBadge status={result.status} />
+          <div className="hidden overflow-x-auto md:block">
+            <div className="min-w-[760px] space-y-2">
+              <div className="grid grid-cols-[minmax(180px,1.5fr)_minmax(120px,1fr)_80px_90px_minmax(120px,1fr)_minmax(160px,1.2fr)_110px] gap-3 rounded-md border bg-muted/30 p-3 text-xs font-medium uppercase text-muted-foreground">
+                <span>Student</span>
+                <span>Enrollment</span>
+                <span>Score</span>
+                <span>Violations</span>
+                <span>Integrity</span>
+                <span>Submitted</span>
+                <span>Status</span>
+              </div>
+              {filtered.map((result, index) => (
+                <div
+                  key={`${result.attempt_token ?? index}`}
+                  className="grid grid-cols-[minmax(180px,1.5fr)_minmax(120px,1fr)_80px_90px_minmax(120px,1fr)_minmax(160px,1.2fr)_110px] items-center gap-3 rounded-md border p-3 text-sm"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium">{result.student_name ?? "-"}</span>
+                  </span>
+                  <span className="truncate">{result.enrollment_number ?? "-"}</span>
+                  <span>{result.final_score}</span>
+                  <span className="font-medium">{result.violation_count}</span>
+                  <span className={cn("font-medium", result.violation_count > 5 ? "text-red-500" : result.integrity_flag ? "text-orange-500" : "text-emerald-500")}>
+                    {result.violation_count > 5 ? "High Violation" : result.integrity_flag ? "Flagged" : "Clean"}
+                  </span>
+                  <span className="text-xs leading-5 text-muted-foreground sm:text-sm">{formatLocalDate(result.submitted_at)}</span>
+                  <div>
+                    <StatusBadge status={result.status} />
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
+
+          <div className="space-y-3 md:hidden">
+            {filtered.map((result, index) => (
+              <div key={`${result.attempt_token ?? index}`} className="space-y-3 rounded-xl border p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold">{result.student_name ?? "-"}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{result.enrollment_number ?? "No enrollment number"}</p>
+                  </div>
+                  <StatusBadge status={result.status} />
+                </div>
+                <dl className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="rounded-lg bg-muted/30 p-3">
+                    <dt className="text-xs uppercase tracking-wide text-muted-foreground">Score</dt>
+                    <dd className="mt-1 font-semibold">{result.final_score}</dd>
+                  </div>
+                  <div className="rounded-lg bg-muted/30 p-3">
+                    <dt className="text-xs uppercase tracking-wide text-muted-foreground">Violations</dt>
+                    <dd className="mt-1 font-semibold">{result.violation_count}</dd>
+                  </div>
+                  <div className="col-span-2 rounded-lg bg-muted/30 p-3">
+                    <dt className="text-xs uppercase tracking-wide text-muted-foreground">Integrity</dt>
+                    <dd className={cn("mt-1 font-medium", result.violation_count > 5 ? "text-red-500" : result.integrity_flag ? "text-orange-500" : "text-emerald-500")}>
+                      {result.violation_count > 5 ? "High Violation" : result.integrity_flag ? "Flagged" : "Clean"}
+                    </dd>
+                  </div>
+                  <div className="col-span-2 rounded-lg bg-muted/30 p-3">
+                    <dt className="text-xs uppercase tracking-wide text-muted-foreground">Submitted</dt>
+                    <dd className="mt-1 text-sm leading-5">{formatLocalDate(result.submitted_at)}</dd>
+                  </div>
+                </dl>
+              </div>
+            ))}
+          </div>
+
           {filtered.length === 0 && <p className="text-sm text-muted-foreground">No results available for current filters.</p>}
         </CardContent>
       </Card>
