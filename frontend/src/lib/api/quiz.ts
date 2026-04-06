@@ -1,12 +1,12 @@
 import axios from "axios"
 import { api } from "@/lib/api/client"
 import { env } from "@/lib/env"
-import { defaultQuizExamSettings, type Quiz, type QuizExamSettings } from "@/types/quiz"
+import { createDefaultVerificationSchema, defaultQuizExamSettings, type Quiz, type QuizExamSettings } from "@/types/quiz"
 
 export interface CreateQuizPayload {
   title: string
   description: string
-  academic_type?: "college" | "school"
+  academic_type?: "college" | "school" | "coaching"
   duration_minutes?: number
 }
 
@@ -36,6 +36,7 @@ interface QuizSettingsEnvelope {
 }
 
 function normalizeQuizSettingsPayload(payload: Partial<QuizExamSettings>): QuizExamSettings {
+  const verificationContext = payload.verification?.context ?? defaultQuizExamSettings.verification.context
   return {
     duration: Number(payload.duration ?? defaultQuizExamSettings.duration),
     default_marks: Number(payload.default_marks ?? defaultQuizExamSettings.default_marks),
@@ -51,6 +52,7 @@ function normalizeQuizSettingsPayload(payload: Partial<QuizExamSettings>): QuizE
     attempts_allowed: Number(payload.attempts_allowed ?? defaultQuizExamSettings.attempts_allowed),
     allow_resume: Boolean(payload.allow_resume ?? defaultQuizExamSettings.allow_resume),
     prevent_duplicate: Boolean(payload.prevent_duplicate ?? defaultQuizExamSettings.prevent_duplicate),
+    verification: payload.verification ?? createDefaultVerificationSchema(verificationContext),
   }
 }
 
@@ -60,15 +62,24 @@ function normalizeQuizSettingsResponse(data: QuizExamSettings | QuizSettingsEnve
   success: boolean
 } {
   if (data && typeof data === "object" && "settings" in data) {
+    const verification =
+      data.settings?.verification ??
+      createDefaultVerificationSchema((data.settings as Partial<QuizExamSettings> | undefined)?.verification?.context ?? "college")
     return {
-      settings: { ...defaultQuizExamSettings, ...(data.settings ?? {}) },
+      settings: { ...defaultQuizExamSettings, ...(data.settings ?? {}), verification },
       message: data.message ?? "Settings saved",
       success: data.success ?? true,
     }
   }
 
+  const payload = (data ?? {}) as QuizExamSettings
+  const fallbackVerificationContext = payload.verification ? payload.verification.context : "college"
   return {
-    settings: { ...defaultQuizExamSettings, ...((data ?? {}) as QuizExamSettings) },
+    settings: {
+      ...defaultQuizExamSettings,
+      ...payload,
+      verification: payload.verification ?? createDefaultVerificationSchema(fallbackVerificationContext),
+    },
     message: "Settings saved",
     success: true,
   }
@@ -96,7 +107,8 @@ function areQuizSettingsEqual(left: QuizExamSettings, right: QuizExamSettings) {
     left.violation_penalty === right.violation_penalty &&
     left.attempts_allowed === right.attempts_allowed &&
     left.allow_resume === right.allow_resume &&
-    left.prevent_duplicate === right.prevent_duplicate
+    left.prevent_duplicate === right.prevent_duplicate &&
+    JSON.stringify(left.verification) === JSON.stringify(right.verification)
   )
 }
 
