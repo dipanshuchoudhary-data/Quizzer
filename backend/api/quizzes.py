@@ -36,6 +36,7 @@ from backend.ai.agents.quiz_generator_agent import generate_single_question
 from backend.core.config import settings
 from backend.core.redis import cache_delete
 from backend.services.question_quality import sanitize_question_candidate
+from backend.services.verification import VerificationSchema, normalize_verification_schema
 
 
 router = APIRouter(
@@ -59,6 +60,7 @@ DEFAULT_QUIZ_SETTINGS = {
     "attempts_allowed": 1,
     "allow_resume": False,
     "prevent_duplicate": True,
+    "verification": normalize_verification_schema(None, "college"),
 }
 
 
@@ -79,6 +81,7 @@ class QuizSettingsPayload(BaseModel):
     attempts_allowed: int = Field(ge=1)
     allow_resume: bool
     prevent_duplicate: bool
+    verification: VerificationSchema
 
 
 class QuizSettingsResponse(BaseModel):
@@ -213,6 +216,8 @@ def _coerce_int(value, default: int, minimum: int = 0) -> int:
 
 def _normalize_quiz_settings_payload(raw_settings: dict | None, duration_minutes: int | None = None) -> dict:
     incoming = raw_settings if isinstance(raw_settings, dict) else {}
+    verification_seed = incoming.get("verification") if isinstance(incoming.get("verification"), dict) else None
+    academic_type = incoming.get("academic_type")
     return {
         "duration": _coerce_int(incoming.get("duration"), duration_minutes or 60, minimum=5),
         "default_marks": _coerce_int(incoming.get("default_marks"), 1, minimum=1),
@@ -228,14 +233,21 @@ def _normalize_quiz_settings_payload(raw_settings: dict | None, duration_minutes
         "attempts_allowed": _coerce_int(incoming.get("attempts_allowed"), 1, minimum=1),
         "allow_resume": _coerce_bool(incoming.get("allow_resume"), False),
         "prevent_duplicate": _coerce_bool(incoming.get("prevent_duplicate"), True),
+        "verification": normalize_verification_schema(verification_seed, academic_type),
     }
 
 
-def _serialize_quiz_settings(settings_obj: QuizSettings | None, duration_minutes: int) -> dict:
+def _serialize_quiz_settings(settings_obj: QuizSettings | None, duration_minutes: int, quiz: Quiz) -> dict:
+    legacy = quiz.settings_json if isinstance(quiz.settings_json, dict) else {}
+    verification = normalize_verification_schema(
+        legacy.get("verification") if isinstance(legacy.get("verification"), dict) else None,
+        quiz.academic_type,
+    )
     if not settings_obj:
         return {
             **DEFAULT_QUIZ_SETTINGS,
             "duration": duration_minutes,
+            "verification": verification,
         }
     return {
         "duration": settings_obj.duration,
@@ -252,6 +264,7 @@ def _serialize_quiz_settings(settings_obj: QuizSettings | None, duration_minutes
         "attempts_allowed": settings_obj.attempts_allowed,
         "allow_resume": settings_obj.allow_resume,
         "prevent_duplicate": settings_obj.prevent_duplicate,
+        "verification": verification,
     }
 
 
@@ -262,6 +275,7 @@ def _is_missing_quiz_settings_table_error(error: Exception) -> bool:
 
 def _serialize_legacy_quiz_settings(quiz: Quiz) -> dict:
     raw = quiz.settings_json if isinstance(quiz.settings_json, dict) else {}
+    raw["academic_type"] = quiz.academic_type
     return _normalize_quiz_settings_payload(raw, quiz.duration_minutes)
 
 
@@ -372,10 +386,10 @@ async def create_quiz(
 
     academic_type = payload.get("academic_type") or "college"
 
-    if academic_type not in ["college", "school"]:
+    if academic_type not in ["college", "school", "coaching"]:
         raise HTTPException(
             status_code=400,
-            detail="academic_type must be 'college' or 'school'",
+            detail="academic_type must be 'college', 'school', or 'coaching'",
         )
 
     quiz = Quiz(
@@ -452,7 +466,7 @@ async def get_quiz_settings(
         return {
             "success": True,
             "message": "Settings loaded successfully",
-            "settings": _serialize_quiz_settings(settings_record, quiz.duration_minutes),
+            "settings": _serialize_quiz_settings(settings_record, quiz.duration_minutes, quiz),
         }
     except SQLAlchemyError as exc:
         await db.rollback()
@@ -499,7 +513,7 @@ async def update_quiz_settings(
         quiz = await _get_owned_quiz_by_user_id(quiz_id, db, current_user_id)
 
         try:
-            normalized = _normalize_quiz_settings_payload(payload_dict, quiz.duration_minutes)
+            normalized = _normalize_quiz_settings_payload({**payload_dict, "academic_type": quiz.academic_type}, quiz.duration_minutes)
             current_settings = _serialize_legacy_quiz_settings(quiz)
             normalized = _validate_quiz_settings_payload(normalized, current_settings)
 
@@ -533,8 +547,8 @@ async def update_quiz_settings(
             raise HTTPException(status_code=500, detail="Unexpected error while saving settings") from unexpected
 
     try:
-        current_settings = _serialize_quiz_settings(settings_record, quiz.duration_minutes)
-        normalized = _normalize_quiz_settings_payload(payload_dict, quiz.duration_minutes)
+        current_settings = _serialize_quiz_settings(settings_record, quiz.duration_minutes, quiz)
+        normalized = _normalize_quiz_settings_payload({**payload_dict, "academic_type": quiz.academic_type}, quiz.duration_minutes)
         normalized = _validate_quiz_settings_payload(normalized, current_settings)
 
         if not settings_record:
@@ -560,6 +574,7 @@ async def update_quiz_settings(
         settings_record.prevent_duplicate = normalized["prevent_duplicate"]
 
         quiz.duration_minutes = normalized["duration"]
+        quiz.settings_json = normalized
 
         await db.commit()
         await db.refresh(settings_record)
@@ -567,7 +582,7 @@ async def update_quiz_settings(
         return {
             "success": True,
             "message": "Settings saved successfully",
-            "settings": _serialize_quiz_settings(settings_record, quiz.duration_minutes),
+            "settings": _serialize_quiz_settings(settings_record, quiz.duration_minutes, quiz),
         }
     except HTTPException:
         await db.rollback()
