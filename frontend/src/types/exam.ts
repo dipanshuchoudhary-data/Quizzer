@@ -1,4 +1,6 @@
-export type ExamMode = "college" | "school";
+import type { QuizVerificationSchema } from "@/types/quiz"
+
+export type ExamMode = "college" | "school" | "coaching" | "custom";
 
 export type ViolationType =
   | "TAB_SWITCH"
@@ -21,15 +23,8 @@ export interface ExamQuestion {
 }
 
 export interface StartExamPayload {
-  student_name: string;
-  enrollment_number: string;
-  institution_type?: ExamMode;
-  course?: string;
-  section?: string;
-  batch?: string;
-  semester?: string;
-  class_name?: string;
-  class_section?: string;
+  verification_context?: ExamMode | string;
+  verification_data: Record<string, string>;
 }
 
 export interface StartAttemptResponse {
@@ -44,6 +39,15 @@ export interface StartAttemptResponse {
   end_time?: string;
   violation_limit?: number;
   mark_deduction_per_violation?: number;
+}
+
+export interface ExamEntryConfigResponse {
+  quiz_id: string
+  quiz_title: string
+  academic_type: ExamMode | string
+  require_fullscreen: boolean
+  violation_limit: number
+  verification: QuizVerificationSchema
 }
 
 export interface SaveAnswerPayload {
