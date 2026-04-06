@@ -1,7 +1,7 @@
 import { examAxiosClient } from "@/api/axiosClient";
 import type {
   AttemptStatusResponse,
-  ExamMode,
+  ExamEntryConfigResponse,
   ExamQuestion,
   SaveAnswerPayload,
   StartAttemptResponse,
@@ -18,6 +18,12 @@ export async function startExamAttempt(quizId: string, payload: StartExamPayload
   return data;
 }
 
+export async function fetchExamEntryConfig(quizId: string, isPublicExam = false) {
+  const path = isPublicExam ? `/attempts/public/${quizId}/entry-config` : `/attempts/${quizId}/entry-config`
+  const { data } = await examAxiosClient.get<ExamEntryConfigResponse>(path)
+  return data
+}
+
 export async function startPublishedExamAttempt(publicExamId: string) {
   const { data } = await examAxiosClient.post<StartAttemptResponse>("/attempts/start", {
     public_exam_id: publicExamId,
@@ -25,7 +31,7 @@ export async function startPublishedExamAttempt(publicExamId: string) {
   return data;
 }
 
-export async function startPublishedVerifiedExamAttempt(publicExamId: string, payload: StartExamPayload & { institution_type: ExamMode }) {
+export async function startPublishedVerifiedExamAttempt(publicExamId: string, payload: StartExamPayload) {
   const { data } = await examAxiosClient.post<StartAttemptResponse>("/attempts/start", {
     public_exam_id: publicExamId,
     ...payload,
