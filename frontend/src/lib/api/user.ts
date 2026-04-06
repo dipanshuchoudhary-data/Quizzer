@@ -98,6 +98,10 @@ export const userApi = {
     await api.post("/auth/logout-all")
   },
 
+  async logoutOtherSessions(): Promise<void> {
+    await api.post("/auth/logout-others")
+  },
+
   async logout(): Promise<void> {
     await api.post("/auth/logout")
   },

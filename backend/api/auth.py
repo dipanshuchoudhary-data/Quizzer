@@ -19,6 +19,7 @@ from backend.services.auth_sessions import (
     AuthenticatedRequestContext,
     create_auth_session,
     expire_all_user_sessions,
+    expire_other_user_sessions,
     expire_session,
     get_authenticated_context,
     list_user_sessions,
@@ -218,6 +219,15 @@ async def logout_all_sessions(
     await expire_all_user_sessions(db, context.user.id)
     clear_auth_cookies(response)
     return {"message": "All sessions ended"}
+
+
+@router.post("/logout-others")
+async def logout_other_sessions(
+    context: AuthenticatedRequestContext = Depends(get_current_auth_context),
+    db: AsyncSession = Depends(get_db),
+):
+    await expire_other_user_sessions(db, str(context.user.id), str(context.session.id))
+    return {"message": "Other sessions ended"}
 
 
 @router.post("/change-password")

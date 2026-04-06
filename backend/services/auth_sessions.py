@@ -142,6 +142,26 @@ async def expire_all_user_sessions(db: AsyncSession, user_id: str) -> None:
     await db.commit()
 
 
+async def expire_other_user_sessions(db: AsyncSession, user_id: str, current_session_id: str) -> None:
+    result = await db.execute(
+        select(AuthSession).where(
+            AuthSession.user_id == user_id,
+            AuthSession.status == "active",
+            AuthSession.id != current_session_id,
+        )
+    )
+    sessions = result.scalars().all()
+    if not sessions:
+        return
+
+    now = utcnow()
+    for auth_session in sessions:
+        auth_session.status = "expired"
+        auth_session.revoked_at = now
+        db.add(auth_session)
+    await db.commit()
+
+
 async def list_user_sessions(db: AsyncSession, user_id: str) -> list[AuthSession]:
     result = await db.execute(
         select(AuthSession)
