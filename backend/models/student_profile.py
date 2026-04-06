@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import String, ForeignKey
+from sqlalchemy import String, ForeignKey, JSON, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
 from backend.core.database import Base
@@ -19,6 +19,13 @@ class StudentProfile(Base, UUIDMixin, TimestampMixin):
     student_name: Mapped[str] = mapped_column(String(255), nullable=False)
     enrollment_number: Mapped[str] = mapped_column(String(100), nullable=False)
     institution_type: Mapped[str] = mapped_column(String(20), nullable=False, default="college")
+    verification_context: Mapped[str] = mapped_column(String(50), nullable=False, default="college")
+    verification_data: Mapped[dict] = mapped_column(
+        JSON,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'"),
+    )
 
     # College fields
     course: Mapped[str | None] = mapped_column(String(255), nullable=True)
