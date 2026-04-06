@@ -160,6 +160,7 @@ export function AccountSettingsWorkspace() {
   const [sessions, setSessions] = useState<AuthSession[]>([])
   const [sessionsLoading, setSessionsLoading] = useState(false)
   const [sessionsLoaded, setSessionsLoaded] = useState(false)
+  const [showSessionDetails, setShowSessionDetails] = useState(false)
 
   useEffect(() => { hydrate(user) }, [hydrate, user])
   useEffect(() => { setActiveTab(initialTab) }, [initialTab])
@@ -319,6 +320,18 @@ export function AccountSettingsWorkspace() {
   }
 
   const avatarSrc = avatarPreviewUrl || profile.avatar_thumbnail_url || profile.avatar_url
+  const currentSession = useMemo(() => sessions.find((session) => session.is_current) ?? null, [sessions])
+  const otherActiveSessions = useMemo(() => sessions.filter((session) => !session.is_current && session.status === "active"), [sessions])
+
+  const handleLogoutOtherSessions = async () => {
+    try {
+      await userApi.logoutOtherSessions()
+      toast.success("Logged out from other devices")
+      await loadSessions()
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Failed to end other sessions"))
+    }
+  }
 
   return (
     <div className="space-y-8 pb-8">
@@ -437,11 +450,25 @@ export function AccountSettingsWorkspace() {
                 </CardContent>
               </Card>
               <Card className="border-slate-200/80 bg-white/95 shadow-[0_18px_60px_-46px_rgba(15,23,42,0.6)] dark:border-[var(--border-color)] dark:bg-[var(--card-bg)]">
-                <CardHeader><SectionIntro title="Login sessions" description="Review where your account is active and clear access when needed." /></CardHeader>
+                <CardHeader><SectionIntro title="Login sessions" description="Keep session security simple by default and open details only when you need them." /></CardHeader>
                 <CardContent className="space-y-4">
-                  {sessionsLoading ? <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-sm text-slate-600 dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)] dark:text-[var(--text-secondary)]"><LoaderCircle className="size-4 animate-spin" />Loading real session data...</div> : null}
-                  {!sessionsLoading && sessions.length === 0 ? <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-sm text-slate-600 dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)] dark:text-[var(--text-secondary)]">No active or historical sessions are available for this account yet.</div> : null}
-                  {sessions.length > 0 ? (
+                  {sessionsLoading ? <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-sm text-slate-600 dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)] dark:text-[var(--text-secondary)]"><LoaderCircle className="size-4 animate-spin" />Checking active devices...</div> : null}
+                  {!sessionsLoading ? (
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)]">
+                        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-[var(--text-muted)]">This device</p>
+                        <p className="mt-2 text-lg font-semibold text-slate-900 dark:text-[var(--text-primary)]">{currentSession ? "You are logged in on this device" : "Current device status unavailable"}</p>
+                        <p className="mt-2 text-sm text-slate-500 dark:text-[var(--text-secondary)]">{currentSession ? `${currentSession.device} active as of ${formatSessionTime(currentSession.last_seen_at)}` : "Refresh session details to verify the current device."}</p>
+                      </div>
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)]">
+                        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-[var(--text-muted)]">Other devices</p>
+                        <p className="mt-2 text-lg font-semibold text-slate-900 dark:text-[var(--text-primary)]">{otherActiveSessions.length === 0 ? "No other active devices" : `${otherActiveSessions.length} other device${otherActiveSessions.length === 1 ? "" : "s"} active`}</p>
+                        <p className="mt-2 text-sm text-slate-500 dark:text-[var(--text-secondary)]">{otherActiveSessions.length === 0 ? "Your account appears to be active only on this device." : "End those sessions if you no longer trust them."}</p>
+                      </div>
+                    </div>
+                  ) : null}
+                  {!sessionsLoading && sessions.length === 0 ? <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-sm text-slate-600 dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)] dark:text-[var(--text-secondary)]">Session details are not available yet for this account.</div> : null}
+                  {showSessionDetails && sessions.length > 0 ? (
                     <div className="grid gap-4 md:grid-cols-2">
                       {sessions.map((session) => (
                         <div key={session.id} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)]">
@@ -459,6 +486,8 @@ export function AccountSettingsWorkspace() {
                   ) : null}
                   <div className="flex flex-wrap gap-3">
                     <Button variant="outline" onClick={() => void loadSessions()} disabled={sessionsLoading}><RefreshCw className={cn("size-4", sessionsLoading ? "animate-spin" : "")} />Refresh sessions</Button>
+                    <Button variant="outline" onClick={() => void handleLogoutOtherSessions()} disabled={sessionsLoading || otherActiveSessions.length === 0}>Log out from all other devices</Button>
+                    <Button variant="outline" onClick={() => setShowSessionDetails((current) => !current)} disabled={sessionsLoading || sessions.length === 0}>{showSessionDetails ? "Hide details" : "View details"}</Button>
                     <Button variant="outline" onClick={() => void handleLogoutAllSessions()}>Logout from all sessions</Button>
                     <Button variant="outline" onClick={() => void logout().then(() => router.replace("/login"))}>Logout from this session</Button>
                   </div>
