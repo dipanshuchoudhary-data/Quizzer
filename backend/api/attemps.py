@@ -3,14 +3,16 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 
 from backend.core.database import get_db
 from backend.models.quiz import Quiz
 from backend.models.attempt import Attempt
 from backend.models.question import Question
+from backend.models.quiz_settings import QuizSettings
 from backend.models.student_profile import StudentProfile
-from backend.models.result import Result
 from backend.schemas.attempt import (
+    ExamEntryConfigResponse,
     StartPublicAttemptRequest,
     StartAttemptRequest,
     StartAttemptResponse,
@@ -24,9 +26,46 @@ from backend.core.redis import (
     exam_expired,
 )
 from backend.ai.graphs.result_processing_graph import build_result_processing_graph
+from backend.services.verification import (
+    normalize_verification_schema,
+    validate_verification_submission,
+)
 
 
 router = APIRouter(prefix="/attempts", tags=["Attempts"])
+
+
+def _load_legacy_runtime_settings(quiz: Quiz) -> dict:
+    raw = quiz.settings_json if isinstance(quiz.settings_json, dict) else {}
+    verification = raw.get("verification") if isinstance(raw.get("verification"), dict) else None
+    return {
+        "require_fullscreen": bool(raw.get("require_fullscreen", True)),
+        "violation_limit": max(1, int(raw.get("violation_limit", 3) or 3)),
+        "verification": normalize_verification_schema(verification, quiz.academic_type),
+    }
+
+
+async def _load_runtime_settings(db: AsyncSession, quiz: Quiz) -> dict:
+    defaults = _load_legacy_runtime_settings(quiz)
+    try:
+        result = await db.execute(
+            select(QuizSettings).where(
+                QuizSettings.quiz_id == quiz.id,
+                QuizSettings.owner_user_id == quiz.created_by,
+            )
+        )
+        settings_record = result.scalar_one_or_none()
+    except SQLAlchemyError:
+        return defaults
+
+    if not settings_record:
+        return defaults
+
+    return {
+        "require_fullscreen": settings_record.require_fullscreen,
+        "violation_limit": max(1, int(settings_record.violation_limit or defaults["violation_limit"])),
+        "verification": defaults["verification"],
+    }
 
 
 async def _load_attempt_questions(db: AsyncSession, quiz_id: uuid.UUID) -> list[Question]:
@@ -93,24 +132,20 @@ async def _create_attempt(
     *,
     db: AsyncSession,
     quiz: Quiz,
-    student_name: str,
-    enrollment_number: str,
-    institution_type: str,
-    course: str | None = None,
-    section: str | None = None,
-    batch: str | None = None,
-    semester: str | None = None,
-    class_name: str | None = None,
-    class_section: str | None = None,
+    verification_context: str,
+    verification_data: dict,
 ) -> StartAttemptResponse:
     questions = await _load_attempt_questions(db, quiz.id)
     if not questions:
         raise HTTPException(status_code=410, detail="Exam has ended")
 
+    runtime_settings = await _load_runtime_settings(db, quiz)
+    verification = validate_verification_submission(runtime_settings["verification"], verification_data)
+
     existing_attempt_result = await db.execute(
         select(Attempt).where(
             Attempt.quiz_id == quiz.id,
-            Attempt.enrollment_number == enrollment_number,
+            Attempt.enrollment_number == verification.identity_key,
         )
     )
     existing_attempt = existing_attempt_result.scalar_one_or_none()
@@ -132,7 +167,7 @@ async def _create_attempt(
     attempt = Attempt(
         quiz_id=quiz.id,
         attempt_token=attempt_token,
-        enrollment_number=enrollment_number,
+        enrollment_number=verification.identity_key,
         status="IN_PROGRESS",
         final_score=0,
         questions_snapshot=_serialize_question_snapshot(questions),
@@ -143,15 +178,17 @@ async def _create_attempt(
 
     profile = StudentProfile(
         attempt_id=attempt.id,
-        student_name=student_name,
-        enrollment_number=enrollment_number,
-        institution_type=institution_type,
-        course=course,
-        section=section,
-        batch=batch,
-        semester=semester,
-        class_name=class_name,
-        class_section=class_section,
+        student_name=verification.legacy_profile["student_name"] or verification.display_identifier,
+        enrollment_number=verification.legacy_profile["enrollment_number"] or verification.display_identifier,
+        institution_type=verification_context,
+        verification_context=verification.context,
+        verification_data=verification.data,
+        course=verification.legacy_profile["course"],
+        section=verification.legacy_profile["section"],
+        batch=verification.legacy_profile["batch"],
+        semester=verification.legacy_profile["semester"],
+        class_name=verification.legacy_profile["class_name"],
+        class_section=verification.legacy_profile["class_section"],
     )
 
     db.add(profile)
@@ -199,22 +236,15 @@ async def start_attempt(
 
     if not quiz or not quiz.is_published:
         raise HTTPException(status_code=404, detail="Quiz not available")
-
-    if str(payload.institution_type).lower() not in {"college", "school"}:
-        raise HTTPException(status_code=400, detail="Institution type must be School or College")
+    runtime_settings = await _load_runtime_settings(db, quiz)
+    verification_schema = runtime_settings["verification"]
+    verification_context = verification_schema.get("context") or str(payload.verification_context or quiz.academic_type or "college").lower()
 
     return await _create_attempt(
         db=db,
         quiz=quiz,
-        student_name=payload.student_name,
-        enrollment_number=payload.enrollment_number,
-        institution_type=payload.institution_type.lower(),
-        course=payload.course,
-        section=payload.section,
-        batch=payload.batch,
-        semester=payload.semester,
-        class_name=payload.class_name,
-        class_section=payload.class_section,
+        verification_context=verification_context,
+        verification_data=payload.verification_data,
     )
 
 
@@ -235,17 +265,62 @@ async def start_public_attempt(
     if str(quiz.ai_generation_status or "").upper() == "CLOSED":
         raise HTTPException(status_code=410, detail="Exam has ended")
 
-    guest_suffix = payload.public_exam_id[:8].upper()
+    runtime_settings = await _load_runtime_settings(db, quiz)
+    verification_schema = runtime_settings["verification"]
+    verification_context = verification_schema.get("context") or str(payload.verification_context or quiz.academic_type or "college").lower()
     return await _create_attempt(
         db=db,
         quiz=quiz,
-        student_name=payload.student_name,
-        enrollment_number=payload.enrollment_number or f"PUBLIC-{guest_suffix}",
-        institution_type=payload.institution_type.lower(),
-        course=payload.course,
-        section=payload.section,
-        batch=payload.batch,
-        semester=payload.semester,
+        verification_context=verification_context,
+        verification_data=payload.verification_data,
+    )
+
+
+@router.get("/{quiz_id}/entry-config", response_model=ExamEntryConfigResponse)
+async def get_attempt_entry_config(
+    quiz_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Quiz).where(Quiz.id == quiz_id))
+    quiz = result.scalar_one_or_none()
+
+    if not quiz or not quiz.is_published:
+        raise HTTPException(status_code=404, detail="Quiz not available")
+
+    runtime_settings = await _load_runtime_settings(db, quiz)
+    return ExamEntryConfigResponse(
+        quiz_id=quiz.id,
+        quiz_title=quiz.title,
+        academic_type=quiz.academic_type,
+        require_fullscreen=runtime_settings["require_fullscreen"],
+        violation_limit=runtime_settings["violation_limit"],
+        verification=runtime_settings["verification"],
+    )
+
+
+@router.get("/public/{public_exam_id}/entry-config", response_model=ExamEntryConfigResponse)
+async def get_public_attempt_entry_config(
+    public_exam_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Quiz).where(Quiz.public_id == public_exam_id))
+    quiz = result.scalar_one_or_none()
+
+    if not quiz:
+        raise HTTPException(status_code=404, detail="Quiz not found")
+    if not quiz.is_published:
+        raise HTTPException(status_code=403, detail="Quiz not published")
+    if str(quiz.ai_generation_status or "").upper() == "CLOSED":
+        raise HTTPException(status_code=410, detail="Exam has ended")
+
+    runtime_settings = await _load_runtime_settings(db, quiz)
+    return ExamEntryConfigResponse(
+        quiz_id=quiz.id,
+        quiz_title=quiz.title,
+        academic_type=quiz.academic_type,
+        require_fullscreen=runtime_settings["require_fullscreen"],
+        violation_limit=runtime_settings["violation_limit"],
+        verification=runtime_settings["verification"],
     )
 
 
