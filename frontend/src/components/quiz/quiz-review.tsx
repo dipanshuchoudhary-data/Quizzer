@@ -6,7 +6,6 @@ import {
   ArrowUp,
   CheckCircle2,
   Copy,
-  CopyPlus,
   Edit3,
   RotateCcw,
   Search,
@@ -16,11 +15,14 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { BulkActionsBar } from "@/features/quiz/review/BulkActionsBar"
 import { useReviewUIStore } from "@/stores/useReviewUIStore"
+import { useSelectionStore } from "@/stores/useSelectionStore"
 import { questionApi } from "@/lib/api/question"
 import { sectionApi } from "@/lib/api/section"
 import { quizApi } from "@/lib/api/quiz"
@@ -65,6 +67,41 @@ function ensureOptionBounds(options: string[]) {
   const padded = [...base]
   while (padded.length < 4) padded.push("")
   return padded.slice(0, 4)
+}
+
+function formatQuestionForClipboard(question: Question) {
+  const qType = normalizeType(question.question_type)
+  const lines: string[] = [question.question_text.trim()]
+
+  if (qType === "MCQ" || qType === "TRUE_FALSE") {
+    const rawOptions = qType === "TRUE_FALSE" ? ["True", "False"] : ensureOptionBounds(parseOptions(question.options))
+    const options = rawOptions.filter((option) => option.trim().length > 0)
+
+    if (options.length > 0) {
+      lines.push("")
+      options.forEach((option, index) => {
+        lines.push(`${String.fromCharCode(65 + index)}. ${option}`)
+      })
+    }
+
+    if (question.correct_answer?.trim()) {
+      const answerIndex = options.findIndex((option) => option === question.correct_answer)
+      const formattedAnswer =
+        answerIndex >= 0
+          ? `${String.fromCharCode(65 + answerIndex)}. ${question.correct_answer}`
+          : question.correct_answer
+      lines.push("", `Correct Answer: ${formattedAnswer}`)
+    }
+
+    return lines.join("\n")
+  }
+
+  const writtenAnswer = (question.expected_answer ?? question.correct_answer ?? "").trim()
+  if (writtenAnswer) {
+    lines.push("", `Expected Answer: ${writtenAnswer}`)
+  }
+
+  return lines.join("\n")
 }
 
 function sortQuestions(questions: Question[]) {
@@ -114,12 +151,27 @@ function getQuestionErrors(question: Question) {
 export function QuizReview({ quizId }: { quizId: string }) {
   const queryClient = useQueryClient()
   const { focusMode, toggleFocus, setFocusMode } = useReviewUIStore()
+  const { selectedIds, setMany, clear, toggle } = useSelectionStore()
   const [hasLoaded, setHasLoaded] = useState(false)
   const [filterSection, setFilterSection] = useState<string>("all")
   const [filterType, setFilterType] = useState<string>("all")
   const [searchQuery, setSearchQuery] = useState("")
   const [hasChangesSincePublish, setHasChangesSincePublish] = useState(false)
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null)
+
+  async function handleCopyQuestion(question: Question) {
+    try {
+      await navigator.clipboard.writeText(formatQuestionForClipboard(question))
+      toast.success("Copied")
+    } catch {
+      toast.error("Could not copy question")
+    }
+  }
+
+  useEffect(() => {
+    clear()
+    return () => clear()
+  }, [clear])
 
   useEffect(() => {
     document.body.classList.toggle("review-focus", focusMode)
@@ -285,6 +337,8 @@ export function QuizReview({ quizId }: { quizId: string }) {
   const validationErrors = useMemo(() => {
     return questions.flatMap((question) => getQuestionErrors(question))
   }, [questions])
+  const filteredIds = useMemo(() => filteredQuestions.map((question) => question.id), [filteredQuestions])
+  const allVisibleSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedIds.includes(id))
 
   const canPublish =
     questions.length > 0 &&
@@ -473,6 +527,28 @@ export function QuizReview({ quizId }: { quizId: string }) {
             ) : null}
           </div>
 
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border bg-background/80 px-3 py-2">
+            <div className="flex min-h-11 items-center gap-2">
+              <Checkbox
+                checked={allVisibleSelected}
+                onCheckedChange={(checked) => {
+                  if (checked) {
+                    setMany(filteredIds)
+                    return
+                  }
+                  clear()
+                }}
+                aria-label="Select all visible questions"
+              />
+              <span className="text-sm text-muted-foreground">
+                Select all visible ({filteredIds.length})
+              </span>
+            </div>
+            <Button variant="ghost" onClick={clear} disabled={selectedIds.length === 0}>
+              Clear selection
+            </Button>
+          </div>
+
           {!canPublish ? (
             <p className="text-xs text-amber-600">
               {isPublished && !hasChangesSincePublish
@@ -482,6 +558,16 @@ export function QuizReview({ quizId }: { quizId: string }) {
           ) : null}
 
           {isLoading && !hasLoaded ? <p className="text-sm text-muted-foreground">Loading questions...</p> : null}
+
+          <BulkActionsBar
+            sections={sections}
+            onDone={() => {
+              setHasChangesSincePublish(true)
+              queryClient.invalidateQueries({ queryKey: ["questions", quizId] })
+              queryClient.invalidateQueries({ queryKey: ["quiz", quizId] })
+              queryClient.invalidateQueries({ queryKey: ["quizzes"] })
+            }}
+          />
 
           <div className="flex-1 space-y-10 overflow-y-auto pr-3 scroll-smooth">
             {filteredQuestions.map((question) => {
@@ -497,20 +583,31 @@ export function QuizReview({ quizId }: { quizId: string }) {
               return (
                 <div
                   key={question.id}
-                  className="space-y-4 rounded-2xl border bg-background/95 p-6 shadow-md"
+                  className={cn(
+                    "space-y-4 rounded-2xl border bg-background/95 p-6 shadow-md",
+                    selectedIds.includes(question.id) && "border-primary/50 ring-1 ring-primary/20"
+                  )}
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="flex-1 space-y-2">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        {qType === "WRITTEN" ? "Written Answer" : qType.replace("_", " ")}
-                      </p>
-                      <Textarea
-                        className="min-h-[96px]"
-                        value={question.question_text}
-                        onChange={(event) =>
-                          updateQuestionMutation.mutate({ id: question.id, payload: { question_text: event.target.value } })
-                        }
+                    <div className="flex flex-1 items-start gap-3">
+                      <Checkbox
+                        checked={selectedIds.includes(question.id)}
+                        onCheckedChange={() => toggle(question.id)}
+                        aria-label={`Select question ${question.id}`}
+                        className="mt-1"
                       />
+                      <div className="flex-1 space-y-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          {qType === "WRITTEN" ? "Written Answer" : qType.replace("_", " ")}
+                        </p>
+                        <Textarea
+                          className="min-h-[96px]"
+                          value={question.question_text}
+                          onChange={(event) =>
+                            updateQuestionMutation.mutate({ id: question.id, payload: { question_text: event.target.value } })
+                          }
+                        />
+                      </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       <span
@@ -743,18 +840,10 @@ export function QuizReview({ quizId }: { quizId: string }) {
                       <Button
                         size="icon"
                         variant="outline"
-                        onClick={() => navigator.clipboard.writeText(question.question_text)}
+                        onClick={() => void handleCopyQuestion(question)}
                         aria-label="Copy question"
                       >
                         <Copy className="size-4" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="outline"
-                        onClick={() => questionApi.duplicate(question.id).then(() => refetchQuestions())}
-                        aria-label="Duplicate question"
-                      >
-                        <CopyPlus className="size-4" />
                       </Button>
                       <Button
                         size="icon"
