@@ -16,15 +16,10 @@ interface AttemptIdentity {
 }
 
 interface StudentProfileState {
-  student_name: string;
-  enrollment_number: string;
-  institution_type?: ExamMode;
-  course?: string;
-  section?: string;
-  batch?: string;
-  semester?: string;
-  class_name?: string;
-  class_section?: string;
+  verification_context: string;
+  verification_data: Record<string, string>;
+  student_name?: string;
+  display_identifier?: string;
 }
 
 interface PersistedExamState {
