@@ -81,6 +81,7 @@ def serialize_user(user: User) -> dict:
         "teaching_experience": user.teaching_experience,
         "avatar_url": user.avatar_url,
         "avatar_thumbnail_url": build_avatar_thumbnail_url(user.avatar_url),
+        "auth_provider": user.auth_provider,
         "is_verified": user.is_verified,
         "onboarding_completed": user.onboarding_completed,
         "is_staff": user.is_staff,
