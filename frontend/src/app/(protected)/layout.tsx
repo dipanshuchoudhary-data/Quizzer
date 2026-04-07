@@ -2,6 +2,7 @@ import { CommandPalette } from "@/components/navigation/command-palette"
 import { Sidebar } from "@/components/navigation/sidebar"
 import { Topbar } from "@/components/navigation/topbar"
 import { PageShell } from "@/components/navigation/page-shell"
+import { FeedbackWidget } from "@/components/feedback/FeedbackWidget"
 
 export default function ProtectedLayout({
   children,
@@ -22,6 +23,7 @@ export default function ProtectedLayout({
         </main>
       </div>
       <CommandPalette />
+      <FeedbackWidget />
     </div>
   )
 }
