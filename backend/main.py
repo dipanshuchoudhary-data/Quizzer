@@ -7,6 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.middleware.sessions import SessionMiddleware
 
 from backend.core.config import settings
 from backend.core.security import ensure_password_backend_available
@@ -25,6 +26,9 @@ from backend.api.users import router as user_router
 from backend.api.ai_jobs import router as ai_jobs_router
 from backend.api.dashboard import router as dashboard_router
 from backend.api.ai_quiz import router as ai_quiz_router
+from backend.api.feedback import router as feedback_router
+from backend.api.notifications import router as notifications_router
+from backend.api.google_auth import router as google_auth_router
 
 # psycopg async mode is incompatible with ProactorEventLoop on Windows.
 # Set Selector policy before any event loop is created.
@@ -59,6 +63,16 @@ def create_app() -> FastAPI:
         version="1.0.0",
         docs_url="/docs",
         redoc_url="/redoc",
+    )
+
+    # OAuth state/nonce storage for the Google authorization-code flow.
+    app.add_middleware(
+        SessionMiddleware,
+        secret_key=settings.JWT_SECRET_KEY,
+        session_cookie="quizzer_oauth_session",
+        same_site="lax",
+        https_only=not settings.is_local,
+        max_age=600,
     )
 
     # CORS
@@ -113,6 +127,9 @@ def create_app() -> FastAPI:
     app.include_router(ai_jobs_router)
     app.include_router(dashboard_router)
     app.include_router(ai_quiz_router)
+    app.include_router(feedback_router)
+    app.include_router(notifications_router)
+    app.include_router(google_auth_router)
 
     @app.get("/health", tags=["Health"])
     async def health():
