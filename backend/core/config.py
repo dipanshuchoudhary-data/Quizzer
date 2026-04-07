@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     # ----------------------
     EMAIL_API_KEY: str | None = None
     EMAIL_FROM: str = "Quizzer <no-reply@quizzer.app>"
+    FEEDBACK_EMAIL_TO: str = "dipanshuchoudhary109@gmail.com"
     SMTP_HOST: str | None = None
     SMTP_PORT: int = 587
     SMTP_USERNAME: str | None = None
@@ -52,6 +53,13 @@ class Settings(BaseSettings):
     COOKIE_SECURE: bool = False
     COOKIE_SAMESITE: str = "lax"  # lax | strict | none
     COOKIE_DOMAIN: str | None = None
+
+    # ----------------------
+    # Google OAuth
+    # ----------------------
+    GOOGLE_CLIENT_ID: str | None = None
+    GOOGLE_CLIENT_SECRET: str | None = None
+    GOOGLE_REDIRECT_URI: str | None = None
 
     # ----------------------
     # LLM Config
