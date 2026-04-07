@@ -70,7 +70,7 @@ async def auth_callback(request: Request, db: AsyncSession = Depends(get_db)):
     await db.refresh(auth_session)
 
     access_token = create_access_token({"sub": str(user.id), "sid": str(auth_session.id), "typ": "access"})
-    redirect_url = f"{settings.FRONTEND_URL}/auth/success?token={access_token}"
+    redirect_url = f"{settings.FRONTEND_URL}/verify-email?token={access_token}"
     response = RedirectResponse(url=redirect_url)
     set_auth_cookies(response, user_id=str(user.id), session_id=str(auth_session.id))
     return response
