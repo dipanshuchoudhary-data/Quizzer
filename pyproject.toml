@@ -23,6 +23,7 @@ dependencies = [
     "python-jose[cryptography]",
     "passlib[bcrypt]",
     "argon2-cffi",
+    "itsdangerous",
     # Background Jobs & Cache
     "redis",
     "celery[redis]",
