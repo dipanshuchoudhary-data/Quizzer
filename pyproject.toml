@@ -46,6 +46,7 @@ dependencies = [
     "pandas",
     "structlog",
     "cloudinary>=1.44.1",
+    "authlib>=1.6.9",
 ]
 
 [tool.uv]
