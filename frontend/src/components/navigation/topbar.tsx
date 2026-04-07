@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { Bell, ChevronRight, Menu, Moon, Plus, Sun } from "lucide-react"
+import { Bell, ChevronRight, LifeBuoy, LogOut, Menu, Moon, Plus, Settings2, ShieldCheck, Sun, UserRound } from "lucide-react"
 import { useTheme } from "next-themes"
 import { GlobalSearch } from "./global-search"
+import { NotificationInbox } from "./notification-inbox"
 import { NAV_SECTIONS } from "./nav-config"
 import { useUIStore } from "@/stores/useUIStore"
 import { useAuthStore } from "@/stores/useAuthStore"
@@ -67,6 +68,16 @@ export function Topbar() {
   const initials = getInitials(displayName)
   const avatarUrl = user?.avatar_thumbnail_url || user?.avatar_url || profile.avatar_thumbnail_url || profile.avatar_url || ""
 
+  const navigateTo = (href: string) => {
+    setAccountOpen(false)
+    router.push(href)
+  }
+
+  const openFeedback = () => {
+    setAccountOpen(false)
+    window.dispatchEvent(new CustomEvent("quizzer:feedback-open"))
+  }
+
   return (
     <header className="sticky top-0 z-20 border-b bg-background/90 px-4 py-3 backdrop-blur sm:px-6">
       <div className="flex flex-wrap items-center gap-3">
@@ -119,14 +130,7 @@ export function Topbar() {
             <Plus className="size-4" />
           </Button>
 
-          <button
-            type="button"
-            className="relative inline-flex h-10 w-10 items-center justify-center rounded-full border bg-background transition-all duration-150 hover:bg-muted hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 active:scale-[0.96]"
-            aria-label="Notifications"
-          >
-            <Bell className="size-4" />
-            <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-rose-500" />
-          </button>
+          <NotificationInbox />
 
           <Button
             size="icon"
@@ -140,33 +144,61 @@ export function Topbar() {
 
           <DropdownMenu open={accountOpen} onOpenChange={setAccountOpen}>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="px-2" aria-label="Open account menu">
+              <Button variant="ghost" className="rounded-full border px-2" aria-label="Open account menu">
                 <Avatar className="h-9 w-9">
                   {avatarUrl ? <AvatarImage src={avatarUrl} alt={displayName} /> : null}
                   <AvatarFallback>{initials}</AvatarFallback>
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-72">
-              <DropdownMenuLabel>
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold">{displayName}</p>
-                  <p className="text-xs text-muted-foreground">{displayEmail}</p>
+            <DropdownMenuContent align="end" sideOffset={10} className="w-80 rounded-2xl border p-2 shadow-xl">
+              <DropdownMenuLabel className="px-2 pb-3 pt-2">
+                <div className="flex items-center gap-3">
+                  <Avatar className="h-11 w-11">
+                    {avatarUrl ? <AvatarImage src={avatarUrl} alt={displayName} /> : null}
+                    <AvatarFallback>{initials}</AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0 space-y-1">
+                    <p className="truncate text-sm font-semibold">{displayName}</p>
+                    <p className="truncate text-xs text-muted-foreground">{displayEmail}</p>
+                  </div>
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuGroup>
-                <DropdownMenuItem onClick={() => router.push("/account/profile")}>Profile</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => router.push("/account/settings")}>Settings</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => router.push("/help")}>Help center</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => navigateTo("/account/profile")}>
+                  <UserRound className="size-4 text-muted-foreground" />
+                  My Profile
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => navigateTo("/account/settings")}>
+                  <Settings2 className="size-4 text-muted-foreground" />
+                  Account Settings
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => navigateTo("/account/settings?tab=security")}>
+                  <ShieldCheck className="size-4 text-muted-foreground" />
+                  Login Sessions / Security
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={openFeedback}>
+                  <Bell className="size-4 text-muted-foreground" />
+                  Feedback
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                <DropdownMenuItem onSelect={() => navigateTo("/help")}>
+                  <LifeBuoy className="size-4 text-muted-foreground" />
+                  Help / Support
+                </DropdownMenuItem>
               </DropdownMenuGroup>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={() => {
+                onSelect={() => {
+                  setAccountOpen(false)
                   void logout().then(() => router.replace("/login"))
                 }}
-                className="text-destructive focus:text-destructive"
+                className="rounded-xl px-3 py-2 text-destructive focus:text-destructive"
               >
+                <LogOut className="size-4" />
                 Logout
               </DropdownMenuItem>
             </DropdownMenuContent>
