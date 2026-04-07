@@ -53,6 +53,19 @@ async def get_current_user(context: AuthenticatedRequestContext = Depends(get_cu
     return context.user
 
 
+async def get_optional_current_user(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> User | None:
+    try:
+        context = await get_current_auth_context(request=request, db=db)
+    except HTTPException as exc:
+        if exc.status_code == status.HTTP_401_UNAUTHORIZED:
+            return None
+        raise
+    return context.user
+
+
 async def get_current_auth_session(context: AuthenticatedRequestContext = Depends(get_current_auth_context)):
     return context.session
 
