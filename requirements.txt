@@ -11,6 +11,7 @@ pydantic-settings
 pydantic[email]
 
 python-jose[cryptography]
+authlib
 passlib[bcrypt]
 argon2-cffi
 
