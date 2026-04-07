@@ -15,3 +15,5 @@ from backend.models.auth_otp import AuthOTP
 from backend.models.email_verification_token import EmailVerificationToken
 from backend.models.quiz_settings import QuizSettings
 from backend.models.auth_session import AuthSession
+from backend.models.notification_message import NotificationMessage
+from backend.models.notification_read import NotificationRead
