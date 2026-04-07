@@ -343,6 +343,8 @@ export default function ExamsPage() {
               const durationLabel = quiz.duration_minutes ? `${quiz.duration_minutes} min` : "No time limit"
               const readiness = getReadinessProgress(questionCount, Boolean(quiz.duration_minutes), isPublished)
               const isSelected = selectedIds.has(quiz.id)
+              const openExamId = isPublished && quiz.public_id ? quiz.public_id : quiz.id
+              const openExamHref = `/exam/${openExamId}`
 
               // Progress bar color: green=ready (80%+), yellow=in-progress (40-79%), red=needs attention (<40%)
               const progressBarColor =
@@ -440,7 +442,7 @@ export default function ExamsPage() {
 
                   <div className="mt-5 flex flex-wrap items-center gap-2">
                     <Link
-                      href={`/quiz/${quiz.id}`}
+                      href={openExamHref}
                       className={cn(buttonVariants({ size: "sm" }), "bg-primary text-primary-foreground hover:bg-primary/90")}
                     >
                       Open Exam
