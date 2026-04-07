@@ -29,6 +29,8 @@ from backend.models import (
     auth_otp,
     email_verification_token,
     quiz_settings,
+    notification_message,
+    notification_read,
 )
 
 # Alembic Config object
