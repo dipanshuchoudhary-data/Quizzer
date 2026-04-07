@@ -28,6 +28,19 @@ class User(Base, UUIDMixin, TimestampMixin):
         nullable=False,
     )
 
+    google_id: Mapped[str | None] = mapped_column(
+        String(255),
+        unique=True,
+        index=True,
+        nullable=True,
+    )
+
+    auth_provider: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="email",
+    )
+
     is_active: Mapped[bool] = mapped_column(
         Boolean,
         default=True,
