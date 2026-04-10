@@ -1,8 +1,10 @@
+import { storeAccessToken } from "@/lib/auth"
 import { api } from "@/lib/api/client"
 import type { User } from "@/types/user"
 
-type SessionResponse = { success: boolean; onboarding_completed: boolean }
+type SessionResponse = { success: boolean; onboarding_completed: boolean; access_token?: string; role?: string | null }
 type PasswordChangePayload = { current_password: string; new_password: string }
+type SetRolePayload = { role: "student" | "teacher" }
 export type AuthSession = {
   id: string
   device: string
@@ -61,6 +63,9 @@ export const userApi = {
       { email, password },
       { skipAuth: true } as never
     )
+    if (data.access_token) {
+      storeAccessToken(data.access_token)
+    }
     return data
   },
 
@@ -86,6 +91,11 @@ export const userApi = {
 
   async changePassword(payload: PasswordChangePayload): Promise<{ message: string }> {
     const { data } = await api.post<{ message: string }>("/auth/change-password", payload)
+    return data
+  },
+
+  async setRole(payload: SetRolePayload): Promise<User> {
+    const { data } = await api.post<User>("/user/set-role", payload)
     return data
   },
 

@@ -66,14 +66,14 @@ class User(Base, UUIDMixin, TimestampMixin):
     # Role-based authorization (PRIMARY PERMISSION FIELD)
     role: Mapped[str] = mapped_column(
         String(50),
-        default="ADMIN",   # change to "USER" if needed
+        default="",
         nullable=False,
     )
 
     # Optional — keep only if legacy logic depends on it
     is_staff: Mapped[bool] = mapped_column(
         Boolean,
-        default=True,
+        default=False,
         nullable=False,
     )
 

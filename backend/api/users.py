@@ -1,7 +1,7 @@
 import logging
 from io import BytesIO
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from PIL import Image, UnidentifiedImageError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,15 +10,17 @@ from backend.api.auth import serialize_user
 from backend.api.deps import get_current_user
 from backend.core.database import get_db
 from backend.models.user import User
-from backend.schemas.user import UserProfileUpdateRequest
+from backend.schemas.user import UserProfileUpdateRequest, UserRoleUpdateRequest
 from backend.services.cloudinary import upload_avatar
 
 
 router = APIRouter(prefix="/users", tags=["Users"])
+role_router = APIRouter(tags=["Users"])
 logger = logging.getLogger(__name__)
 MAX_AVATAR_SIZE_BYTES = 1024 * 1024
 MAX_AVATAR_DIMENSION = 1024
 ALLOWED_AVATAR_CONTENT_TYPES = {"image/png", "image/jpeg", "image/webp"}
+ASSIGNABLE_ROLES = {"student", "teacher"}
 
 
 @router.get("/profile")
@@ -76,6 +78,36 @@ async def update_profile(
         raise HTTPException(status_code=500, detail="Unable to update profile right now") from exc
 
     logger.info("profile_updated user_id=%s full_name=%s", current_user.id, current_user.full_name)
+    return serialize_user(current_user)
+
+
+@router.post("/set-role")
+@role_router.post("/user/set-role")
+async def set_role(
+    payload: UserRoleUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    role = payload.role.strip().lower()
+    if role not in ASSIGNABLE_ROLES:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Role must be student or teacher")
+
+    current_role = (current_user.role or "").strip().lower()
+    if current_role in ASSIGNABLE_ROLES and current_role != role:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Role is already assigned")
+
+    current_user.role = role
+    current_user.onboarding_completed = role == "student"
+    db.add(current_user)
+
+    try:
+        await db.commit()
+        await db.refresh(current_user)
+    except Exception as exc:
+        await db.rollback()
+        logger.exception("user_role_update_failed user_id=%s", current_user.id)
+        raise HTTPException(status_code=500, detail="Unable to update role right now") from exc
+
     return serialize_user(current_user)
 
 

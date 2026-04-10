@@ -14,3 +14,7 @@ class UserProfileUpdateRequest(BaseModel):
     teaching_experience: str | None = None
     avatar_url: str | None = None
     onboarding_completed: bool | None = None
+
+
+class UserRoleUpdateRequest(BaseModel):
+    role: str = Field(..., min_length=1)
