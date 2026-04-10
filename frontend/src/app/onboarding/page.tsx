@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { Suspense, useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { BookOpen, GraduationCap, Loader2, Sparkles } from "lucide-react"
 import { toast } from "sonner"
@@ -47,6 +47,14 @@ const ROLE_COPY: Record<RoleOption, { title: string; description: string; icon: 
 }
 
 export default function OnboardingPage() {
+  return (
+    <Suspense fallback={<OnboardingLoadingState />}>
+      <OnboardingContent />
+    </Suspense>
+  )
+}
+
+function OnboardingContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user, setUser, refreshMe } = useAuthStore((state) => ({
@@ -171,15 +179,7 @@ export default function OnboardingPage() {
   }
 
   if (isBootstrapping) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background via-muted/40 to-background px-6">
-        <div className="text-center">
-          <Loader2 className="mx-auto mb-4 size-10 animate-spin text-primary" />
-          <h1 className="text-2xl font-semibold tracking-tight">Preparing your workspace</h1>
-          <p className="mt-2 text-sm text-muted-foreground">We&apos;re checking your account and setting up the next step.</p>
-        </div>
-      </div>
-    )
+    return <OnboardingLoadingState />
   }
 
   return (
@@ -299,6 +299,18 @@ export default function OnboardingPage() {
             </CardContent>
           </Card>
         ) : null}
+      </div>
+    </div>
+  )
+}
+
+function OnboardingLoadingState() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background via-muted/40 to-background px-6">
+      <div className="text-center">
+        <Loader2 className="mx-auto mb-4 size-10 animate-spin text-primary" />
+        <h1 className="text-2xl font-semibold tracking-tight">Preparing your workspace</h1>
+        <p className="mt-2 text-sm text-muted-foreground">We&apos;re checking your account and setting up the next step.</p>
       </div>
     </div>
   )
