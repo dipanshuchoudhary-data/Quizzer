@@ -20,7 +20,10 @@ const isPublicQuizRoute = (pathname: string) => {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
-  const { bootstrap, isAuthenticated, isLoading, user } = useAuthStore((state) => state)
+  const bootstrap = useAuthStore((state) => state.bootstrap)
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
+  const isLoading = useAuthStore((state) => state.isLoading)
+  const user = useAuthStore((state) => state.user)
 
   useEffect(() => {
     void bootstrap()
@@ -35,7 +38,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix)) ||
       isPublicQuizRoute(pathname)
     if (!isAuthenticated && !isPublic) {
-      router.replace("/login")
+      if (pathname !== "/login") router.replace("/login")
       return
     }
 
@@ -49,22 +52,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (destination !== "/onboarding" && (pathname === "/onboarding" || pathname === "/auth/success")) {
-      router.replace(destination)
+      if (pathname !== destination) router.replace(destination)
       return
     }
 
     if (pathname === "/login" || pathname === "/signup") {
-      router.replace(destination)
+      if (pathname !== destination) router.replace(destination)
       return
     }
 
     if (user?.role === "student" && !STUDENT_ALLOWED_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
-      router.replace("/student/dashboard")
+      if (pathname !== "/student/dashboard") router.replace("/student/dashboard")
       return
     }
 
     if ((user?.role === "teacher" || user?.role === "ADMIN" || user?.role === "STAFF") && pathname.startsWith("/student")) {
-      router.replace("/teacher/dashboard")
+      if (pathname !== "/teacher/dashboard") router.replace("/teacher/dashboard")
     }
   }, [isAuthenticated, isLoading, pathname, router, user])
 
