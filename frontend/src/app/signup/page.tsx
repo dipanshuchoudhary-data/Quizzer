@@ -49,13 +49,13 @@ function signupStrength(password: string): { label: "Weak" | "Medium" | "Strong"
 function SignupField({ label, name, type = "text", placeholder, error, register, rightElement }: SignupFieldProps) {
   return (
     <label className="block space-y-2">
-      <span className="text-sm font-bold text-[#28382d]">{label}</span>
+      <span className="text-sm font-bold text-foreground">{label}</span>
       <div className="relative">
         <Input
           type={type}
           placeholder={placeholder}
           aria-invalid={Boolean(error)}
-          className="h-12 rounded-2xl border-[#d8cfbd] bg-white/80 px-4 text-[15px] shadow-inner shadow-[#cabfaa]/20 placeholder:text-[#8c887d] focus-visible:border-[#214b3b] focus-visible:ring-[#214b3b]/20"
+          className="h-12 rounded-2xl border-border bg-background/80 px-4 text-[15px] shadow-inner shadow-slate-200/30 placeholder:text-muted-foreground focus-visible:border-[var(--brand-accent)] focus-visible:ring-[var(--brand-accent)]/25 dark:shadow-black/20"
           {...register(name)}
         />
         {rightElement}
@@ -129,7 +129,7 @@ export default function SignupPage() {
       footer={
         <>
           Already have an account?{" "}
-          <Link href="/login" className="font-bold text-[#214b3b] underline-offset-4 hover:underline">
+          <Link href="/login" className="font-bold text-[var(--brand-accent)] underline-offset-4 hover:underline">
             Sign in
           </Link>
         </>
@@ -150,7 +150,7 @@ export default function SignupPage() {
             rightElement={
               <button
                 type="button"
-                className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full p-1 text-[#667267] transition hover:bg-[#efe7d8] hover:text-[#214b3b] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#214b3b]/30"
+                className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-accent)]/30"
                 onClick={() => setShowPassword((value) => !value)}
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >
@@ -159,10 +159,10 @@ export default function SignupPage() {
             }
           />
           <div className="flex items-center gap-3">
-            <div className="h-2 flex-1 overflow-hidden rounded-full bg-[#e5dccb]">
+            <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
               <div className={`h-full rounded-full transition-all duration-300 ${strength.className}`} style={{ width: strength.width }} />
             </div>
-            <span className="text-xs font-bold uppercase tracking-[0.18em] text-[#6b746b]">{strength.label}</span>
+            <span className="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">{strength.label}</span>
           </div>
         </div>
 
@@ -174,7 +174,7 @@ export default function SignupPage() {
         <SignupField label="Timezone" name="timezone" placeholder="Asia/Calcutta" register={register} />
 
         <Button
-          className="h-12 w-full rounded-2xl bg-[#214b3b] text-base font-bold text-[#fffaf1] shadow-[0_16px_35px_rgba(33,75,59,0.28)] hover:bg-[#17382b]"
+          className="h-12 w-full rounded-2xl bg-[var(--brand-accent)] text-base font-bold text-white shadow-[0_16px_35px_rgba(34,197,94,0.28)] hover:bg-green-600 dark:text-black dark:hover:bg-green-300"
           type="submit"
           disabled={isSubmitting || isGoogleLoading}
         >
@@ -193,15 +193,15 @@ export default function SignupPage() {
       </form>
 
       <div className="my-6 flex items-center gap-3">
-        <div className="h-px flex-1 bg-[#d8cfbd]" />
-        <span className="text-xs font-bold uppercase tracking-[0.22em] text-[#7c7467]">or</span>
-        <div className="h-px flex-1 bg-[#d8cfbd]" />
+        <div className="h-px flex-1 bg-border" />
+        <span className="text-xs font-bold uppercase tracking-[0.22em] text-muted-foreground">or</span>
+        <div className="h-px flex-1 bg-border" />
       </div>
 
       <Button
         type="button"
         variant="outline"
-        className="h-12 w-full rounded-2xl border-[#d8cfbd] bg-white/70 text-base font-bold text-[#25342a] hover:bg-white"
+        className="h-12 w-full rounded-2xl border-border bg-background/80 text-base font-bold text-foreground hover:bg-muted"
         onClick={handleGoogleSignup}
         disabled={isGoogleLoading || isSubmitting}
       >
