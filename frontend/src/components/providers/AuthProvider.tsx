@@ -66,7 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return
     }
 
-    if ((user?.role === "teacher" || user?.role === "ADMIN" || user?.role === "STAFF") && pathname.startsWith("/student")) {
+    if ((user?.role === "teacher" || user?.role === "ADMIN" || user?.role === "STAFF") && pathname.startsWith("/student/")) {
       if (pathname !== "/teacher/dashboard") router.replace("/teacher/dashboard")
     }
   }, [isAuthenticated, isLoading, pathname, router, user])
