@@ -73,10 +73,11 @@ def create_app() -> FastAPI:
         SessionMiddleware,
         secret_key=settings.JWT_SECRET_KEY,
         session_cookie="quizzer_oauth_session",
-        same_site="lax",
-        https_only=not settings.is_local,
+        same_site="none",
+        https_only=True,
         max_age=600,
     )
+
 
     # CORS
     app.add_middleware(

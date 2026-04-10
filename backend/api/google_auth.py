@@ -47,7 +47,10 @@ async def auth_callback(request: Request, db: AsyncSession = Depends(get_db)):
 
     nonce = request.session.pop(NONCE_SESSION_KEY, None)
     if not nonce:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing OAuth session state")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Missing OAuth session state. Please try Google sign-in again.",
+        )
 
     try:
         token = await oauth.google.authorize_access_token(request)
