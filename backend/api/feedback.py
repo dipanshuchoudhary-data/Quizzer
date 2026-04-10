@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from backend.api.deps import get_optional_current_user
 from backend.models.user import User
 from backend.schemas.feedback import FeedbackCreateRequest
-from backend.services.email_service import send_feedback_email
+from backend.services.email_service import is_smtp_configured, send_feedback_email
 
 
 router = APIRouter(prefix="/feedback", tags=["Feedback"])
@@ -17,6 +17,15 @@ async def submit_feedback(
     payload: FeedbackCreateRequest,
     current_user: User | None = Depends(get_optional_current_user),
 ):
+    if not is_smtp_configured():
+        logger.warning(
+            "feedback_submission_logged_without_email user_id=%s user_email=%s message=%r",
+            getattr(current_user, "id", None),
+            getattr(current_user, "email", None),
+            payload.message,
+        )
+        return {"message": "Feedback received successfully"}
+
     try:
         await send_feedback_email(
             feedback_message=payload.message,
@@ -24,12 +33,6 @@ async def submit_feedback(
             user_email=current_user.email if current_user else None,
             user_name=current_user.full_name if current_user else None,
         )
-    except RuntimeError as exc:
-        logger.exception("feedback_email_not_configured")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Feedback service is temporarily unavailable",
-        ) from exc
     except Exception as exc:
         logger.exception("feedback_submission_failed user_id=%s", getattr(current_user, "id", None))
         raise HTTPException(

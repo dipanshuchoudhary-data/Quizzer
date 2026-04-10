@@ -9,8 +9,12 @@ from backend.core.config import settings
 logger = logging.getLogger(__name__)
 
 
+def is_smtp_configured() -> bool:
+    return bool(settings.SMTP_HOST and settings.SMTP_USERNAME and settings.SMTP_PASSWORD)
+
+
 async def _send_email(message: EmailMessage) -> None:
-    if not settings.SMTP_HOST or not settings.SMTP_USERNAME or not settings.SMTP_PASSWORD:
+    if not is_smtp_configured():
         raise RuntimeError("SMTP is not configured")
 
     def _send() -> None:
