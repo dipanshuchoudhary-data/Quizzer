@@ -34,6 +34,7 @@
 ## 📋 Table of Contents
 
 - [Product Overview](#product-overview)
+- [What's New](#-whats-new)
 - [Key Features](#key-features)
 - [System Architecture](#system-architecture)
 - [Tech Stack](#tech-stack)
@@ -75,11 +76,21 @@ Quizzer is designed for **educators, professors, and training teams** who need t
 
 ---
 
+## 🆕 What's New
+
+- ⚡ **Faster AI generation experience** with stream-capable quiz generation and live progress updates
+- 🧪 **Upgraded review workspace** with focus mode, bulk actions, filters, and high-density review lists
+- 🔐 **Google OAuth sign-in** support in addition to email/password authentication
+- 🧭 **Smoother creation flow** from source ingestion to approval and publishing
+
+---
+
 ## ✨ Key Features
 
 ### 🤖 AI-Powered Quiz Generation
 
 - Generate quizzes from **text input, URLs, uploaded documents** (PDF, DOCX, PPTX, images, Excel)
+- **Fast generation modes**: standard async jobs plus stream-capable generation for lower perceived latency
 - OCR support for **scanned PDFs** and image-based documents
 - LangGraph-orchestrated multi-step pipeline: Summarize → Enhance Prompt → Generate Questions → Fill Answer Keys
 - **Blueprint-based generation**: specify sections, question types, difficulty, and count
@@ -113,6 +124,7 @@ Quizzer is designed for **educators, professors, and training teams** who need t
 ### 🔐 Authentication & Security
 
 - JWT-based authentication with **Argon2 password hashing**
+- **Google OAuth 2.0 / OIDC login** with secure callback validation
 - Cookie-based session management (HTTPOnly, Secure, SameSite)
 - **Role-based access control**: `ADMIN`, `STAFF`, `USER`
 - Email verification flow
@@ -414,6 +426,11 @@ SMTP_USERNAME=user@example.com
 SMTP_PASSWORD=your-smtp-password
 SMTP_USE_TLS=true
 
+# ── Google OAuth (optional) ───────────────────────────────────────────
+GOOGLE_CLIENT_ID=your-google-oauth-client-id
+GOOGLE_CLIENT_SECRET=your-google-oauth-client-secret
+GOOGLE_REDIRECT_URI=http://localhost:8000/auth/google/callback
+
 # ── Cloud Storage (pick one or leave blank for local) ─────────────────
 GCS_BUCKET_NAME=your-gcs-bucket        # Google Cloud Storage bucket name
 GCP_PROJECT_ID=your-gcp-project        # GCP project ID
@@ -435,6 +452,7 @@ The API is organized by resource domain. All protected routes require a valid JW
 | Domain | Base Path | Description |
 |--------|-----------|-------------|
 | **Auth** | `/auth` | Register, login, logout, token refresh, password management |
+| **Google Auth** | `/login/google`, `/auth/google/callback` | OAuth sign-in with Google and secure callback flow |
 | **Users** | `/users` | User profile read and update |
 | **Quizzes** | `/quizzes` | Quiz CRUD, publish/unpublish/archive lifecycle |
 | **Sections** | `/quizzes/{id}/sections` | Section management within a quiz |
@@ -571,6 +589,7 @@ Redis is used for:
 ### Authentication
 
 - Passwords are hashed with **Argon2** (memory-hard, resistant to GPU brute-force)
+- Google OAuth follows the authorization-code OIDC flow with token/claim validation and nonce checks
 - JWT tokens are signed with a configurable secret and stored in **HTTPOnly cookies** (inaccessible to JavaScript)
 - Cookie flags: `Secure` (HTTPS-only in production), `SameSite=lax` (CSRF protection)
 
