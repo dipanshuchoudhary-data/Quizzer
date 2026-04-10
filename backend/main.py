@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from pathlib import Path
 import sys
 import time
 
@@ -22,6 +23,7 @@ from backend.api.document import router as document_router
 from backend.api.questions import router as question_router
 from backend.api.sections import router as section_router
 from backend.api.monitoring import router as monitoring_router
+from backend.api.users import role_router as user_role_router
 from backend.api.users import router as user_router
 from backend.api.ai_jobs import router as ai_jobs_router
 from backend.api.dashboard import router as dashboard_router
@@ -36,6 +38,7 @@ if sys.platform.startswith("win"):
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 logger = logging.getLogger(__name__)
+UPLOADS_DIR = Path("uploads")
 
 
 def _resolve_cors_origins(raw_origins: str) -> list[str]:
@@ -108,7 +111,9 @@ def create_app() -> FastAPI:
             content={"detail": "Internal server error"},
         )
 
-    app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+    # Fresh deploys may start without the uploads directory present yet.
+    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+    app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
 
     # Routers
     app.include_router(auth_router)
@@ -124,6 +129,7 @@ def create_app() -> FastAPI:
     app.include_router(section_router)
     app.include_router(monitoring_router)
     app.include_router(user_router)
+    app.include_router(user_role_router)
     app.include_router(ai_jobs_router)
     app.include_router(dashboard_router)
     app.include_router(ai_quiz_router)
