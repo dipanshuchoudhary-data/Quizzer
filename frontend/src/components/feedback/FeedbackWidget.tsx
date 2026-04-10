@@ -1,11 +1,9 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { MessageSquareMore } from "lucide-react"
 import axios from "axios"
 import { toast } from "sonner"
 import { feedbackApi } from "@/lib/api/feedback"
-import { Button } from "@/components/ui/button"
 import {
   Dialog,
   DialogContent,
@@ -15,6 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
+import { Button } from "@/components/ui/button"
 
 const MAX_WORDS = 500
 const SUCCESS_MESSAGE =
@@ -88,18 +87,6 @@ export function FeedbackWidget() {
 
   return (
     <>
-      <div className="fixed right-4 bottom-4 z-40 sm:right-6 sm:bottom-6">
-        <Button
-          type="button"
-          size="lg"
-          className="h-12 rounded-full px-5 shadow-lg"
-          onClick={() => setOpen(true)}
-        >
-          <MessageSquareMore className="size-4" />
-          Feedback
-        </Button>
-      </div>
-
       <Dialog
         open={open}
         onOpenChange={(nextOpen) => {

@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect } from "react"
-import { CircleHelp, LayoutDashboard, PanelLeftClose, PanelLeftOpen, Settings2, UserRound } from "lucide-react"
+import { CircleHelp, LayoutDashboard, MessageSquareMore, PanelLeftClose, PanelLeftOpen, Settings2, UserRound } from "lucide-react"
 import { useUIStore } from "@/stores/useUIStore"
 import { useAuthStore } from "@/stores/useAuthStore"
 import { cn } from "@/lib/utils"
@@ -12,6 +12,11 @@ import { Button } from "@/components/ui/button"
 export function Sidebar() {
   const user = useAuthStore((state) => state.user)
   const { sidebarCollapsed, toggleSidebar, mobileSidebarOpen, setMobileSidebarOpen } = useUIStore()
+
+  const openFeedback = () => {
+    window.dispatchEvent(new CustomEvent("quizzer:feedback-open"))
+    setMobileSidebarOpen(false)
+  }
 
   const sections =
     user?.role === "student"
@@ -104,6 +109,23 @@ export function Sidebar() {
             </div>
           ))}
         </nav>
+
+        <div className="border-t border-sidebar-border/80 px-3 py-3">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={openFeedback}
+            className={cn(
+              "h-11 w-full justify-start gap-3 rounded-2xl px-3 text-sidebar-foreground/85 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+              sidebarCollapsed && "lg:justify-center lg:px-0"
+            )}
+            aria-label="Open feedback"
+            title="Feedback"
+          >
+            <MessageSquareMore className="size-4 shrink-0" />
+            <span className={cn("truncate", sidebarCollapsed && "lg:hidden")}>Feedback</span>
+          </Button>
+        </div>
       </aside>
     </>
   )
