@@ -3,6 +3,7 @@
 import { useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
+import { getPostAuthRoute, storeAccessToken } from "@/lib/auth"
 import { useAuthStore } from "@/stores/useAuthStore"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
@@ -16,8 +17,9 @@ export default function VerifyEmailPage() {
       const token = searchParams.get("token")
       if (token) {
         try {
+          storeAccessToken(token)
           const user = await refreshMe()
-          router.replace(user?.onboarding_completed ? "/dashboard" : "/onboarding")
+          router.replace(getPostAuthRoute(user))
         } catch {
           router.replace("/login")
         }
