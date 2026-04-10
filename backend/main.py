@@ -73,8 +73,8 @@ def create_app() -> FastAPI:
         SessionMiddleware,
         secret_key=settings.JWT_SECRET_KEY,
         session_cookie="quizzer_oauth_session",
-        same_site="none",
-        https_only=True,
+        same_site=settings.COOKIE_SAMESITE,
+        https_only=settings.COOKIE_SECURE,
         max_age=600,
     )
 
