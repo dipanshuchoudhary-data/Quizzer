@@ -15,6 +15,11 @@ async def get_current_auth_context(
     db: AsyncSession = Depends(get_db),
 ) -> AuthenticatedRequestContext:
     token = request.cookies.get("access_token")
+    if not token:
+        auth_header = request.headers.get("Authorization", "")
+        scheme, _, credentials = auth_header.partition(" ")
+        if scheme.lower() == "bearer" and credentials.strip():
+            token = credentials.strip()
 
     if not token:
         if settings.DEMO_MODE:

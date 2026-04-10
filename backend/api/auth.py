@@ -31,14 +31,33 @@ from backend.services.cloudinary import build_avatar_thumbnail_url
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
+def normalize_user_role(role: str | None) -> str | None:
+    value = (role or "").strip()
+    return value or None
+
+
+def create_user_access_token(user: User, *, session_id: str) -> str:
+    return create_access_token(
+        {
+            "sub": str(user.id),
+            "sid": session_id,
+            "typ": "access",
+            "email": user.email,
+            "role": normalize_user_role(user.role),
+            "name": user.full_name,
+            "onboarding_completed": user.onboarding_completed,
+        }
+    )
+
+
 def clear_auth_cookies(response: Response) -> None:
     response.delete_cookie(key="access_token", path="/", domain=settings.COOKIE_DOMAIN)
     response.delete_cookie(key="refresh_token", path="/", domain=settings.COOKIE_DOMAIN)
 
 
-def set_auth_cookies(response: Response, *, user_id: str, session_id: str) -> None:
-    access_token = create_access_token({"sub": user_id, "sid": session_id, "typ": "access"})
-    refresh_token = create_refresh_token({"sub": user_id, "sid": session_id, "typ": "refresh"})
+def set_auth_cookies(response: Response, *, user: User, session_id: str) -> None:
+    access_token = create_user_access_token(user, session_id=session_id)
+    refresh_token = create_refresh_token({"sub": str(user.id), "sid": session_id, "typ": "refresh"})
 
     secure_cookie = settings.COOKIE_SECURE
     samesite_policy = settings.COOKIE_SAMESITE.lower()
@@ -86,7 +105,7 @@ def serialize_user(user: User) -> dict:
         "onboarding_completed": user.onboarding_completed,
         "is_staff": user.is_staff,
         "is_active": user.is_active,
-        "role": user.role,
+        "role": normalize_user_role(user.role),
     }
 
 
@@ -124,6 +143,7 @@ async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db))
         is_active=True,
         is_staff=False,
         is_verified=True,
+        role="",
         phone_number=payload.phone_number,
         institution=payload.institution,
         country=payload.country,
@@ -147,13 +167,17 @@ async def login(payload: LoginRequest, request: Request, response: Response, db:
 
     auth_session = await create_auth_session(db, user, request)
     await db.commit()
+    await db.refresh(user)
     await db.refresh(auth_session)
 
-    set_auth_cookies(response, user_id=str(user.id), session_id=str(auth_session.id))
+    access_token = create_user_access_token(user, session_id=str(auth_session.id))
+    set_auth_cookies(response, user=user, session_id=str(auth_session.id))
     return {
         "success": True,
         "onboarding_completed": user.onboarding_completed,
         "is_verified": user.is_verified,
+        "access_token": access_token,
+        "role": normalize_user_role(user.role),
     }
 
 
@@ -196,8 +220,9 @@ async def refresh_token(request: Request, response: Response, db: AsyncSession =
 
     context = await get_authenticated_context(db, session_id=session_id, user_id=user_id)
     await touch_auth_session(db, context.session)
-    set_auth_cookies(response, user_id=str(context.user.id), session_id=str(context.session.id))
-    return {"message": "Token refreshed"}
+    access_token = create_user_access_token(context.user, session_id=str(context.session.id))
+    set_auth_cookies(response, user=context.user, session_id=str(context.session.id))
+    return {"message": "Token refreshed", "access_token": access_token}
 
 
 @router.get("/sessions")

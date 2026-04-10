@@ -1,4 +1,5 @@
 import { create } from "zustand"
+import { clearAuthSession } from "@/lib/auth"
 import { userApi } from "@/lib/api/user"
 import type { User } from "@/types/user"
 
@@ -31,6 +32,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       const me = await userApi.me()
       set({ user: me, isAuthenticated: true, isLoading: false })
     } catch {
+      clearAuthSession()
       set({ user: null, isAuthenticated: false, isLoading: false })
     }
   },
@@ -50,6 +52,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   logout: async () => {
     await userApi.logout()
+    clearAuthSession()
     set({ user: null, isAuthenticated: false, isLoading: false })
   },
 }))

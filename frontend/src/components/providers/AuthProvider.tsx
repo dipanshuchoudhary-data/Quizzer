@@ -2,10 +2,13 @@
 
 import { useEffect } from "react"
 import { usePathname, useRouter } from "next/navigation"
+import { getPostAuthRoute } from "@/lib/auth"
 import { useAuthStore } from "@/stores/useAuthStore"
 
 const AUTH_ROUTES = new Set(["/login", "/signup"])
+const PUBLIC_ROUTES = new Set(["/privacy", "/terms", "/auth/success", "/onboarding"])
 const PUBLIC_PREFIXES = ["/exam", "/verify-email"]
+const STUDENT_ALLOWED_PREFIXES = ["/student", "/account", "/help"]
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 const isPublicQuizRoute = (pathname: string) => {
@@ -28,6 +31,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const isPublic =
       AUTH_ROUTES.has(pathname) ||
+      PUBLIC_ROUTES.has(pathname) ||
       PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix)) ||
       isPublicQuizRoute(pathname)
     if (!isAuthenticated && !isPublic) {
@@ -37,22 +41,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (!isAuthenticated) return
 
-    if (!user?.onboarding_completed && pathname !== "/onboarding") {
+    const destination = getPostAuthRoute(user)
+
+    if (destination === "/onboarding" && pathname !== "/onboarding") {
       router.replace("/onboarding")
       return
     }
 
-    if (user?.onboarding_completed && pathname === "/onboarding") {
-      router.replace("/dashboard")
+    if (destination !== "/onboarding" && (pathname === "/onboarding" || pathname === "/auth/success")) {
+      router.replace(destination)
       return
     }
 
     if (pathname === "/login" || pathname === "/signup") {
-      router.replace(user?.onboarding_completed ? "/dashboard" : "/onboarding")
+      router.replace(destination)
+      return
     }
-  }, [isAuthenticated, isLoading, pathname, router, user?.onboarding_completed])
 
-  if (isLoading && !AUTH_ROUTES.has(pathname)) {
+    if (user?.role === "student" && !STUDENT_ALLOWED_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
+      router.replace("/student/dashboard")
+      return
+    }
+
+    if ((user?.role === "teacher" || user?.role === "ADMIN" || user?.role === "STAFF") && pathname.startsWith("/student")) {
+      router.replace("/teacher/dashboard")
+    }
+  }, [isAuthenticated, isLoading, pathname, router, user])
+
+  if (isLoading && !AUTH_ROUTES.has(pathname) && !PUBLIC_ROUTES.has(pathname)) {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
         Loading workspace...
