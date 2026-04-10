@@ -47,7 +47,7 @@ async def get_or_create_google_user(
     full_name: str,
     avatar_url: str | None,
     google_id: str,
-) -> User:
+ ) -> tuple[User, bool]:
     result = await db.execute(
         select(User).where(or_(User.google_id == google_id, User.email == email))
     )
@@ -74,11 +74,11 @@ async def get_or_create_google_user(
             is_active=True,
             is_verified=True,
             is_staff=False,
-            role="student",
+            role="",
         )
         db.add(user)
         await db.flush()
-        return user
+        return user, True
 
     if user.google_id and user.google_id != google_id:
         raise HTTPException(
@@ -86,8 +86,10 @@ async def get_or_create_google_user(
             detail="This email is already linked to a different Google account",
         )
 
+    is_new_google_link = False
     if not user.google_id:
         user.google_id = google_id
+        is_new_google_link = True
     if full_name:
         user.full_name = full_name
     if avatar_url:
@@ -96,4 +98,4 @@ async def get_or_create_google_user(
     user.is_verified = True
     db.add(user)
     await db.flush()
-    return user
+    return user, is_new_google_link

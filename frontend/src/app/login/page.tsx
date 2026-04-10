@@ -8,6 +8,7 @@ import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { Eye, EyeOff } from "lucide-react"
 import { toast } from "sonner"
+import { getPostAuthRoute } from "@/lib/auth"
 import { useAuthStore } from "@/stores/useAuthStore"
 import { getApiErrorMessage } from "@/lib/api/error"
 import { env } from "@/lib/env"
@@ -41,7 +42,7 @@ export default function LoginPage() {
   const onEmailLogin = async (values: LoginValues) => {
     try {
       const me = await login(values.email, values.password)
-      router.replace(me.onboarding_completed ? "/dashboard" : "/onboarding")
+      router.replace(getPostAuthRoute(me))
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Login failed"))
     }
