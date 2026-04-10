@@ -67,6 +67,7 @@ export function Topbar() {
   const displayEmail = profile.email || user?.email || "-"
   const initials = getInitials(displayName)
   const avatarUrl = user?.avatar_thumbnail_url || user?.avatar_url || profile.avatar_thumbnail_url || profile.avatar_url || ""
+  const isStudent = user?.role === "student"
 
   const navigateTo = (href: string) => {
     setAccountOpen(false)
@@ -117,20 +118,23 @@ export function Topbar() {
         </div>
 
         <div className="ml-auto flex items-center gap-2">
-          <Button className="hidden h-11 sm:inline-flex" onClick={() => router.push("/quizzes/create")}>
-            <Plus className="size-4" />
-            Create Quiz
-          </Button>
-          <Button
-            size="icon"
-            className="h-11 w-11 sm:hidden"
-            aria-label="Create quiz"
-            onClick={() => router.push("/quizzes/create")}
-          >
-            <Plus className="size-4" />
-          </Button>
-
-          <NotificationInbox />
+          {!isStudent ? (
+            <>
+              <Button className="hidden h-11 sm:inline-flex" onClick={() => router.push("/quizzes/create")}>
+                <Plus className="size-4" />
+                Create Quiz
+              </Button>
+              <Button
+                size="icon"
+                className="h-11 w-11 sm:hidden"
+                aria-label="Create quiz"
+                onClick={() => router.push("/quizzes/create")}
+              >
+                <Plus className="size-4" />
+              </Button>
+              <NotificationInbox />
+            </>
+          ) : null}
 
           <Button
             size="icon"

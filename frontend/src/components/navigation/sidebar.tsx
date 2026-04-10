@@ -1,15 +1,33 @@
 "use client"
 
 import { useEffect } from "react"
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react"
+import { CircleHelp, LayoutDashboard, PanelLeftClose, PanelLeftOpen, Settings2, UserRound } from "lucide-react"
 import { useUIStore } from "@/stores/useUIStore"
+import { useAuthStore } from "@/stores/useAuthStore"
 import { cn } from "@/lib/utils"
 import { NAV_SECTIONS } from "./nav-config"
 import { NavItemRow } from "./nav-item"
 import { Button } from "@/components/ui/button"
 
 export function Sidebar() {
+  const user = useAuthStore((state) => state.user)
   const { sidebarCollapsed, toggleSidebar, mobileSidebarOpen, setMobileSidebarOpen } = useUIStore()
+
+  const sections =
+    user?.role === "student"
+      ? [
+          {
+            id: "student-workspace",
+            title: "Workspace",
+            items: [
+              { id: "student-dashboard", label: "Dashboard", href: "/student/dashboard", icon: LayoutDashboard },
+              { id: "profile", label: "Profile", href: "/account/profile", icon: UserRound },
+              { id: "settings", label: "Settings", href: "/account/settings", icon: Settings2 },
+              { id: "help", label: "Help", href: "/help", icon: CircleHelp },
+            ],
+          },
+        ]
+      : NAV_SECTIONS
 
   useEffect(() => {
     if (!mobileSidebarOpen) return
@@ -40,7 +58,7 @@ export function Sidebar() {
         <div className="flex h-16 items-center justify-between px-4 lg:px-3">
           <div className={cn("min-w-0", sidebarCollapsed && "hidden lg:block")}>
             <p className="truncate text-lg font-semibold tracking-tight text-sidebar-foreground">Quizzer</p>
-            <p className="truncate text-xs text-sidebar-foreground/65">Professor Workspace</p>
+            <p className="truncate text-xs text-sidebar-foreground/65">{user?.role === "student" ? "Student Workspace" : "Professor Workspace"}</p>
           </div>
           <Button
             size="icon"
@@ -66,7 +84,7 @@ export function Sidebar() {
           className="sidebar-scroll flex-1 min-h-0 space-y-6 overflow-y-auto bg-sidebar px-3 pb-6"
           aria-label="Primary"
         >
-          {NAV_SECTIONS.map((section) => (
+          {sections.map((section) => (
             <div key={section.id} className="space-y-2">
               {!sidebarCollapsed && (
                 <p className="px-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-sidebar-foreground/50">
