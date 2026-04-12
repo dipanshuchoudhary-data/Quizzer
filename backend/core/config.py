@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     FRONTEND_URL: str | None = None
     CORS_ALLOW_ORIGINS: str | None = None
     DEMO_MODE: bool = False
+    API_DOCS_ENABLED: bool | None = None
+    OPENAPI_ENABLED: bool | None = None
 
     # ----------------------
     # Database
@@ -100,6 +102,10 @@ class Settings(BaseSettings):
             self.APP_URL = (self.APP_URL or "http://localhost:8000").rstrip("/")
             self.FRONTEND_URL = (self.FRONTEND_URL or "http://localhost:3000").rstrip("/")
             self.CORS_ALLOW_ORIGINS = self.CORS_ALLOW_ORIGINS or self.FRONTEND_URL
+            if self.API_DOCS_ENABLED is None:
+                self.API_DOCS_ENABLED = True
+            if self.OPENAPI_ENABLED is None:
+                self.OPENAPI_ENABLED = True
             return self
 
         required_values = {
@@ -114,6 +120,10 @@ class Settings(BaseSettings):
         self.APP_URL = self.APP_URL.rstrip("/")
         self.FRONTEND_URL = self.FRONTEND_URL.rstrip("/")
         self.CORS_ALLOW_ORIGINS = ",".join(self.cors_origins)
+        if self.API_DOCS_ENABLED is None:
+            self.API_DOCS_ENABLED = False
+        if self.OPENAPI_ENABLED is None:
+            self.OPENAPI_ENABLED = False
         return self
 
 
