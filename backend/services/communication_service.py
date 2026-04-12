@@ -33,7 +33,8 @@ def otp_expiry(minutes: int = 5) -> datetime:
 
 
 async def send_verification_email(to_email: str, full_name: str, token: str) -> None:
-    verify_url = f"{settings.APP_URL.rstrip('/')}/verify-email?token={token}"
+    base_url = str(getattr(settings, "FRONTEND_URL", None) or settings.APP_URL).rstrip("/")
+    verify_url = f"{base_url}/verify-email?token={token}"
     subject = "Verify your Quizzer account"
     html = (
         f"<p>Hello {full_name},</p>"
