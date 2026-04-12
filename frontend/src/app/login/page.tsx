@@ -3,7 +3,8 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import type { ReactNode } from "react"
-import { useCallback, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
+import { useSearchParams } from "next/navigation"
 import type { UseFormRegister } from "react-hook-form"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
@@ -22,6 +23,17 @@ const loginSchema = z.object({
   email: z.string().email("Enter a valid email address"),
   password: z.string().min(6, "Password must be at least 6 characters"),
 })
+
+const GOOGLE_AUTH_ERROR_MESSAGES: Record<string, string> = {
+  google_oauth_failed: "Google sign-in failed. Please try again.",
+  google_oauth_session_missing: "Session expired during Google sign-in. Please try again.",
+  google_token_invalid: "Google token was invalid or expired. Please try again.",
+  google_token_issuer_invalid: "Google sign-in response was invalid. Please try again.",
+  google_token_audience_invalid: "Google sign-in is not configured for this app yet. Please contact support.",
+  google_email_missing: "Google account email is missing. Please choose a different account.",
+  google_email_unverified: "Your Google email is not verified. Verify it in Google account settings and try again.",
+  google_account_invalid: "Google account details could not be verified. Please try again.",
+}
 
 type LoginValues = z.infer<typeof loginSchema>
 
@@ -67,9 +79,21 @@ function GoogleIcon() {
 
 export default function LoginPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const login = useAuthStore((state) => state.login)
   const [showPassword, setShowPassword] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
+
+  useEffect(() => {
+    const errorCode = searchParams.get("error")
+    if (!errorCode) return
+    const message = GOOGLE_AUTH_ERROR_MESSAGES[errorCode] ?? "Google sign-in could not be completed. Please try again."
+    toast.error(message)
+    const nextParams = new URLSearchParams(searchParams.toString())
+    nextParams.delete("error")
+    const nextQuery = nextParams.toString()
+    router.replace(nextQuery ? `/login?${nextQuery}` : "/login")
+  }, [router, searchParams])
 
   const {
     register,
