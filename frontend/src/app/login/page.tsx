@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import type { ReactNode } from "react"
-import { useCallback, useEffect, useState } from "react"
+import { Suspense, useCallback, useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import type { UseFormRegister } from "react-hook-form"
 import { useForm } from "react-hook-form"
@@ -80,7 +80,7 @@ function GoogleIcon() {
   )
 }
 
-export default function LoginPage() {
+function LoginPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const login = useAuthStore((state) => state.login)
@@ -212,5 +212,13 @@ export default function LoginPage() {
         )}
       </Button>
     </AuthShell>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginPageContent />
+    </Suspense>
   )
 }
