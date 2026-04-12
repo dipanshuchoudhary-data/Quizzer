@@ -178,8 +178,6 @@ export default function ExamsPage() {
     setSelectedIds(new Set())
   }
 
-  const isAllSelected = visibleQuizzes.length > 0 && selectedIds.size === visibleQuizzes.length
-
   return (
     <section className="space-y-8">
       <PageHeader

@@ -83,20 +83,21 @@ function GoogleIcon() {
 function LoginPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const searchParamsString = searchParams.toString()
+  const googleErrorCode = searchParams.get("error")
   const login = useAuthStore((state) => state.login)
   const [showPassword, setShowPassword] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
 
   useEffect(() => {
-    const errorCode = searchParams.get("error")
-    if (!errorCode) return
-    const message = GOOGLE_AUTH_ERROR_MESSAGES[errorCode] ?? "Google sign-in could not be completed. Please try again."
+    if (!googleErrorCode) return
+    const message = GOOGLE_AUTH_ERROR_MESSAGES[googleErrorCode] ?? "Google sign-in could not be completed. Please try again."
     toast.error(message)
-    const nextParams = new URLSearchParams(searchParams.toString())
+    const nextParams = new URLSearchParams(searchParamsString)
     nextParams.delete("error")
     const nextQuery = nextParams.toString()
     router.replace(nextQuery ? `/login?${nextQuery}` : "/login")
-  }, [router, searchParams])
+  }, [googleErrorCode, router, searchParamsString])
 
   const {
     register,
