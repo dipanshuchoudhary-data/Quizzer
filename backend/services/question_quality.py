@@ -129,6 +129,8 @@ def normalize_math_text(text: Any) -> str:
     if collapsed != compact_candidate and len(compact_candidate) <= 48:
         value = collapsed
 
+    # OCR cleanup can produce duplicated escapes like \\theta; collapse those to a single LaTeX slash.
+    value = re.sub(r"\\{2,}(?=[A-Za-z])", r"\\", value)
     value = re.sub(r"(\\[A-Za-z]+)(?:\1)+", r"\1", value)
     value = re.sub(r"([A-Za-z0-9])\\([A-Za-z]+)", r"\1 \\\2", value)
     value = re.sub(r"\\(sin|cos|tan|cot|sec|csc|log|ln)\s+\\theta", r"\\\1\\theta", value)
