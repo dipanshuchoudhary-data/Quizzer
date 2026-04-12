@@ -1,4 +1,6 @@
 import secrets
+from urllib.parse import urlencode
+import logging
 
 from authlib.integrations.base_client.errors import OAuthError
 from authlib.integrations.starlette_client import OAuth
@@ -14,6 +16,23 @@ from backend.services.google_auth import get_or_create_google_user, validate_goo
 
 router = APIRouter(tags=["Google Auth"])
 NONCE_SESSION_KEY = "google_oauth_nonce"
+logger = logging.getLogger(__name__)
+
+
+def _frontend_auth_error_redirect(error_code: str) -> RedirectResponse:
+    query = urlencode({"error": error_code})
+    return RedirectResponse(url=f"{settings.FRONTEND_URL}/login?{query}")
+
+
+def _map_claim_validation_error(detail: str) -> str:
+    mapping = {
+        "Invalid Google token issuer": "google_token_issuer_invalid",
+        "Invalid Google token audience": "google_token_audience_invalid",
+        "Google account email is required": "google_email_missing",
+        "Google account email is not verified": "google_email_unverified",
+        "Invalid Google account identifier": "google_account_invalid",
+    }
+    return mapping.get(detail, "google_token_invalid")
 
 oauth = OAuth()
 
@@ -40,31 +59,39 @@ async def login_google(request: Request):
 async def auth_callback(request: Request, db: AsyncSession = Depends(get_db)):
     provider_error = request.query_params.get("error")
     if provider_error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Google OAuth failed: {provider_error}",
-        )
+        logger.warning("google_oauth_provider_error error=%s", provider_error)
+        return _frontend_auth_error_redirect("google_oauth_failed")
 
     nonce = request.session.pop(NONCE_SESSION_KEY, None)
     if not nonce:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Missing OAuth session state. Please try Google sign-in again.",
-        )
+        logger.warning("google_oauth_missing_session_state")
+        return _frontend_auth_error_redirect("google_oauth_session_missing")
 
     try:
         token = await oauth.google.authorize_access_token(request)
         claims = await oauth.google.parse_id_token(request, token, nonce=nonce)
     except OAuthError as exc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Google OAuth failed: {exc.error}") from exc
-    except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired Google token") from exc
+        logger.warning("google_oauth_exchange_failed error=%s", getattr(exc, "error", "unknown"))
+        return _frontend_auth_error_redirect("google_oauth_failed")
+    except Exception:
+        logger.exception("google_oauth_token_parse_failed")
+        return _frontend_auth_error_redirect("google_token_invalid")
 
     if not claims:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired Google token")
+        logger.warning("google_oauth_empty_claims")
+        return _frontend_auth_error_redirect("google_token_invalid")
 
-    validated_claims = validate_google_claims(dict(claims), expected_audience=settings.GOOGLE_CLIENT_ID)
-    user, is_new_google_user = await get_or_create_google_user(db, **validated_claims)
+    try:
+        validated_claims = validate_google_claims(dict(claims), expected_audience=settings.GOOGLE_CLIENT_ID)
+        user, is_new_google_user = await get_or_create_google_user(db, **validated_claims)
+    except HTTPException as exc:
+        detail = str(exc.detail)
+        error_code = _map_claim_validation_error(detail)
+        logger.warning("google_oauth_claim_validation_failed reason=%s", detail)
+        return _frontend_auth_error_redirect(error_code)
+    except Exception:
+        logger.exception("google_oauth_user_link_failed")
+        return _frontend_auth_error_redirect("google_oauth_failed")
 
     auth_session = await create_auth_session(db, user, request)
     await db.commit()
