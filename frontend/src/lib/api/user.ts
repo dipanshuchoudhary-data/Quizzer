@@ -74,6 +74,18 @@ export const userApi = {
     return data
   },
 
+  async refreshSession(): Promise<boolean> {
+    try {
+      const { data } = await api.post<{ access_token?: string }>("/auth/refresh")
+      if (data?.access_token) {
+        storeAccessToken(data.access_token)
+      }
+      return true
+    } catch {
+      return false
+    }
+  },
+
   async updateProfile(payload: UpdateProfilePayload): Promise<User> {
     const { data } = await api.patch<User>("/users/profile", payload)
     return data

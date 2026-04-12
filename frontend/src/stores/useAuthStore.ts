@@ -32,6 +32,16 @@ export const useAuthStore = create<AuthState>((set) => ({
       const me = await userApi.me()
       set({ user: me, isAuthenticated: true, isLoading: false })
     } catch {
+      const refreshed = await userApi.refreshSession()
+      if (refreshed) {
+        try {
+          const me = await userApi.me()
+          set({ user: me, isAuthenticated: true, isLoading: false })
+          return
+        } catch {
+          // Fall through to clear local auth state.
+        }
+      }
       clearAuthSession()
       set({ user: null, isAuthenticated: false, isLoading: false })
     }

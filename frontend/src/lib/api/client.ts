@@ -25,7 +25,9 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    const config = error?.config as (typeof error.config & { __retryCount?: number }) | undefined
+    const config = error?.config as
+      | (typeof error.config & { __retryCount?: number; __isAuthRetry?: boolean })
+      | undefined
     const shouldRetry =
       !error?.response &&
       config?.method?.toLowerCase() === "get" &&
@@ -38,6 +40,25 @@ api.interceptors.response.use(
     }
 
     if (error?.response?.status === 401) {
+      const requestUrl = String(config?.url ?? "")
+      const isRefreshRequest = requestUrl.includes("/auth/refresh")
+      if (!isRefreshRequest && config && !config.__isAuthRetry) {
+        config.__isAuthRetry = true
+        try {
+          const refreshResponse = await api.post<{ access_token?: string }>("/auth/refresh")
+          const nextToken = refreshResponse?.data?.access_token
+          if (nextToken) {
+            config.headers = {
+              ...config.headers,
+              Authorization: `Bearer ${nextToken}`,
+            }
+          }
+          return api.request(config)
+        } catch {
+          // Continue to logout flow when refresh fails.
+        }
+      }
+
       if (typeof window !== "undefined") {
         clearAuthSession()
         const publicRoutes = new Set(["/login", "/signup", "/privacy", "/terms", "/auth/success", "/onboarding"])
