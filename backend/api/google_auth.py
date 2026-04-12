@@ -34,6 +34,21 @@ def _map_claim_validation_error(detail: str) -> str:
     }
     return mapping.get(detail, "google_token_invalid")
 
+
+def _map_token_parse_error(error_text: str) -> str:
+    text = (error_text or "").lower()
+    if "nonce" in text:
+        return "google_token_nonce_mismatch"
+    if "expired" in text or "exp" in text:
+        return "google_token_expired"
+    if "signature" in text:
+        return "google_token_signature_invalid"
+    if "issuer" in text:
+        return "google_token_issuer_invalid"
+    if "aud" in text or "audience" in text:
+        return "google_token_audience_invalid"
+    return "google_token_invalid"
+
 oauth = OAuth()
 
 oauth.register(
@@ -73,9 +88,10 @@ async def auth_callback(request: Request, db: AsyncSession = Depends(get_db)):
     except OAuthError as exc:
         logger.warning("google_oauth_exchange_failed error=%s", getattr(exc, "error", "unknown"))
         return _frontend_auth_error_redirect("google_oauth_failed")
-    except Exception:
-        logger.exception("google_oauth_token_parse_failed")
-        return _frontend_auth_error_redirect("google_token_invalid")
+    except Exception as exc:
+        error_code = _map_token_parse_error(str(exc))
+        logger.exception("google_oauth_token_parse_failed code=%s", error_code)
+        return _frontend_auth_error_redirect(error_code)
 
     if not claims:
         logger.warning("google_oauth_empty_claims")
