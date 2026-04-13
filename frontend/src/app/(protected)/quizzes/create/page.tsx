@@ -24,6 +24,8 @@ type SupportedQuestionType = "MCQ" | "True/False" | "Short Answer" | "Long Answe
 
 const AUTO_QUESTION_TYPES: SupportedQuestionType[] = ["MCQ", "True/False", "Short Answer", "Long Answer"]
 const EMPTY_DOCUMENTS: Document[] = []
+const QUIZ_CREATE_DRAFT_STORAGE_KEY = "quizzer_quiz_create_flow_v1"
+const MAX_FLOW_STEP = 4
 
 const defaultSection: DraftSection = {
   id: crypto.randomUUID(),
@@ -33,6 +35,27 @@ const defaultSection: DraftSection = {
   marksPerQuestion: 1,
   difficulty: "Medium",
   bloomLevel: "",
+}
+
+interface QuizCreateDraftState {
+  step: number
+  title: string
+  description: string
+  quizId: string | null
+  sourceMode: SourceMode
+  sourceText: string
+  sourceUrls: string[]
+  generationMode: GenerationMode
+  sections: DraftSection[]
+  questionTarget: number
+  selectedTypes: SupportedQuestionType[]
+  jobId: string | null
+}
+
+function normalizeStep(step: unknown) {
+  const parsed = Number(step)
+  if (!Number.isFinite(parsed)) return 0
+  return Math.max(0, Math.min(MAX_FLOW_STEP, Math.floor(parsed)))
 }
 
 export default function QuizCreatePage() {
@@ -65,10 +88,87 @@ export default function QuizCreatePage() {
     completed: false,
     failed: false,
   })
+  const hasRestoredDraftRef = useRef(false)
+  const hydratedDraftRef = useRef(false)
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const savedRaw = window.localStorage.getItem(QUIZ_CREATE_DRAFT_STORAGE_KEY)
+    if (!savedRaw) {
+      hydratedDraftRef.current = true
+      return
+    }
+
+    try {
+      const parsed = JSON.parse(savedRaw) as Partial<QuizCreateDraftState>
+      const restoredStep = normalizeStep(parsed.step)
+      const restoredQuizId = typeof parsed.quizId === "string" && parsed.quizId.trim().length > 0 ? parsed.quizId : null
+      const safeStep = restoredQuizId ? restoredStep : 0
+
+      setStep(safeStep)
+      if (typeof parsed.title === "string") setTitle(parsed.title)
+      if (typeof parsed.description === "string") setDescription(parsed.description)
+      setQuizId(restoredQuizId)
+      if (parsed.sourceMode === "paste" || parsed.sourceMode === "files" || parsed.sourceMode === "links") {
+        setSourceMode(parsed.sourceMode)
+      }
+      if (typeof parsed.sourceText === "string") setSourceText(parsed.sourceText)
+      if (Array.isArray(parsed.sourceUrls)) {
+        setSourceUrls(parsed.sourceUrls.filter((item): item is string => typeof item === "string" && item.trim().length > 0))
+      }
+      if (parsed.generationMode === "auto" || parsed.generationMode === "custom") {
+        setGenerationMode(parsed.generationMode)
+      }
+      if (Array.isArray(parsed.sections) && parsed.sections.length > 0) {
+        setSections(parsed.sections)
+      }
+      if (typeof parsed.questionTarget === "number" && Number.isFinite(parsed.questionTarget)) {
+        setQuestionTarget(Math.max(1, Math.floor(parsed.questionTarget)))
+      }
+      if (Array.isArray(parsed.selectedTypes) && parsed.selectedTypes.length > 0) {
+        const filteredTypes = parsed.selectedTypes.filter((item): item is SupportedQuestionType => AUTO_QUESTION_TYPES.includes(item))
+        if (filteredTypes.length > 0) {
+          setSelectedTypes(filteredTypes)
+        }
+      }
+      if (typeof parsed.jobId === "string" && parsed.jobId.trim().length > 0) {
+        setJobId(parsed.jobId)
+      }
+
+      hasRestoredDraftRef.current = true
+    } catch {
+      window.localStorage.removeItem(QUIZ_CREATE_DRAFT_STORAGE_KEY)
+    } finally {
+      hydratedDraftRef.current = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    if (!hydratedDraftRef.current) return
+
+    const draftState: QuizCreateDraftState = {
+      step,
+      title,
+      description,
+      quizId,
+      sourceMode,
+      sourceText,
+      sourceUrls,
+      generationMode,
+      sections,
+      questionTarget,
+      selectedTypes,
+      jobId,
+    }
+
+    window.localStorage.setItem(QUIZ_CREATE_DRAFT_STORAGE_KEY, JSON.stringify(draftState))
+  }, [description, generationMode, jobId, questionTarget, quizId, sections, selectedTypes, sourceMode, sourceText, sourceUrls, step, title])
 
   useEffect(() => {
     const source = searchParams.get("source")
     if (!source) return
+    if (hasRestoredDraftRef.current) return
     if (source === "import") {
       setSourceMode("files")
       return
