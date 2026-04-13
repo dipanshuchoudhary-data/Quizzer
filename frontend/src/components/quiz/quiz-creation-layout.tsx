@@ -32,16 +32,16 @@ export function QuizCreationLayout({
             <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl lg:text-3xl">{title}</h1>
             {subtitle ? <p className="text-sm text-muted-foreground">{subtitle}</p> : null}
           </div>
-          <div className="-mx-1 overflow-x-auto px-1">
-            <div className="flex min-w-max items-center gap-2 sm:gap-3">
+          <div className="w-full">
+            <div className="grid grid-cols-5 items-center gap-2 sm:gap-3">
               {steps.map((item, index) => {
                 const active = item.id === step
                 const completed = item.id < step
                 return (
-                  <div key={item.id} className="flex items-center gap-2">
+                  <div key={item.id} className="flex items-center gap-2 min-w-0">
                     <div
                       className={cn(
-                        "flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold transition-all",
+                        "flex min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl border px-3 py-2 text-sm font-semibold transition-all sm:px-4",
                         active
                           ? "border-primary/50 bg-primary/10 text-primary"
                           : completed
@@ -51,7 +51,7 @@ export function QuizCreationLayout({
                     >
                       <span
                         className={cn(
-                          "flex h-5 w-5 items-center justify-center rounded-full text-[11px]",
+                          "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs",
                           active
                             ? "bg-primary text-primary-foreground"
                             : completed
@@ -61,17 +61,24 @@ export function QuizCreationLayout({
                       >
                         {item.id + 1}
                       </span>
-                      {item.label}
+                      <span className="truncate">{item.label}</span>
                     </div>
-                    {index < steps.length - 1 ? (
-                      <span
-                        className={cn(
-                          "h-0.5 w-8 rounded-full transition-all",
-                          completed ? "bg-emerald-400/70" : active ? "pipeline-mini-flow bg-transparent" : "bg-border"
-                        )}
-                      />
-                    ) : null}
                   </div>
+                )
+              })}
+            </div>
+            <div className="mt-3 grid grid-cols-4 gap-2 sm:gap-3">
+              {steps.slice(0, -1).map((item) => {
+                const completed = item.id < step
+                const flowing = item.id === step
+                return (
+                  <span
+                    key={`connector-${item.id}`}
+                    className={cn(
+                      "h-1.5 rounded-full transition-all",
+                      completed ? "bg-emerald-400/70" : flowing ? "pipeline-mini-flow bg-transparent" : "bg-border"
+                    )}
+                  />
                 )
               })}
             </div>
