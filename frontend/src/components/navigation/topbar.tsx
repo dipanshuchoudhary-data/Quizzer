@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { Bell, ChevronRight, LifeBuoy, LogOut, Menu, Moon, Plus, Settings2, ShieldCheck, Sun, UserRound } from "lucide-react"
@@ -57,8 +57,6 @@ export function Topbar() {
   const { profile, hydrate } = useAccountSettingsStore()
   const { toggleMobileSidebar } = useUIStore()
   const breadcrumbs = useBreadcrumbs()
-  const [accountOpen, setAccountOpen] = useState(false)
-
   useEffect(() => {
     hydrate(user)
   }, [hydrate, user])
@@ -70,12 +68,10 @@ export function Topbar() {
   const isStudent = user?.role === "student"
 
   const navigateTo = (href: string) => {
-    setAccountOpen(false)
     router.push(href)
   }
 
   const openFeedback = () => {
-    setAccountOpen(false)
     window.dispatchEvent(new CustomEvent("quizzer:feedback-open"))
   }
 
@@ -146,7 +142,7 @@ export function Topbar() {
             {resolvedTheme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
           </Button>
 
-          <DropdownMenu open={accountOpen} onOpenChange={setAccountOpen}>
+          <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="rounded-full border px-2" aria-label="Open account menu">
                 <Avatar className="h-9 w-9">
@@ -197,7 +193,6 @@ export function Topbar() {
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onSelect={() => {
-                  setAccountOpen(false)
                   void logout().then(() => router.replace("/login"))
                 }}
                 className="rounded-xl px-3 py-2 text-destructive focus:text-destructive"
