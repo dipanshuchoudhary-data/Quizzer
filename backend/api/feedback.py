@@ -29,6 +29,8 @@ async def submit_feedback(
     try:
         await send_feedback_email(
             feedback_message=payload.message,
+            feedback_subject=payload.subject,
+            contact_email=payload.contact_email,
             user_id=str(current_user.id) if current_user else None,
             user_email=current_user.email if current_user else None,
             user_name=current_user.full_name if current_user else None,
