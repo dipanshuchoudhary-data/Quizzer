@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
@@ -20,6 +20,7 @@ import type { Document } from "@/types/document"
 
 type SourceMode = "paste" | "files" | "links"
 type GenerationMode = "auto" | "custom"
+type AutoProcessingMode = "source_first" | "guided"
 type SupportedQuestionType = "MCQ" | "True/False" | "Short Answer" | "Long Answer"
 
 const AUTO_QUESTION_TYPES: SupportedQuestionType[] = ["MCQ", "True/False", "Short Answer", "Long Answer"]
@@ -27,14 +28,24 @@ const EMPTY_DOCUMENTS: Document[] = []
 const QUIZ_CREATE_DRAFT_STORAGE_KEY = "quizzer_quiz_create_flow_v1"
 const MAX_FLOW_STEP = 4
 
-const defaultSection: DraftSection = {
-  id: crypto.randomUUID(),
-  title: "Section 1",
-  numberOfQuestions: 10,
-  questionType: "MCQ",
-  marksPerQuestion: 1,
-  difficulty: "Medium",
-  bloomLevel: "",
+function createDefaultSection(): DraftSection {
+  return {
+    id: crypto.randomUUID(),
+    title: "Section 1",
+    numberOfQuestions: 10,
+    questionType: "MCQ",
+    marksPerQuestion: 1,
+    difficulty: "Medium",
+    bloomLevel: "",
+  }
+}
+
+function resolveSourceMode(sourceParam: string | null): SourceMode | null {
+  if (!sourceParam) return null
+  if (sourceParam === "import") return "files"
+  if (sourceParam === "ai") return "paste"
+  if (sourceParam === "paste" || sourceParam === "files" || sourceParam === "links") return sourceParam
+  return null
 }
 
 interface QuizCreateDraftState {
@@ -46,6 +57,7 @@ interface QuizCreateDraftState {
   sourceText: string
   sourceUrls: string[]
   generationMode: GenerationMode
+  autoProcessingMode: AutoProcessingMode
   sections: DraftSection[]
   questionTarget: number
   selectedTypes: SupportedQuestionType[]
@@ -68,7 +80,8 @@ export default function QuizCreatePage() {
   const [sourceText, setSourceText] = useState("")
   const [sourceUrls, setSourceUrls] = useState<string[]>([])
   const [generationMode, setGenerationMode] = useState<GenerationMode>("auto")
-  const [sections, setSections] = useState<DraftSection[]>([defaultSection])
+  const [autoProcessingMode, setAutoProcessingMode] = useState<AutoProcessingMode>("source_first")
+  const [sections, setSections] = useState<DraftSection[]>([createDefaultSection()])
   const [questionTarget, setQuestionTarget] = useState(10)
   const [selectedTypes, setSelectedTypes] = useState<SupportedQuestionType[]>(["MCQ"])
   const [jobId, setJobId] = useState<string | null>(null)
@@ -90,9 +103,53 @@ export default function QuizCreatePage() {
   })
   const hasRestoredDraftRef = useRef(false)
   const hydratedDraftRef = useRef(false)
+  const forceNew = searchParams.get("new") === "1"
+  const resetFlowForNewQuiz = useCallback(() => {
+    const sourceFromQuery = resolveSourceMode(searchParams.get("source"))
+    const nextSourceMode = sourceFromQuery ?? "paste"
+
+    setStep(0)
+    setTitle("")
+    setDescription("")
+    setQuizId(null)
+    setSourceMode(nextSourceMode)
+    setSourceText("")
+    setSourceUrls([])
+    setGenerationMode("auto")
+    setAutoProcessingMode("source_first")
+    setSections([createDefaultSection()])
+    setQuestionTarget(10)
+    setSelectedTypes(["MCQ"])
+    setJobId(null)
+    setProcessingError(null)
+    setIngestState("idle")
+    setIngestMessage("")
+    trackedUploadIdsRef.current = new Set()
+    fileToastStateRef.current = {
+      uploadNotified: false,
+      started: false,
+      completed: false,
+      failed: false,
+    }
+    previousJobStatusRef.current = null
+    jobToastStateRef.current = {
+      started: false,
+      completed: false,
+      failed: false,
+    }
+
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(QUIZ_CREATE_DRAFT_STORAGE_KEY)
+    }
+  }, [searchParams])
 
   useEffect(() => {
     if (typeof window === "undefined") return
+    if (forceNew) {
+      window.localStorage.removeItem(QUIZ_CREATE_DRAFT_STORAGE_KEY)
+      hydratedDraftRef.current = true
+      return
+    }
     const savedRaw = window.localStorage.getItem(QUIZ_CREATE_DRAFT_STORAGE_KEY)
     if (!savedRaw) {
       hydratedDraftRef.current = true
@@ -119,6 +176,9 @@ export default function QuizCreatePage() {
       if (parsed.generationMode === "auto" || parsed.generationMode === "custom") {
         setGenerationMode(parsed.generationMode)
       }
+      if (parsed.autoProcessingMode === "source_first" || parsed.autoProcessingMode === "guided") {
+        setAutoProcessingMode(parsed.autoProcessingMode)
+      }
       if (Array.isArray(parsed.sections) && parsed.sections.length > 0) {
         setSections(parsed.sections)
       }
@@ -141,7 +201,7 @@ export default function QuizCreatePage() {
     } finally {
       hydratedDraftRef.current = true
     }
-  }, [])
+  }, [forceNew])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -156,6 +216,7 @@ export default function QuizCreatePage() {
       sourceText,
       sourceUrls,
       generationMode,
+      autoProcessingMode,
       sections,
       questionTarget,
       selectedTypes,
@@ -163,24 +224,36 @@ export default function QuizCreatePage() {
     }
 
     window.localStorage.setItem(QUIZ_CREATE_DRAFT_STORAGE_KEY, JSON.stringify(draftState))
-  }, [description, generationMode, jobId, questionTarget, quizId, sections, selectedTypes, sourceMode, sourceText, sourceUrls, step, title])
+  }, [autoProcessingMode, description, generationMode, jobId, questionTarget, quizId, sections, selectedTypes, sourceMode, sourceText, sourceUrls, step, title])
 
   useEffect(() => {
-    const source = searchParams.get("source")
-    if (!source) return
+    const sourceModeFromQuery = resolveSourceMode(searchParams.get("source"))
+    if (!sourceModeFromQuery) return
     if (hasRestoredDraftRef.current) return
-    if (source === "import") {
-      setSourceMode("files")
-      return
-    }
-    if (source === "ai") {
-      setSourceMode("paste")
-      return
-    }
-    if (["paste", "files", "links"].includes(source)) {
-      setSourceMode(source as SourceMode)
-    }
+    setSourceMode(sourceModeFromQuery)
   }, [searchParams])
+
+  useEffect(() => {
+    if (!hydratedDraftRef.current) return
+    if (!quizId) return
+
+    let active = true
+    void (async () => {
+      try {
+        const quiz = await quizApi.getById(quizId)
+        if (!active) return
+        if (quiz.is_published) {
+          resetFlowForNewQuiz()
+        }
+      } catch {
+        // Ignore lookup failures and keep current draft state.
+      }
+    })()
+
+    return () => {
+      active = false
+    }
+  }, [quizId, resetFlowForNewQuiz])
 
   const createQuizMutation = useMutation({
     mutationFn: () => quizApi.create({ title, description: description || "AI-generated quiz" }),
@@ -226,19 +299,34 @@ export default function QuizCreatePage() {
       if (!quizId) throw new Error("Quiz not created")
       const blueprint =
         generationMode === "auto"
-          ? {
-              sections: [
-                {
-                  title: "Section 1",
-                  number_of_questions: questionTarget,
-                  question_types: selectedTypes,
-                  marks_per_question: 1,
-                },
-              ],
-              auto_detect_structure: true,
-              source_mode: sourceMode,
-              source_references: sourceUrls,
-            }
+          ? autoProcessingMode === "guided"
+            ? {
+                sections: [
+                  {
+                    title: "Section 1",
+                    number_of_questions: questionTarget,
+                    question_types: selectedTypes,
+                    marks_per_question: 1,
+                  },
+                ],
+                auto_detect_structure: true,
+                source_mode: sourceMode,
+                source_references: sourceUrls,
+              }
+            : {
+                // Default auto mode: infer structure from extracted source first.
+                sections: [
+                  {
+                    title: "Auto Detect",
+                    number_of_questions: 5,
+                    question_types: ["MCQ"],
+                    marks_per_question: 1,
+                  },
+                ],
+                auto_detect_structure: true,
+                source_mode: sourceMode,
+                source_references: sourceUrls,
+              }
           : {
               sections,
               source_mode: sourceMode,
@@ -574,49 +662,82 @@ export default function QuizCreatePage() {
               }}
               className={`rounded-2xl border p-4 text-left transition-all ${generationMode === "auto" ? "border-primary/40 bg-primary/5" : "hover:-translate-y-1 hover:border-primary/30 hover:bg-muted/40"}`}
             >
-              <p className="text-sm font-semibold text-foreground">Start AI Processing</p>
-              <p className="text-xs text-muted-foreground">AI will analyze your content and generate questions based on detected topics.</p>
+              <p className="text-sm font-semibold text-foreground">Auto AI Processing</p>
+              <p className="text-xs text-muted-foreground">Choose source-first extraction or guided count/type generation.</p>
               {generationMode === "auto" ? (
                 <div className="mt-4 space-y-4">
-                  <div className="space-y-2">
-                    <label htmlFor="total-questions" className="text-xs font-medium text-foreground">
-                      Questions to Generate
-                    </label>
-                    <Input
-                      id="total-questions"
-                      type="number"
-                      min={1}
-                      value={questionTarget}
-                      onChange={(event) => setQuestionTarget(Math.max(1, Number(event.target.value || 1)))}
-                      placeholder="Number of questions"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Target number of questions AI will create from your content. Actual count may vary based on source material.
-                    </p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.preventDefault()
+                        setAutoProcessingMode("source_first")
+                      }}
+                      className={`rounded-xl border px-3 py-2 text-left text-xs transition-colors ${autoProcessingMode === "source_first" ? "border-primary bg-primary/10 text-primary" : "border-border bg-background text-muted-foreground hover:border-primary/35 hover:text-foreground"}`}
+                    >
+                      <p className="font-semibold">Source-first (Recommended)</p>
+                      <p className="mt-1 text-[11px] opacity-90">Use extracted file/source structure and preserve detected types.</p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.preventDefault()
+                        setAutoProcessingMode("guided")
+                      }}
+                      className={`rounded-xl border px-3 py-2 text-left text-xs transition-colors ${autoProcessingMode === "guided" ? "border-primary bg-primary/10 text-primary" : "border-border bg-background text-muted-foreground hover:border-primary/35 hover:text-foreground"}`}
+                    >
+                      <p className="font-semibold">Guided generation</p>
+                      <p className="mt-1 text-[11px] opacity-90">Set explicit number of questions and question types.</p>
+                    </button>
                   </div>
 
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium text-foreground">Question Types</p>
-                    <div className="flex flex-wrap gap-2">
-                      {AUTO_QUESTION_TYPES.map((type) => {
-                        const isSelected = selectedTypes.includes(type)
-                        return (
-                          <button
-                            key={type}
-                            type="button"
-                            onClick={(event) => {
-                              event.preventDefault()
-                              toggleQuestionType(type)
-                            }}
-                            className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${isSelected ? "border-primary bg-primary/10 text-primary" : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}
-                            aria-pressed={isSelected}
-                          >
-                            {type}
-                          </button>
-                        )
-                      })}
+                  {autoProcessingMode === "source_first" ? (
+                    <div className="rounded-xl border bg-background/70 px-3 py-2 text-xs text-muted-foreground">
+                      AI will extract as many valid questions as possible from your source and keep detected type diversity.
                     </div>
-                  </div>
+                  ) : (
+                    <>
+                      <div className="space-y-2">
+                        <label htmlFor="total-questions" className="text-xs font-medium text-foreground">
+                          Questions to Generate
+                        </label>
+                        <Input
+                          id="total-questions"
+                          type="number"
+                          min={1}
+                          value={questionTarget}
+                          onChange={(event) => setQuestionTarget(Math.max(1, Number(event.target.value || 1)))}
+                          placeholder="Number of questions"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Target number of questions AI will create from your content.
+                        </p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium text-foreground">Question Types</p>
+                        <div className="flex flex-wrap gap-2">
+                          {AUTO_QUESTION_TYPES.map((type) => {
+                            const isSelected = selectedTypes.includes(type)
+                            return (
+                              <button
+                                key={type}
+                                type="button"
+                                onClick={(event) => {
+                                  event.preventDefault()
+                                  toggleQuestionType(type)
+                                }}
+                                className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${isSelected ? "border-primary bg-primary/10 text-primary" : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}
+                                aria-pressed={isSelected}
+                              >
+                                {type}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               ) : null}
             </div>
@@ -653,7 +774,7 @@ export default function QuizCreatePage() {
               }}
               disabled={
                 generateMutation.isPending ||
-                (generationMode === "auto" && (questionTarget <= 0 || selectedTypes.length === 0)) ||
+                (generationMode === "auto" && autoProcessingMode === "guided" && (questionTarget <= 0 || selectedTypes.length === 0)) ||
                 (generationMode === "custom" && sections.length === 0)
               }
               className="h-11 w-full sm:w-auto"
