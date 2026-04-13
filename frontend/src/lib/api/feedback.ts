@@ -2,6 +2,8 @@ import { api } from "@/lib/api/client"
 
 type SubmitFeedbackPayload = {
   message: string
+  subject?: string
+  contact_email?: string
 }
 
 export const feedbackApi = {
