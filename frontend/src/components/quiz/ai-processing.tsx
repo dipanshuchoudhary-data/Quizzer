@@ -65,8 +65,8 @@ export function AIProcessing({
           const done = index <= doneBoundary
           const active = !isCompleted && !isFailed && index === activeIndex
 
-          const connectorDone = index < doneBoundary
-          const connectorFlow = isProcessing && index === doneBoundary
+          const connectorDone = index < activeIndex
+          const connectorFlow = isProcessing && !isCompleted && !isFailed && index === activeIndex && index < pipelineSteps.length - 1
 
           return (
             <div key={step.id} className="relative">
