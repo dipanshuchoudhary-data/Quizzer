@@ -140,10 +140,7 @@ export default function ExamsPage() {
       const matchesQuery =
         query.length === 0 ||
         (quiz.title ?? "").toLowerCase().includes(query)
-      const quizOrg = organizationMap[quiz.id]
-      const quizClusterValue = quizOrg?.course_name
-        ? `${quizOrg.course_name}__quizzer_cluster__${quizOrg.unit_name ?? ""}`
-        : "__none__"
+      const quizClusterValue = getQuizClusterValue(quiz.id)
       const matchesCluster = clusterFilter === "__all__" ? true : clusterFilter === quizClusterValue
 
       return matchesFilter && matchesQuery && matchesCluster
@@ -205,6 +202,13 @@ export default function ExamsPage() {
     setSelectedIds(new Set())
   }
 
+  const getQuizClusterValue = (quizId: string) => {
+    const quizOrg = organizationMap[quizId]
+    return quizOrg?.course_name
+      ? `${quizOrg.course_name}__quizzer_cluster__${quizOrg.unit_name ?? ""}`
+      : "__none__"
+  }
+
   const handleCreateCluster = () => {
     const courseName = newCourseName.trim()
     const unitName = newUnitName.trim()
@@ -233,6 +237,47 @@ export default function ExamsPage() {
     setOrganizationMap(nextMap)
     toast.success(selectedCluster ? "Selected exams assigned to cluster" : "Selected exams removed from cluster")
   }
+
+  const moveSelectedToClusterValue = (clusterValue: string) => {
+    if (selectedIds.size === 0) return
+    setBulkClusterValue(clusterValue)
+    const selectedCluster = clusterOptions.find((option) => option.value === clusterValue)
+    assignQuizzesToCluster(
+      Array.from(selectedIds),
+      selectedCluster
+        ? { course_name: selectedCluster.course_name, unit_name: selectedCluster.unit_name }
+        : null
+    )
+    setOrganizationMap(loadQuizOrganizationMap())
+    toast.success(selectedCluster ? "Selected exams assigned to cluster" : "Selected exams removed from cluster")
+  }
+
+  const selectClusterExams = (clusterValue: string) => {
+    const ids = quizzes
+      .filter((quiz) => getQuizClusterValue(quiz.id) === clusterValue)
+      .map((quiz) => quiz.id)
+    setSelectedIds(new Set(ids))
+  }
+
+  const clusterSnapshots = useMemo(
+    () =>
+      clusterOptions.map((option) => {
+        const clusterQuizzes = quizzes
+          .filter((quiz) => getQuizClusterValue(quiz.id) === option.value)
+          .sort((a, b) => {
+            const dateA = a.updated_at ? new Date(a.updated_at).getTime() : 0
+            const dateB = b.updated_at ? new Date(b.updated_at).getTime() : 0
+            return dateB - dateA
+          })
+
+        return {
+          ...option,
+          total: clusterQuizzes.length,
+          recent: clusterQuizzes.slice(0, 5),
+        }
+      }),
+    [clusterOptions, quizzes, organizationMap]
+  )
 
   return (
     <section className="space-y-8">
@@ -346,6 +391,56 @@ export default function ExamsPage() {
             })}
           </div>
         </div>
+      ) : null}
+
+      {clusterOptions.length > 0 ? (
+        <section className="space-y-4">
+          <SectionHeader
+            title="Exam Clusters"
+            description="Each cluster groups related exams and shows recent activity."
+            icon={FolderOpen}
+          />
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {clusterSnapshots.map((cluster) => (
+              <div key={cluster.value} className={cn(pageCardClass, "space-y-3")}>
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">{cluster.label}</p>
+                    <p className="text-xs text-muted-foreground">{cluster.total} exam{cluster.total === 1 ? "" : "s"}</p>
+                  </div>
+                  <Badge variant="outline">Cluster</Badge>
+                </div>
+
+                <div className="rounded-xl border bg-muted/20 p-3">
+                  <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">Recent quizzes</p>
+                  {cluster.recent.length > 0 ? (
+                    <ul className="mt-2 space-y-1.5">
+                      {cluster.recent.map((quiz) => (
+                        <li key={`${cluster.value}-${quiz.id}`} className="truncate text-sm text-foreground">
+                          {quiz.title}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-2 text-xs text-muted-foreground">No exams in this cluster yet.</p>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="outline" onClick={() => setClusterFilter(cluster.value)}>
+                    Open Cluster
+                  </Button>
+                  <Button size="sm" variant="outline" disabled={selectedIds.size === 0} onClick={() => moveSelectedToClusterValue(cluster.value)}>
+                    Move Selected Here
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => selectClusterExams(cluster.value)}>
+                    Select Cluster Exams
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
       ) : null}
 
       <section className="space-y-4">
