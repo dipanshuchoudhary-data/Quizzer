@@ -34,33 +34,46 @@ export function QuizCreationLayout({
           </div>
           <div className="-mx-1 overflow-x-auto px-1">
             <div className="flex min-w-max items-center gap-2 sm:gap-3">
-            {steps.map((item) => {
-              const active = item.id === step
-              const completed = item.id < step
-              return (
-                <div
-                  key={item.id}
-                  className={cn(
-                    "flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold transition-all",
-                    active
-                      ? "border-primary/50 bg-primary/10 text-primary"
-                      : completed
-                      ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-600"
-                      : "border-border bg-background text-muted-foreground"
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "flex h-5 w-5 items-center justify-center rounded-full text-[11px]",
-                      active ? "bg-primary text-primary-foreground" : completed ? "bg-emerald-500 text-white" : "bg-muted text-muted-foreground"
-                    )}
-                  >
-                    {item.id + 1}
-                  </span>
-                  {item.label}
-                </div>
-              )
-            })}
+              {steps.map((item, index) => {
+                const active = item.id === step
+                const completed = item.id < step
+                return (
+                  <div key={item.id} className="flex items-center gap-2">
+                    <div
+                      className={cn(
+                        "flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold transition-all",
+                        active
+                          ? "border-primary/50 bg-primary/10 text-primary"
+                          : completed
+                          ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-600"
+                          : "border-border bg-background text-muted-foreground"
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "flex h-5 w-5 items-center justify-center rounded-full text-[11px]",
+                          active
+                            ? "bg-primary text-primary-foreground"
+                            : completed
+                            ? "bg-emerald-500 text-white"
+                            : "bg-muted text-muted-foreground"
+                        )}
+                      >
+                        {item.id + 1}
+                      </span>
+                      {item.label}
+                    </div>
+                    {index < steps.length - 1 ? (
+                      <span
+                        className={cn(
+                          "h-0.5 w-8 rounded-full transition-all",
+                          completed ? "bg-emerald-400/70" : active ? "pipeline-mini-flow bg-transparent" : "bg-border"
+                        )}
+                      />
+                    ) : null}
+                  </div>
+                )
+              })}
             </div>
           </div>
         </div>
