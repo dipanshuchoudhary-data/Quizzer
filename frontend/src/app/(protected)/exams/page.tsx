@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
@@ -35,6 +35,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Tooltip } from "@/components/ui/tooltip"
+import {
+  assignQuizzesToCluster,
+  buildCourseClusterOptions,
+  loadCourseLibrary,
+  loadQuizOrganizationMap,
+  mergeCourseFromAssignment,
+  saveCourseLibrary,
+  type CourseDefinition,
+  type QuizOrganizationMap,
+} from "@/features/quiz/organization/storage"
 
 function formatUpdatedAt(updatedAt?: string) {
   if (!updatedAt) return "Updated recently"
@@ -75,6 +85,17 @@ export default function ExamsPage() {
   const [sortBy, setSortBy] = useState<SortOption>("updated")
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false)
+  const [courseLibrary, setCourseLibrary] = useState<CourseDefinition[]>([])
+  const [organizationMap, setOrganizationMap] = useState<QuizOrganizationMap>({})
+  const [clusterFilter, setClusterFilter] = useState("__all__")
+  const [bulkClusterValue, setBulkClusterValue] = useState("__none__")
+  const [newCourseName, setNewCourseName] = useState("")
+  const [newUnitName, setNewUnitName] = useState("")
+
+  useEffect(() => {
+    setCourseLibrary(loadCourseLibrary())
+    setOrganizationMap(loadQuizOrganizationMap())
+  }, [])
 
   const { data: quizzes = [], isLoading } = useQuery({
     queryKey: ["quizzes"],
@@ -99,6 +120,7 @@ export default function ExamsPage() {
     () => new Map(runningJobs.map((job) => [job.quiz_id, job])),
     [runningJobs]
   )
+  const clusterOptions = useMemo(() => buildCourseClusterOptions(courseLibrary), [courseLibrary])
 
   const visibleQuizzes = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
@@ -118,8 +140,13 @@ export default function ExamsPage() {
       const matchesQuery =
         query.length === 0 ||
         (quiz.title ?? "").toLowerCase().includes(query)
+      const quizOrg = organizationMap[quiz.id]
+      const quizClusterValue = quizOrg?.course_name
+        ? `${quizOrg.course_name}__quizzer_cluster__${quizOrg.unit_name ?? ""}`
+        : "__none__"
+      const matchesCluster = clusterFilter === "__all__" ? true : clusterFilter === quizClusterValue
 
-      return matchesFilter && matchesQuery
+      return matchesFilter && matchesQuery && matchesCluster
     })
 
     // Sort the filtered results
@@ -137,7 +164,7 @@ export default function ExamsPage() {
       const dateB = b.updated_at ? new Date(b.updated_at).getTime() : 0
       return dateB - dateA
     })
-  }, [filter, liveQuizIds, quizzes, runningJobsByQuizId, searchQuery, sortBy])
+  }, [clusterFilter, filter, liveQuizIds, organizationMap, quizzes, runningJobsByQuizId, searchQuery, sortBy])
 
   // Bulk delete mutation
   const bulkDeleteMutation = useMutation({
@@ -178,6 +205,35 @@ export default function ExamsPage() {
     setSelectedIds(new Set())
   }
 
+  const handleCreateCluster = () => {
+    const courseName = newCourseName.trim()
+    const unitName = newUnitName.trim()
+    if (!courseName) {
+      toast.error("Course name is required")
+      return
+    }
+    const nextLibrary = mergeCourseFromAssignment(courseLibrary, courseName, unitName || undefined)
+    setCourseLibrary(nextLibrary)
+    saveCourseLibrary(nextLibrary)
+    setNewCourseName("")
+    setNewUnitName("")
+    toast.success("Cluster created")
+  }
+
+  const handleAssignSelectedToCluster = () => {
+    if (selectedIds.size === 0) return
+    const selectedCluster = clusterOptions.find((option) => option.value === bulkClusterValue)
+    assignQuizzesToCluster(
+      Array.from(selectedIds),
+      selectedCluster
+        ? { course_name: selectedCluster.course_name, unit_name: selectedCluster.unit_name }
+        : null
+    )
+    const nextMap = loadQuizOrganizationMap()
+    setOrganizationMap(nextMap)
+    toast.success(selectedCluster ? "Selected exams assigned to cluster" : "Selected exams removed from cluster")
+  }
+
   return (
     <section className="space-y-8">
       <PageHeader
@@ -216,6 +272,20 @@ export default function ExamsPage() {
                   <SelectItem value="updated">Last Updated</SelectItem>
                   <SelectItem value="created">Date Created</SelectItem>
                   <SelectItem value="alphabetical">Alphabetical</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={clusterFilter} onValueChange={setClusterFilter}>
+                <SelectTrigger className="w-[190px]">
+                  <SelectValue placeholder="All clusters" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">All clusters</SelectItem>
+                  <SelectItem value="__none__">Unclustered only</SelectItem>
+                  {clusterOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -289,6 +359,26 @@ export default function ExamsPage() {
                 <span className="text-sm text-muted-foreground">
                   {selectedIds.size} selected
                 </span>
+                <Select value={bulkClusterValue} onValueChange={setBulkClusterValue}>
+                  <SelectTrigger className="h-9 w-[220px]">
+                    <SelectValue placeholder="Move to cluster" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Remove from cluster</SelectItem>
+                    {clusterOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAssignSelectedToCluster}
+                >
+                  Move
+                </Button>
                 <Button
                   variant="outline"
                   size="sm"
@@ -319,6 +409,26 @@ export default function ExamsPage() {
             )}
           </div>
         </div>
+        <div className="flex flex-wrap items-center gap-2 rounded-2xl border bg-muted/20 p-3">
+          <Input
+            value={newCourseName}
+            onChange={(event) => setNewCourseName(event.target.value)}
+            placeholder="New course (e.g., Physics)"
+            className="h-9 w-[210px]"
+          />
+          <Input
+            value={newUnitName}
+            onChange={(event) => setNewUnitName(event.target.value)}
+            placeholder="Unit / Batch (optional)"
+            className="h-9 w-[210px]"
+          />
+          <Button size="sm" variant="outline" onClick={handleCreateCluster}>
+            Create Cluster
+          </Button>
+          <span className="text-xs text-muted-foreground">
+            Use clusters to group exams by course and batch.
+          </span>
+        </div>
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
         {isLoading
           ? Array.from({ length: 6 }).map((_, index) => (
@@ -343,6 +453,10 @@ export default function ExamsPage() {
               const isSelected = selectedIds.has(quiz.id)
               const openExamId = isPublished && quiz.public_id ? quiz.public_id : quiz.id
               const openExamHref = `/exam/${openExamId}`
+              const quizCluster = organizationMap[quiz.id]
+              const clusterLabel = quizCluster?.course_name
+                ? `${quizCluster.course_name}${quizCluster.unit_name ? ` • ${quizCluster.unit_name}` : ""}`
+                : "No cluster"
 
               // Progress bar color: green=ready (80%+), yellow=in-progress (40-79%), red=needs attention (<40%)
               const progressBarColor =
@@ -407,6 +521,7 @@ export default function ExamsPage() {
 
                     <div className="flex flex-col items-end gap-1.5">
                       <Badge className={statusBadgeClasses(status)}>{status}</Badge>
+                      <Badge variant="outline" className="max-w-[150px] truncate">{clusterLabel}</Badge>
                       {linkedJob ? <Badge className={statusBadgeClasses("PROCESSING")}>PROCESSING</Badge> : null}
                     </div>
                   </div>

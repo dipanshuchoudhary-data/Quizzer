@@ -13,9 +13,17 @@ export interface CourseDefinition {
   units: string[]
 }
 
+export interface CourseClusterOption {
+  value: string
+  label: string
+  course_name: string
+  unit_name?: string
+}
+
 const QUIZ_ORG_KEY = "quizzer_quiz_organization_v1"
 const COURSE_LIBRARY_KEY = "quizzer_course_library_v1"
 const TAG_LIBRARY_KEY = "quizzer_tag_library_v1"
+const COURSE_CLUSTER_KEY_SEPARATOR = "__quizzer_cluster__"
 
 function safeParse<T>(value: string | null, fallback: T): T {
   if (!value) return fallback
@@ -119,4 +127,82 @@ export function mergeCourseFromAssignment(
   const mergedUnits = dedupeCaseInsensitive([...next[index].units, ...(unit ? [unit] : [])])
   next[index] = { ...next[index], name: next[index].name, units: mergedUnits }
   return next
+}
+
+export function makeCourseClusterValue(courseName: string, unitName?: string): string {
+  const course = cleanToken(courseName)
+  const unit = cleanToken(unitName ?? "")
+  return `${course}${COURSE_CLUSTER_KEY_SEPARATOR}${unit}`
+}
+
+export function parseCourseClusterValue(value: string): { course_name: string; unit_name?: string } | null {
+  if (!value) return null
+  const [rawCourse, rawUnit = ""] = value.split(COURSE_CLUSTER_KEY_SEPARATOR)
+  const course = cleanToken(rawCourse)
+  const unit = cleanToken(rawUnit)
+  if (!course) return null
+  return {
+    course_name: course,
+    unit_name: unit || undefined,
+  }
+}
+
+export function buildCourseClusterOptions(courses: CourseDefinition[]): CourseClusterOption[] {
+  const options: CourseClusterOption[] = []
+  courses.forEach((course) => {
+    const courseName = cleanToken(course.name)
+    if (!courseName) return
+    if (!course.units.length) {
+      options.push({
+        value: makeCourseClusterValue(courseName),
+        label: courseName,
+        course_name: courseName,
+      })
+      return
+    }
+    course.units.forEach((unit) => {
+      const unitName = cleanToken(unit)
+      if (!unitName) return
+      options.push({
+        value: makeCourseClusterValue(courseName, unitName),
+        label: `${courseName} • ${unitName}`,
+        course_name: courseName,
+        unit_name: unitName,
+      })
+    })
+  })
+  return options
+}
+
+export function assignQuizToCluster(quizId: string, cluster: { course_name: string; unit_name?: string } | null) {
+  const current = loadQuizOrganizationMap()
+  if (!cluster) {
+    delete current[quizId]
+    saveQuizOrganizationMap(current)
+    return
+  }
+  current[quizId] = {
+    ...current[quizId],
+    course_name: cluster.course_name,
+    unit_name: cluster.unit_name,
+    tags: current[quizId]?.tags ?? [],
+  }
+  saveQuizOrganizationMap(current)
+}
+
+export function assignQuizzesToCluster(quizIds: string[], cluster: { course_name: string; unit_name?: string } | null) {
+  const current = loadQuizOrganizationMap()
+  quizIds.forEach((quizId) => {
+    if (!cluster) {
+      delete current[quizId]
+      return
+    }
+    current[quizId] = {
+      ...current[quizId],
+      course_name: cluster.course_name,
+      unit_name: cluster.unit_name,
+      tags: current[quizId]?.tags ?? [],
+    }
+  })
+  saveQuizOrganizationMap(current)
 }

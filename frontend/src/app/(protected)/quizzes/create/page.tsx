@@ -11,12 +11,19 @@ import { QuizReview } from "@/components/quiz/quiz-review"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { quizApi } from "@/lib/api/quiz"
 import { aiApi } from "@/lib/api/ai"
 import { getApiErrorMessage } from "@/lib/api/error"
 import { SectionBuilder } from "@/features/quiz/creation/SectionBuilder"
 import type { DraftSection } from "@/features/quiz/creation/SortableSectionCard"
 import type { Document } from "@/types/document"
+import {
+  assignQuizToCluster,
+  buildCourseClusterOptions,
+  loadCourseLibrary,
+  parseCourseClusterValue,
+} from "@/features/quiz/organization/storage"
 
 type SourceMode = "paste" | "files" | "links"
 type GenerationMode = "auto" | "custom"
@@ -62,6 +69,7 @@ interface QuizCreateDraftState {
   questionTarget: number
   selectedTypes: SupportedQuestionType[]
   jobId: string | null
+  selectedClusterValue: string
 }
 
 function normalizeStep(step: unknown) {
@@ -84,6 +92,7 @@ export default function QuizCreatePage() {
   const [sections, setSections] = useState<DraftSection[]>([createDefaultSection()])
   const [questionTarget, setQuestionTarget] = useState(10)
   const [selectedTypes, setSelectedTypes] = useState<SupportedQuestionType[]>(["MCQ"])
+  const [selectedClusterValue, setSelectedClusterValue] = useState("")
   const [jobId, setJobId] = useState<string | null>(null)
   const [processingError, setProcessingError] = useState<string | null>(null)
   const [ingestState, setIngestState] = useState<"idle" | "processing" | "ready" | "failed">("idle")
@@ -120,6 +129,7 @@ export default function QuizCreatePage() {
     setSections([createDefaultSection()])
     setQuestionTarget(10)
     setSelectedTypes(["MCQ"])
+    setSelectedClusterValue("")
     setJobId(null)
     setProcessingError(null)
     setIngestState("idle")
@@ -185,6 +195,9 @@ export default function QuizCreatePage() {
       if (typeof parsed.questionTarget === "number" && Number.isFinite(parsed.questionTarget)) {
         setQuestionTarget(Math.max(1, Math.floor(parsed.questionTarget)))
       }
+      if (typeof parsed.selectedClusterValue === "string") {
+        setSelectedClusterValue(parsed.selectedClusterValue)
+      }
       if (Array.isArray(parsed.selectedTypes) && parsed.selectedTypes.length > 0) {
         const filteredTypes = parsed.selectedTypes.filter((item): item is SupportedQuestionType => AUTO_QUESTION_TYPES.includes(item))
         if (filteredTypes.length > 0) {
@@ -220,11 +233,14 @@ export default function QuizCreatePage() {
       sections,
       questionTarget,
       selectedTypes,
+      selectedClusterValue,
       jobId,
     }
 
     window.localStorage.setItem(QUIZ_CREATE_DRAFT_STORAGE_KEY, JSON.stringify(draftState))
-  }, [autoProcessingMode, description, generationMode, jobId, questionTarget, quizId, sections, selectedTypes, sourceMode, sourceText, sourceUrls, step, title])
+  }, [autoProcessingMode, description, generationMode, jobId, questionTarget, quizId, sections, selectedClusterValue, selectedTypes, sourceMode, sourceText, sourceUrls, step, title])
+
+  const courseClusterOptions = buildCourseClusterOptions(loadCourseLibrary())
 
   useEffect(() => {
     const sourceModeFromQuery = resolveSourceMode(searchParams.get("source"))
@@ -259,6 +275,10 @@ export default function QuizCreatePage() {
     mutationFn: () => quizApi.create({ title, description: description || "AI-generated quiz" }),
     onSuccess: (quiz) => {
       setQuizId(quiz.id)
+      const selectedCluster = parseCourseClusterValue(selectedClusterValue)
+      if (selectedCluster) {
+        assignQuizToCluster(quiz.id, selectedCluster)
+      }
       setStep(1)
     },
     onError: (error: unknown) => toast.error(getApiErrorMessage(error, "Failed to create quiz")),
@@ -570,6 +590,32 @@ export default function QuizCreatePage() {
               />
               <p className="text-xs text-muted-foreground">Example: Covers arrays, linked lists, stacks, and queue operations.</p>
             </div>
+
+            {courseClusterOptions.length > 0 ? (
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Cluster (Batch/Course)</label>
+                <Select value={selectedClusterValue || "__none__"} onValueChange={(value) => setSelectedClusterValue(value === "__none__" ? "" : value)}>
+                  <SelectTrigger className="h-11 w-full">
+                    <SelectValue placeholder="Select cluster (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">No cluster</SelectItem>
+                    {courseClusterOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  New quiz will be auto-grouped under selected course/unit.
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-xl border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                No clusters found yet. Create course clusters from the Exams page when needed.
+              </div>
+            )}
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
