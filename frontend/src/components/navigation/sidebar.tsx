@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils"
 import { NAV_SECTIONS } from "./nav-config"
 import { NavItemRow } from "./nav-item"
 import { Button } from "@/components/ui/button"
+import { Brand } from "@/components/branding/brand"
 
 export function Sidebar() {
   const user = useAuthStore((state) => state.user)
@@ -62,8 +63,12 @@ export function Sidebar() {
       >
         <div className="flex h-16 items-center justify-between px-4 lg:px-3">
           <div className={cn("min-w-0", sidebarCollapsed && "hidden lg:block")}>
-            <p className="truncate text-lg font-semibold tracking-tight text-sidebar-foreground">Quizzer</p>
-            <p className="truncate text-xs text-sidebar-foreground/65">{user?.role === "student" ? "Student Workspace" : "Professor Workspace"}</p>
+            <Brand
+              compact
+              subtitle={user?.role === "student" ? "Student Workspace" : "Professor Workspace"}
+              titleClassName="text-sidebar-foreground"
+              subtitleClassName="text-sidebar-foreground/65"
+            />
           </div>
           <Button
             size="icon"

@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { ReactNode } from "react"
 import { CheckCircle2, Sparkles } from "lucide-react"
+import { Brand } from "@/components/branding/brand"
 
 interface AuthShellProps {
   eyebrow: string
@@ -34,10 +35,12 @@ export function AuthShell({
       <div className="relative grid min-h-screen lg:grid-cols-[1.05fr_0.95fr]">
         <section className="hidden min-h-screen flex-col justify-between px-10 py-10 lg:flex xl:px-16">
           <Link href="/" className="flex w-fit items-center gap-3 text-sm font-semibold tracking-[0.24em] text-foreground">
-            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--brand-accent)] text-lg font-black text-white shadow-[0_18px_45px_rgba(34,197,94,0.25)]">
-              Q
-            </span>
-            QUIZZER
+            <Brand
+              className="gap-3"
+              logoClassName="h-10 w-10 rounded-xl shadow-[0_18px_45px_rgba(34,197,94,0.25)]"
+              titleClassName="text-sm font-semibold tracking-[0.24em] uppercase text-foreground"
+              compact
+            />
           </Link>
 
           <div className="max-w-2xl animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -71,10 +74,12 @@ export function AuthShell({
           <div className="w-full max-w-[31rem] animate-in fade-in zoom-in-95 duration-500">
             <div className="mb-8 flex items-center justify-center lg:hidden">
               <Link href="/" className="flex items-center gap-3 text-sm font-semibold tracking-[0.22em] text-foreground">
-                <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--brand-accent)] text-lg font-black text-white">
-                  Q
-                </span>
-                QUIZZER
+                <Brand
+                  className="gap-3"
+                  logoClassName="h-10 w-10 rounded-xl"
+                  titleClassName="text-sm font-semibold tracking-[0.22em] uppercase text-foreground"
+                  compact
+                />
               </Link>
             </div>
 

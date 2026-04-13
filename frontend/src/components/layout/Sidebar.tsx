@@ -7,6 +7,7 @@ import { BarChart3, GraduationCap, LayoutDashboard, PanelLeftClose, PanelLeftOpe
 import { useUIStore } from "@/stores/useUIStore"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { Brand } from "@/components/branding/brand"
 
 const items = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -35,8 +36,12 @@ export function Sidebar() {
       <div className="flex h-full flex-col">
         <div className={cn("flex h-16 items-center px-3", sidebarCollapsed ? "justify-center" : "justify-between")}>
           <div className={cn("min-w-0", sidebarCollapsed && "hidden")}>
-            <p className="truncate text-lg font-semibold tracking-tight text-sidebar-foreground">Quizzer</p>
-            <p className="truncate text-xs text-sidebar-foreground/65">Professor Workspace</p>
+            <Brand
+              compact
+              subtitle="Professor Workspace"
+              titleClassName="text-sidebar-foreground"
+              subtitleClassName="text-sidebar-foreground/65"
+            />
           </div>
           <Button
             size="icon"
