@@ -244,6 +244,76 @@ a {
   animation: page-transition 200ms ease-out both;
 }
 
+.pipeline-node-active {
+  box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.45);
+  animation: pipeline-node-pulse 1.35s ease-in-out infinite;
+}
+
+.pipeline-flow {
+  position: relative;
+  overflow: hidden;
+}
+
+.pipeline-flow::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(16, 185, 129, 0.2) 0%, rgba(56, 189, 248, 0.9) 45%, rgba(34, 197, 94, 0.2) 100%);
+  background-size: 200% 100%;
+  animation: pipeline-flow 1.15s linear infinite;
+}
+
+.pipeline-progress-scanner {
+  border-radius: 9999px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.85) 50%, rgba(255, 255, 255, 0) 100%);
+  filter: blur(0.2px);
+  animation: pipeline-progress-scan 2.2s linear infinite;
+}
+
+.pipeline-mini-flow {
+  position: relative;
+  overflow: hidden;
+}
+
+.pipeline-mini-flow::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(56, 189, 248, 0.1) 0%, rgba(56, 189, 248, 0.9) 50%, rgba(56, 189, 248, 0.1) 100%);
+  background-size: 200% 100%;
+  animation: pipeline-flow 1.2s linear infinite;
+}
+
+@keyframes pipeline-flow {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+@keyframes pipeline-node-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(34, 197, 94, 0);
+  }
+}
+
+@keyframes pipeline-progress-scan {
+  from {
+    transform: translateX(-30%);
+  }
+  to {
+    transform: translateX(520%);
+  }
+}
+
 .sidebar-scroll {
   scroll-behavior: smooth;
   scrollbar-width: thin;
@@ -283,7 +353,11 @@ body.review-focus [data-app-content] {
   .dashboard-fade-up,
   .skeleton,
   .dash-pulse,
-  .page-transition {
+  .page-transition,
+  .pipeline-node-active,
+  .pipeline-flow::before,
+  .pipeline-mini-flow::before,
+  .pipeline-progress-scanner {
     animation: none;
   }
 }
