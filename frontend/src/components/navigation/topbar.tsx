@@ -116,7 +116,7 @@ export function Topbar() {
         <div className="ml-auto flex items-center gap-2">
           {!isStudent ? (
             <>
-              <Button className="hidden h-11 sm:inline-flex" onClick={() => router.push("/quizzes/create")}>
+              <Button className="hidden h-11 sm:inline-flex" onClick={() => router.push("/quizzes/create?new=1")}>
                 <Plus className="size-4" />
                 Create Quiz
               </Button>
@@ -124,7 +124,7 @@ export function Topbar() {
                 size="icon"
                 className="h-11 w-11 sm:hidden"
                 aria-label="Create quiz"
-                onClick={() => router.push("/quizzes/create")}
+                onClick={() => router.push("/quizzes/create?new=1")}
               >
                 <Plus className="size-4" />
               </Button>
@@ -143,13 +143,14 @@ export function Topbar() {
           </Button>
 
           <DropdownMenu modal={false}>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="rounded-full border px-2" aria-label="Open account menu">
-                <Avatar className="h-9 w-9">
-                  {avatarUrl ? <AvatarImage src={avatarUrl} alt={displayName} /> : null}
-                  <AvatarFallback>{initials}</AvatarFallback>
-                </Avatar>
-              </Button>
+            <DropdownMenuTrigger
+              aria-label="Open account menu"
+              className="inline-flex items-center justify-center rounded-full border bg-background p-1 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Avatar className="h-9 w-9">
+                {avatarUrl ? <AvatarImage src={avatarUrl} alt={displayName} /> : null}
+                <AvatarFallback>{initials}</AvatarFallback>
+              </Avatar>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" sideOffset={10} className="w-80 rounded-2xl border p-2 shadow-xl">
               <DropdownMenuLabel className="px-2 pb-3 pt-2">
