@@ -55,18 +55,25 @@ async def send_verification_email(email: str, verification_url: str) -> None:
 async def send_feedback_email(
     *,
     feedback_message: str,
+    feedback_subject: str | None = None,
+    contact_email: str | None = None,
     user_id: str | None = None,
     user_email: str | None = None,
     user_name: str | None = None,
 ) -> None:
     message = EmailMessage()
-    message["Subject"] = "Quizzer feedback submission"
+    message["Subject"] = "Quizzer support request" if feedback_subject else "Quizzer feedback submission"
     message["From"] = settings.EMAIL_FROM
     message["To"] = settings.FEEDBACK_EMAIL_TO
+    reply_to = contact_email or user_email
+    if reply_to:
+        message["Reply-To"] = reply_to
 
     body_lines = [
-        "A new feedback submission was received from Quizzer.",
+        "A new support/feedback submission was received from Quizzer.",
         "",
+        f"Subject: {feedback_subject or 'General feedback'}",
+        f"Contact Email: {contact_email or user_email or 'Not available'}",
         f"User ID: {user_id or 'Anonymous'}",
         f"User Name: {user_name or 'Not available'}",
         f"User Email: {user_email or 'Not available'}",
