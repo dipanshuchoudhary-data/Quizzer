@@ -28,7 +28,7 @@ export function AuthShell({
 }: AuthShellProps) {
   return (
     <main className="relative min-h-screen overflow-hidden bg-background text-foreground">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_14%_18%,rgba(34,197,94,0.16),transparent_28%),radial-gradient(circle_at_88%_12%,rgba(56,189,248,0.12),transparent_30%),linear-gradient(135deg,#ffffff_0%,#f8fafc_48%,#eef2f6_100%)] dark:bg-[radial-gradient(circle_at_14%_18%,rgba(74,222,128,0.14),transparent_28%),radial-gradient(circle_at_88%_12%,rgba(56,189,248,0.1),transparent_30%),linear-gradient(135deg,#0b0f14_0%,#11161c_52%,#161c23_100%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_14%_18%,rgba(34,197,94,0.16),transparent_28%),radial-gradient(circle_at_88%_12%,rgba(245,158,11,0.12),transparent_30%),linear-gradient(135deg,#ffffff_0%,#f8fafc_48%,#eef2f6_100%)] dark:bg-[radial-gradient(circle_at_14%_18%,rgba(74,222,128,0.14),transparent_28%),radial-gradient(circle_at_88%_12%,rgba(245,158,11,0.1),transparent_30%),linear-gradient(135deg,#0b0f14_0%,#11161c_52%,#161c23_100%)]" />
       <div className="absolute -left-24 top-24 h-72 w-72 rounded-full border border-[var(--brand-accent)]/20" />
       <div className="absolute bottom-[-8rem] right-[-6rem] h-96 w-96 rounded-full bg-[var(--brand-accent)]/10 blur-3xl" />
 

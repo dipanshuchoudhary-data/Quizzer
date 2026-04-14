@@ -20,7 +20,7 @@ export const statusToneStyles = {
   success: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-500/10 dark:text-emerald-400",
   warning: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-400/10 dark:text-amber-300",
   error: "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/60 dark:bg-rose-500/10 dark:text-rose-400",
-  info: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900/60 dark:bg-sky-400/10 dark:text-sky-300",
+  info: "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-900/60 dark:bg-orange-400/10 dark:text-orange-300",
   neutral: "border-slate-200 bg-slate-50 text-slate-700 dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)] dark:text-[var(--text-secondary)]",
 } as const
 
@@ -45,7 +45,7 @@ export function PageHeader({ eyebrow, title, subtitle, actions, children, classN
   return (
     <section
       className={cn(
-        "animate-fade-in rounded-[32px] border border-slate-200/80 bg-[radial-gradient(circle_at_top_left,_rgba(34,197,94,0.12),_transparent_28%),linear-gradient(135deg,_rgba(255,255,255,1)_0%,_rgba(248,250,252,1)_58%,_rgba(241,245,249,1)_100%)] px-6 py-6 shadow-[0_24px_80px_-48px_rgba(15,23,42,0.45)] transition-all duration-200 ease-in-out dark:border-[var(--border-color)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(74,222,128,0.12),_transparent_28%),linear-gradient(135deg,_#0f172a_0%,_#111827_58%,_#0b1220_100%)] dark:shadow-[0_0_20px_rgba(74,222,128,0.08)] sm:px-7",
+        "animate-fade-in ui-gentle-float rounded-[32px] border border-slate-200/80 bg-[radial-gradient(circle_at_top_left,_rgba(34,197,94,0.12),_transparent_28%),radial-gradient(circle_at_85%_18%,_rgba(245,158,11,0.14),_transparent_34%),linear-gradient(135deg,_rgba(255,255,255,1)_0%,_rgba(250,250,249,1)_58%,_rgba(245,245,244,1)_100%)] px-6 py-6 shadow-[0_24px_80px_-48px_rgba(15,23,42,0.45)] transition-all duration-200 ease-in-out dark:border-[var(--border-color)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(74,222,128,0.12),_transparent_28%),radial-gradient(circle_at_85%_18%,_rgba(245,158,11,0.14),_transparent_34%),linear-gradient(135deg,_#0f172a_0%,_#111827_58%,_#0b1220_100%)] dark:shadow-[0_0_20px_rgba(74,222,128,0.08)] sm:px-7",
         className
       )}
     >

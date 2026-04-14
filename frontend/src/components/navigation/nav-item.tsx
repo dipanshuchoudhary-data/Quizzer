@@ -23,16 +23,18 @@ export function NavItemRow({ item, collapsed, onNavigate }: NavItemProps) {
         onClick={onNavigate}
         aria-current={active ? "page" : undefined}
         className={cn(
-          "flex h-11 items-center gap-3 rounded-2xl px-3 text-sm font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70",
+          "flex h-11 items-center gap-3 rounded-2xl px-3 text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70",
           active
-            ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm ring-1 ring-sidebar-border"
-            : "text-sidebar-foreground/80 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground"
+            ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-[0_8px_20px_rgba(15,23,42,0.12)] ring-1 ring-sidebar-border"
+            : "text-sidebar-foreground/80 hover:-translate-y-[1px] hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground"
         )}
       >
         <span
           className={cn(
-            "inline-flex h-9 w-9 items-center justify-center rounded-xl border border-transparent transition-all duration-150",
-            active ? "bg-background/80 text-foreground" : "bg-sidebar/80 text-sidebar-foreground/70 group-hover:bg-background/70"
+            "inline-flex h-9 w-9 items-center justify-center rounded-xl border border-transparent transition-all duration-200",
+            active
+              ? "bg-background/80 text-foreground"
+              : "bg-sidebar/80 text-sidebar-foreground/70 group-hover:scale-[1.04] group-hover:bg-background/70"
           )}
         >
           <Icon className="size-4" />

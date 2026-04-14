@@ -14,7 +14,7 @@ import { useAuthStore } from "@/stores/useAuthStore"
 
 const CATEGORY_STYLES: Record<NotificationCategory, string> = {
   update: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  announcement: "bg-sky-50 text-sky-700 border-sky-200",
+  announcement: "bg-amber-50 text-amber-800 border-amber-200",
   alert: "bg-rose-50 text-rose-700 border-rose-200",
 }
 

@@ -56,7 +56,7 @@ export function Sidebar() {
       />
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex h-screen min-h-0 max-w-[88vw] flex-col border-r border-sidebar-border/80 bg-sidebar text-sidebar-foreground transition-all duration-200 lg:sticky lg:top-0 lg:max-w-none",
+          "fixed inset-y-0 left-0 z-40 flex h-screen min-h-0 max-w-[88vw] flex-col border-r border-sidebar-border/80 bg-sidebar/92 text-sidebar-foreground backdrop-blur-xl transition-all duration-200 lg:sticky lg:top-0 lg:max-w-none",
           sidebarCollapsed ? "lg:w-[84px]" : "w-[272px]",
           mobileSidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}
@@ -70,15 +70,15 @@ export function Sidebar() {
               subtitleClassName="text-sidebar-foreground/65"
             />
           </div>
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={toggleSidebar}
-            aria-label="Toggle sidebar"
-            className="hidden text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground lg:inline-flex"
-          >
-            {sidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
-          </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={toggleSidebar}
+              aria-label="Toggle sidebar"
+              className="hidden text-sidebar-foreground/80 transition hover:scale-[1.03] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground lg:inline-flex"
+            >
+              {sidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+            </Button>
           <Button
             size="icon"
             variant="ghost"
@@ -95,7 +95,7 @@ export function Sidebar() {
           aria-label="Primary"
         >
           {sections.map((section) => (
-            <div key={section.id} className="space-y-2">
+            <div key={section.id} className="ui-nav-enter space-y-2">
               {!sidebarCollapsed && (
                 <p className="px-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-sidebar-foreground/50">
                   {section.title}

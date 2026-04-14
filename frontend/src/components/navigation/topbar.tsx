@@ -76,7 +76,7 @@ export function Topbar() {
   }
 
   return (
-    <header className="sticky top-0 z-20 border-b bg-background/90 px-4 py-3 backdrop-blur sm:px-6">
+    <header className="sticky top-0 z-20 border-b border-border/80 bg-background/88 px-4 py-3 backdrop-blur-xl sm:px-6">
       <div className="flex flex-wrap items-center gap-3">
         <Button
           size="icon"
@@ -116,13 +116,16 @@ export function Topbar() {
         <div className="ml-auto flex items-center gap-2">
           {!isStudent ? (
             <>
-              <Button className="hidden h-11 sm:inline-flex" onClick={() => router.push("/quizzes/create?new=1")}>
+              <Button
+                className="hidden h-11 rounded-2xl bg-[var(--brand-accent)] px-5 font-semibold text-white shadow-[0_12px_28px_rgba(34,197,94,0.24)] transition hover:-translate-y-0.5 hover:bg-green-600 dark:text-black dark:hover:bg-green-300 sm:inline-flex"
+                onClick={() => router.push("/quizzes/create?new=1")}
+              >
                 <Plus className="size-4" />
                 Create Quiz
               </Button>
               <Button
                 size="icon"
-                className="h-11 w-11 sm:hidden"
+                className="h-11 w-11 rounded-2xl bg-[var(--brand-accent)] text-white shadow-[0_10px_22px_rgba(34,197,94,0.24)] transition hover:bg-green-600 dark:text-black dark:hover:bg-green-300 sm:hidden"
                 aria-label="Create quiz"
                 onClick={() => router.push("/quizzes/create?new=1")}
               >
@@ -137,7 +140,7 @@ export function Topbar() {
             variant="ghost"
             aria-label="Toggle theme"
             onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-            className="rounded-full border"
+            className="rounded-full border border-border/70 bg-card/90 transition hover:scale-[1.03] hover:bg-muted"
           >
             {resolvedTheme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
           </Button>
@@ -145,7 +148,7 @@ export function Topbar() {
           <DropdownMenu modal={false}>
             <DropdownMenuTrigger
               aria-label="Open account menu"
-              className="inline-flex items-center justify-center rounded-full border bg-background p-1 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="inline-flex items-center justify-center rounded-full border border-border/70 bg-background/90 p-1 transition-all hover:scale-[1.03] hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <Avatar className="h-9 w-9">
                 {avatarUrl ? <AvatarImage src={avatarUrl} alt={displayName} /> : null}
