@@ -1,45 +1,44 @@
 <svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" fill="none">
   <defs>
-    <linearGradient id="qz-grad-main" x1="68" y1="36" x2="192" y2="184" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#D8F5FF"/>
-      <stop offset="0.52" stop-color="#9AE8FF"/>
-      <stop offset="1" stop-color="#65F26D"/>
+    <linearGradient id="qz-blue" x1="68" y1="66" x2="130" y2="144" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#D6F6FF"/>
+      <stop offset="0.55" stop-color="#9DDEFF"/>
+      <stop offset="1" stop-color="#74A8F7"/>
     </linearGradient>
-    <linearGradient id="qz-grad-inner" x1="86" y1="58" x2="166" y2="170" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#EEF8FF"/>
-      <stop offset="1" stop-color="#B9F8C2"/>
+    <linearGradient id="qz-green" x1="127" y1="70" x2="214" y2="190" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#E9FAD8"/>
+      <stop offset="0.55" stop-color="#A4EA6E"/>
+      <stop offset="1" stop-color="#43BA4D"/>
     </linearGradient>
-    <linearGradient id="qz-grad-dot" x1="110" y1="196" x2="148" y2="234" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#E9FFF0"/>
-      <stop offset="1" stop-color="#5DFF77"/>
+    <linearGradient id="qz-tail" x1="116" y1="150" x2="165" y2="206" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#E9F9E7"/>
+      <stop offset="1" stop-color="#70D081"/>
     </linearGradient>
-    <radialGradient id="qz-bg-glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(128 128) rotate(90) scale(128)">
-      <stop stop-color="#183954"/>
-      <stop offset="1" stop-color="#050A1E"/>
+    <radialGradient id="qz-dot" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(122 208) rotate(90) scale(18)">
+      <stop offset="0" stop-color="#EBFFF2"/>
+      <stop offset="1" stop-color="#59D657"/>
     </radialGradient>
-    <filter id="qz-glow" x="24" y="20" width="208" height="220" filterUnits="userSpaceOnUse">
-      <feGaussianBlur stdDeviation="7.5" result="blur"/>
-      <feMerge>
-        <feMergeNode in="blur"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
+    <filter id="qz-soft-shadow" x="38" y="48" width="184" height="186" filterUnits="userSpaceOnUse">
+      <feOffset dy="3"/>
+      <feGaussianBlur stdDeviation="4.5"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.18 0 0 0 0 0.38 0 0 0 0 0.26 0 0 0 0.22 0"/>
+      <feBlend in2="SourceGraphic" mode="normal"/>
     </filter>
   </defs>
 
-  <rect width="256" height="256" rx="40" fill="url(#qz-bg-glow)"/>
-
-  <g filter="url(#qz-glow)">
+  <g filter="url(#qz-soft-shadow)">
     <path
-      d="M133.6 45.7C173.1 45.7 204.9 77.5 204.9 117.1C204.9 140.8 192.8 162.8 173.7 175.7L143.7 195.9V145.4L160.5 134.1C169.8 127.8 175.6 117.2 175.6 105.8C175.6 87.6 160.9 72.8 142.8 72.8C130.5 72.8 119.1 79.7 113.4 90.6C110.6 95.9 104.1 97.9 98.8 95.1C93.5 92.3 91.5 85.8 94.3 80.5C103.8 61.9 123 45.7 133.6 45.7Z"
-      fill="url(#qz-grad-main)"
+      d="M99 79C111 69 126 63 141 63C176 63 203 90 203 124C203 148 190 168 166 184L124 207L116 191L150 169C171 156 182 141 182 123C182 101 164 84 141 84C130 84 118 88 109 98C104 103 95 103 89 98C83 93 83 84 89 79C92 77 95 75 99 79Z"
+      fill="url(#qz-green)"
     />
     <path
-      d="M142.4 72.8C160.6 72.8 175.3 87.6 175.3 105.8C175.3 117.2 169.5 127.8 160.2 134.1L129.5 154.7L143.4 176L184.9 148.1C198.8 138.8 207.2 123.2 207.2 106.5C207.2 73.5 180.5 46.8 147.5 46.8C131.5 46.8 115.8 53.2 104.3 64.7L118.5 78.9C124.9 72.6 133.5 72.8 142.4 72.8Z"
-      fill="url(#qz-grad-inner)"
-      opacity="0.55"
+      d="M74 84C86 71 103 64 121 64C143 64 160 77 168 96L151 106C146 93 135 86 122 86C111 86 100 90 92 98C85 106 82 115 82 125C82 134 84 141 90 148C95 154 95 163 88 168C81 173 72 172 66 164C57 153 53 139 53 124C53 108 59 95 74 84Z"
+      fill="url(#qz-blue)"
     />
-    <path d="M106.4 173.1L143.7 145.4V195.9L106.4 223.6V173.1Z" fill="#DDFBE6"/>
-    <path d="M143.7 195.9L173.7 175.7L193.1 201.3H159.8L143.7 195.9Z" fill="#2C6D6A" opacity="0.5"/>
-    <circle cx="127.5" cy="213.6" r="15.8" fill="url(#qz-grad-dot)"/>
+    <path
+      d="M122 145C132 137 139 130 145 121L159 133C152 145 143 155 131 164L115 189C113 192 109 194 105 193C101 192 98 188 98 184C98 180 99 176 102 173L122 145Z"
+      fill="url(#qz-tail)"
+    />
+    <circle cx="122" cy="208" r="13" fill="url(#qz-dot)"/>
   </g>
 </svg>
