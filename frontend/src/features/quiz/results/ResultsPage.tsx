@@ -139,13 +139,13 @@ export function ResultsPage({ quizId }: { quizId: string }) {
                 <Line
                   dataKey="final_score"
                   type="monotone"
-                  stroke="#38bdf8"
+                  stroke="#f59e0b"
                   strokeWidth={2.5}
                   isAnimationActive
                   animationDuration={300}
                   animationEasing="ease-out"
-                  dot={{ r: 3, fill: "#38bdf8", strokeWidth: 0 }}
-                  activeDot={{ r: 6, fill: "#7dd3fc", stroke: "#e0f2fe", strokeWidth: 2 }}
+                  dot={{ r: 3, fill: "#f59e0b", strokeWidth: 0 }}
+                  activeDot={{ r: 6, fill: "#fbbf24", stroke: "#fef3c7", strokeWidth: 2 }}
                 />
               </LineChart>
             </ResponsiveContainer>

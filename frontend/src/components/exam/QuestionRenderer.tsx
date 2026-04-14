@@ -49,7 +49,7 @@ export function QuestionRenderer({ question, answer, onAnswerChange }: QuestionR
                 key={`${question.id}-option-${idx}`}
                 className={`flex cursor-pointer items-center gap-3 rounded-lg border-2 px-3 py-3 transition-all sm:rounded-xl sm:px-4 sm:py-3 ${
                   answer === option
-                    ? "border-blue-500 bg-blue-50 shadow-sm"
+                    ? "border-amber-500 bg-amber-50 shadow-sm"
                     : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
                 }`}
               >
@@ -58,7 +58,7 @@ export function QuestionRenderer({ question, answer, onAnswerChange }: QuestionR
                   name={question.id}
                   checked={answer === option}
                   onChange={() => onAnswerChange(option)}
-                  className="h-5 w-5 accent-blue-600"
+                  className="h-5 w-5 accent-amber-600"
                 />
                 <span className="text-sm text-slate-800 sm:text-base">{option}</span>
               </label>
@@ -75,7 +75,7 @@ export function QuestionRenderer({ question, answer, onAnswerChange }: QuestionR
                 onClick={() => onAnswerChange(option)}
                 className={`flex-1 rounded-lg border-2 px-4 py-3 text-base font-semibold transition-all sm:rounded-xl sm:px-6 sm:py-3 ${
                   answer === option
-                    ? "border-blue-500 bg-blue-600 text-white shadow-md"
+                    ? "border-amber-500 bg-amber-600 text-white shadow-md"
                     : "border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50"
                 }`}
               >
@@ -90,7 +90,7 @@ export function QuestionRenderer({ question, answer, onAnswerChange }: QuestionR
             value={answer}
             onChange={(e) => onAnswerChange(e.target.value)}
             placeholder="Type one word answer"
-            className="w-full rounded-lg border-2 border-slate-300 bg-white px-4 py-3 text-base text-slate-900 placeholder:text-slate-400 transition-colors focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            className="w-full rounded-lg border-2 border-slate-300 bg-white px-4 py-3 text-base text-slate-900 placeholder:text-slate-400 transition-colors focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/30"
             autoComplete="off"
             spellCheck={false}
             maxLength={120}
@@ -102,7 +102,7 @@ export function QuestionRenderer({ question, answer, onAnswerChange }: QuestionR
             value={answer}
             onChange={(e) => onAnswerChange(e.target.value)}
             placeholder="Write your answer here..."
-            className="min-h-36 w-full rounded-lg border-2 border-slate-300 bg-white px-4 py-3 text-base text-slate-900 placeholder:text-slate-400 transition-colors focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 sm:min-h-40"
+            className="min-h-36 w-full rounded-lg border-2 border-slate-300 bg-white px-4 py-3 text-base text-slate-900 placeholder:text-slate-400 transition-colors focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/30 sm:min-h-40"
             spellCheck={false}
             maxLength={2000}
           />

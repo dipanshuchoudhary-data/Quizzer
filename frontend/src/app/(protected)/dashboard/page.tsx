@@ -282,8 +282,8 @@ export default function DashboardPage() {
           <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
             <div className={cn("rounded-xl border px-3 py-3 transition-all duration-200 hover:scale-[1.02] hover:shadow-sm", statusToneStyles.info)}>
               <div className="flex items-center gap-2">
-                <Activity className="size-4 text-blue-800 dark:text-blue-200" />
-                <span className="text-xs font-semibold uppercase tracking-wide text-blue-800 dark:text-blue-200">Active</span>
+                <Activity className="size-4 text-orange-800 dark:text-orange-200" />
+                <span className="text-xs font-semibold uppercase tracking-wide text-orange-800 dark:text-orange-200">Active</span>
               </div>
               <p className="mt-1 text-xl font-bold text-foreground">{activeNowDisplay}</p>
             </div>

@@ -90,7 +90,7 @@ export function ExamTimer({
           <p className="text-[10px] text-slate-500 sm:text-xs">Saved</p>
         </div>
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-2 sm:p-3">
-          <p className="text-lg font-bold text-blue-600 sm:text-xl">{pendingSyncCount}</p>
+          <p className="text-lg font-bold text-amber-600 sm:text-xl">{pendingSyncCount}</p>
           <p className="text-[10px] text-slate-500 sm:text-xs">Syncing</p>
         </div>
         <div

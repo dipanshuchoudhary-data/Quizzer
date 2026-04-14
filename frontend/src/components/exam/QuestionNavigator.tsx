@@ -37,7 +37,7 @@ export function QuestionNavigator({
               className={cn(
                 "relative rounded-lg border px-2 py-2 text-xs font-semibold transition",
                 "hover:border-slate-400",
-                isCurrent && "border-blue-700 bg-blue-700 text-white",
+                isCurrent && "border-amber-700 bg-amber-700 text-white",
                 !isCurrent && isAnswered && "border-emerald-600 bg-emerald-50 text-emerald-700",
                 !isCurrent && !isAnswered && isVisited && "border-amber-500 bg-amber-50 text-amber-700",
                 !isCurrent && !isAnswered && !isVisited && "border-slate-200 bg-slate-50 text-slate-600"

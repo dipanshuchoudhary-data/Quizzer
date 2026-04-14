@@ -280,7 +280,7 @@ export function ExamLayout({ quizId }: ExamLayoutProps) {
                           onClick={() => setCurrentQuestion(q.id)}
                           className={`relative flex-shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition sm:px-3 sm:py-2 ${
                             isCurrent
-                              ? "bg-blue-600 text-white"
+                              ? "bg-amber-600 text-white"
                               : isAnswered
                               ? "bg-emerald-500/20 text-emerald-300"
                               : isVisited
