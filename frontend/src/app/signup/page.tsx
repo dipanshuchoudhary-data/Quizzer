@@ -14,8 +14,10 @@ import { AuthShell } from "@/components/auth/AuthShell"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { getApiErrorMessage } from "@/lib/api/error"
+import { getPostAuthRoute } from "@/lib/auth"
 import { userApi } from "@/lib/api/user"
 import { env } from "@/lib/env"
+import { useAuthStore } from "@/stores/useAuthStore"
 
 const signupSchema = z.object({
   full_name: z.string().min(2, "Enter your full name"),
@@ -78,6 +80,7 @@ function GoogleIcon() {
 
 export default function SignupPage() {
   const router = useRouter()
+  const login = useAuthStore((state) => state.login)
   const [showPassword, setShowPassword] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
   const {
@@ -109,8 +112,9 @@ export default function SignupPage() {
         timezone: values.timezone || undefined,
       })
 
+      const user = await login(values.email, values.password)
       toast.success(result.message || "Account created")
-      router.replace("/login")
+      router.replace(getPostAuthRoute(user))
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Sign up failed"))
     }

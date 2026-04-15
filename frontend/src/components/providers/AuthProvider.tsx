@@ -8,7 +8,7 @@ import { useAuthStore } from "@/stores/useAuthStore"
 const AUTH_ROUTES = new Set(["/login", "/signup"])
 const PUBLIC_ROUTES = new Set(["/privacy", "/terms", "/auth/success", "/onboarding"])
 const PUBLIC_PREFIXES = ["/exam", "/verify-email"]
-const STUDENT_ALLOWED_PREFIXES = ["/student", "/account", "/help"]
+const STUDENT_ALLOWED_PREFIXES = ["/student", "/account", "/help", "/exam"]
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 const isPublicQuizRoute = (pathname: string) => {

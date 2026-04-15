@@ -57,6 +57,8 @@ export default function OnboardingPage() {
 function OnboardingContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const searchParamsString = searchParams.toString()
+  const token = searchParams.get("token")
   const { user, setUser, refreshMe } = useAuthStore((state) => ({
     user: state.user,
     setUser: state.setUser,
@@ -73,7 +75,6 @@ function OnboardingContent() {
     let cancelled = false
 
     const bootstrap = async () => {
-      const token = searchParams.get("token")
       if (token) {
         storeAccessToken(token)
       }
@@ -113,7 +114,7 @@ function OnboardingContent() {
     return () => {
       cancelled = true
     }
-  }, [refreshMe, router, searchParams, user])
+  }, [refreshMe, router, searchParamsString, token, user])
 
   const teacherFormValid = useMemo(() => {
     return (

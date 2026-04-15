@@ -10,11 +10,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 export default function VerifyEmailPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const searchParamsString = searchParams.toString()
+  const token = searchParams.get("token")
   const refreshMe = useAuthStore((state) => state.refreshMe)
 
   useEffect(() => {
     const handleGoogleCallback = async () => {
-      const token = searchParams.get("token")
       if (token) {
         try {
           storeAccessToken(token)
@@ -27,9 +28,8 @@ export default function VerifyEmailPage() {
     }
 
     void handleGoogleCallback()
-  }, [searchParams, refreshMe, router])
+  }, [token, searchParamsString, refreshMe, router])
 
-  const token = searchParams.get("token")
   if (token) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background via-muted/40 to-background">
