@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
@@ -115,12 +115,22 @@ export default function ExamsPage() {
   })
 
   const liveQuizIds = useMemo(() => new Set(liveData?.items.map((item) => item.quiz_id)), [liveData])
-  const runningJobs = summary?.running_jobs ?? []
+  const runningJobs = useMemo(() => summary?.running_jobs ?? [], [summary?.running_jobs])
   const runningJobsByQuizId = useMemo(
     () => new Map(runningJobs.map((job) => [job.quiz_id, job])),
     [runningJobs]
   )
   const clusterOptions = useMemo(() => buildCourseClusterOptions(courseLibrary), [courseLibrary])
+
+  const getQuizClusterValue = useCallback(
+    (quizId: string) => {
+      const quizOrg = organizationMap[quizId]
+      return quizOrg?.course_name
+        ? `${quizOrg.course_name}__quizzer_cluster__${quizOrg.unit_name ?? ""}`
+        : "__none__"
+    },
+    [organizationMap]
+  )
 
   const visibleQuizzes = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
@@ -161,7 +171,7 @@ export default function ExamsPage() {
       const dateB = b.updated_at ? new Date(b.updated_at).getTime() : 0
       return dateB - dateA
     })
-  }, [clusterFilter, filter, liveQuizIds, organizationMap, quizzes, runningJobsByQuizId, searchQuery, sortBy])
+  }, [clusterFilter, filter, getQuizClusterValue, liveQuizIds, quizzes, runningJobsByQuizId, searchQuery, sortBy])
 
   // Bulk delete mutation
   const bulkDeleteMutation = useMutation({
@@ -200,13 +210,6 @@ export default function ExamsPage() {
 
   const clearSelection = () => {
     setSelectedIds(new Set())
-  }
-
-  const getQuizClusterValue = (quizId: string) => {
-    const quizOrg = organizationMap[quizId]
-    return quizOrg?.course_name
-      ? `${quizOrg.course_name}__quizzer_cluster__${quizOrg.unit_name ?? ""}`
-      : "__none__"
   }
 
   const handleCreateCluster = () => {
@@ -276,7 +279,7 @@ export default function ExamsPage() {
           recent: clusterQuizzes.slice(0, 5),
         }
       }),
-    [clusterOptions, quizzes, organizationMap]
+    [clusterOptions, getQuizClusterValue, quizzes]
   )
 
   return (

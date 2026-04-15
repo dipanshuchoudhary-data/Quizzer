@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { getPostAuthRoute } from "@/lib/auth"
 import { useAuthStore } from "@/stores/useAuthStore"
@@ -20,6 +20,7 @@ const isPublicQuizRoute = (pathname: string) => {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
+  const redirectTargetRef = useRef<string | null>(null)
   const bootstrap = useAuthStore((state) => state.bootstrap)
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
   const isLoading = useAuthStore((state) => state.isLoading)
@@ -30,7 +31,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [bootstrap])
 
   useEffect(() => {
+    redirectTargetRef.current = null
+  }, [pathname])
+
+  useEffect(() => {
     if (isLoading) return
+
+    const replaceOnce = (target: string) => {
+      if (pathname === target) return
+      if (redirectTargetRef.current === target) return
+      redirectTargetRef.current = target
+      router.replace(target)
+    }
 
     const isPublic =
       AUTH_ROUTES.has(pathname) ||
@@ -38,7 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix)) ||
       isPublicQuizRoute(pathname)
     if (!isAuthenticated && !isPublic) {
-      if (pathname !== "/login") router.replace("/login")
+      replaceOnce("/login")
       return
     }
 
@@ -47,27 +59,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const destination = getPostAuthRoute(user)
 
     if (destination === "/onboarding" && pathname !== "/onboarding") {
-      router.replace("/onboarding")
+      replaceOnce("/onboarding")
       return
     }
 
     if (destination !== "/onboarding" && (pathname === "/onboarding" || pathname === "/auth/success")) {
-      if (pathname !== destination) router.replace(destination)
+      replaceOnce(destination)
       return
     }
 
     if (pathname === "/login" || pathname === "/signup") {
-      if (pathname !== destination) router.replace(destination)
+      replaceOnce(destination)
       return
     }
 
     if (user?.role === "student" && !STUDENT_ALLOWED_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
-      if (pathname !== "/student/dashboard") router.replace("/student/dashboard")
+      replaceOnce("/student/dashboard")
       return
     }
 
     if ((user?.role === "teacher" || user?.role === "ADMIN" || user?.role === "STAFF") && pathname.startsWith("/student/")) {
-      if (pathname !== "/teacher/dashboard") router.replace("/teacher/dashboard")
+      replaceOnce("/teacher/dashboard")
     }
   }, [isAuthenticated, isLoading, pathname, router, user])
 
