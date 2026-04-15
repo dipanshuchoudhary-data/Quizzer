@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react"
 import { usePathname, useRouter } from "next/navigation"
-import { getPostAuthRoute } from "@/lib/auth"
+import { getPostAuthRoute, normalizeAppRole } from "@/lib/auth"
 import { useAuthStore } from "@/stores/useAuthStore"
 
 const AUTH_ROUTES = new Set(["/login", "/signup"])
@@ -56,6 +56,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (!isAuthenticated) return
 
+    const normalizedRole = normalizeAppRole(user?.role)
     const destination = getPostAuthRoute(user)
 
     if (destination === "/onboarding" && pathname !== "/onboarding") {
@@ -73,12 +74,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return
     }
 
-    if (user?.role === "student" && !STUDENT_ALLOWED_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
+    if (normalizedRole === "student" && !STUDENT_ALLOWED_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
       replaceOnce("/student/dashboard")
       return
     }
 
-    if ((user?.role === "teacher" || user?.role === "ADMIN" || user?.role === "STAFF") && pathname.startsWith("/student/")) {
+    if ((normalizedRole === "teacher" || normalizedRole === "admin" || normalizedRole === "staff") && pathname.startsWith("/student/")) {
       replaceOnce("/teacher/dashboard")
     }
   }, [isAuthenticated, isLoading, pathname, router, user])

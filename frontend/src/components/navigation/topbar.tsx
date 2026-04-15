@@ -11,6 +11,7 @@ import { NAV_SECTIONS } from "./nav-config"
 import { useUIStore } from "@/stores/useUIStore"
 import { useAuthStore } from "@/stores/useAuthStore"
 import { useAccountSettingsStore } from "@/stores/useAccountSettingsStore"
+import { normalizeAppRole } from "@/lib/auth"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   DropdownMenu,
@@ -65,7 +66,7 @@ export function Topbar() {
   const displayEmail = profile.email || user?.email || "-"
   const initials = getInitials(displayName)
   const avatarUrl = user?.avatar_thumbnail_url || user?.avatar_url || profile.avatar_thumbnail_url || profile.avatar_url || ""
-  const isStudent = user?.role === "student"
+  const isStudent = normalizeAppRole(user?.role) === "student"
 
   const navigateTo = (href: string) => {
     router.push(href)

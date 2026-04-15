@@ -4,6 +4,7 @@ import { useEffect } from "react"
 import { CircleHelp, LayoutDashboard, MessageSquareMore, PanelLeftClose, PanelLeftOpen, Settings2, UserRound } from "lucide-react"
 import { useUIStore } from "@/stores/useUIStore"
 import { useAuthStore } from "@/stores/useAuthStore"
+import { normalizeAppRole } from "@/lib/auth"
 import { cn } from "@/lib/utils"
 import { NAV_SECTIONS } from "./nav-config"
 import { NavItemRow } from "./nav-item"
@@ -12,6 +13,7 @@ import { Brand } from "@/components/branding/brand"
 
 export function Sidebar() {
   const user = useAuthStore((state) => state.user)
+  const normalizedRole = normalizeAppRole(user?.role)
   const { sidebarCollapsed, toggleSidebar, mobileSidebarOpen, setMobileSidebarOpen } = useUIStore()
 
   const openFeedback = () => {
@@ -20,7 +22,7 @@ export function Sidebar() {
   }
 
   const sections =
-    user?.role === "student"
+    normalizedRole === "student"
       ? [
           {
             id: "student-workspace",
@@ -65,7 +67,7 @@ export function Sidebar() {
           <div className={cn("min-w-0", sidebarCollapsed && "hidden lg:block")}>
             <Brand
               compact
-              subtitle={user?.role === "student" ? "Student Workspace" : "Professor Workspace"}
+              subtitle={normalizedRole === "student" ? "Student Workspace" : "Professor Workspace"}
               titleClassName="text-sidebar-foreground"
               subtitleClassName="text-sidebar-foreground/65"
             />
