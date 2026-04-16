@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 import { useAuthStore } from "@/stores/useAuthStore"
 import { useAccountSettingsStore } from "@/stores/useAccountSettingsStore"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -10,10 +10,16 @@ import { Button } from "@/components/ui/button"
 import { getDisplayName, getInitials } from "@/lib/user"
 
 export default function AccountProfilePage() {
-  const { user } = useAuthStore()
-  const { hydrated, profile, hydrate } = useAccountSettingsStore()
+  const user = useAuthStore((s) => s.user)
+  const hydrated = useAccountSettingsStore((s) => s.hydrated)
+  const profile = useAccountSettingsStore((s) => s.profile)
+  const hydrate = useAccountSettingsStore((s) => s.hydrate)
+  const hydratedUserId = useRef<string | null>(null)
 
   useEffect(() => {
+    const id = user?.id ?? null
+    if (id === hydratedUserId.current) return
+    hydratedUserId.current = id
     hydrate(user)
   }, [hydrate, user])
 

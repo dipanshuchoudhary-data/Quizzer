@@ -140,13 +140,16 @@ export function AccountSettingsWorkspace() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const { setTheme } = useTheme()
-  const { user, logout, setUser } = useAuthStore()
+  const user = useAuthStore((s) => s.user)
+  const logout = useAuthStore((s) => s.logout)
+  const setUser = useAuthStore((s) => s.setUser)
   const { hydrated, saveState, profile, preferences, notifications, workspace, hydrate, setSaveState, patchProfile, patchPreferences, patchNotifications, patchWorkspace } = useAccountSettingsStore()
 
   const saveTimer = useRef<number | null>(null)
   const profileSaveTimer = useRef<number | null>(null)
   const profileRequestId = useRef(0)
   const avatarInputRef = useRef<HTMLInputElement | null>(null)
+  const hydratedUserId = useRef<string | null>(null)
   const routeTab = searchParams.get("tab")
   const initialTab: SettingsTab = isSettingsTab(routeTab) ? routeTab : "profile"
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab)
@@ -162,7 +165,12 @@ export function AccountSettingsWorkspace() {
   const [sessionsLoaded, setSessionsLoaded] = useState(false)
   const [showSessionDetails, setShowSessionDetails] = useState(false)
 
-  useEffect(() => { hydrate(user) }, [hydrate, user])
+  useEffect(() => {
+    const id = user?.id ?? null
+    if (id === hydratedUserId.current) return
+    hydratedUserId.current = id
+    hydrate(user)
+  }, [hydrate, user])
   useEffect(() => { setActiveTab(initialTab) }, [initialTab])
   useEffect(() => { setProfileErrors(validateProfile(profile)) }, [profile])
   useEffect(() => () => {
