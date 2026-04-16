@@ -29,6 +29,8 @@ from backend.services.cloudinary import build_avatar_thumbnail_url
 
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
+DEFAULT_COUNTRY = "India"
+DEFAULT_TIMEZONE = "Asia/Kolkata"
 
 
 def normalize_user_role(role: str | None) -> str | None:
@@ -146,8 +148,8 @@ async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db))
         role="",
         phone_number=payload.phone_number,
         institution=payload.institution,
-        country=payload.country,
-        timezone=payload.timezone,
+        country=payload.country or DEFAULT_COUNTRY,
+        timezone=payload.timezone or DEFAULT_TIMEZONE,
     )
 
     db.add(user)

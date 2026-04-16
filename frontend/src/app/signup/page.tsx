@@ -23,9 +23,6 @@ const signupSchema = z.object({
   full_name: z.string().min(2, "Enter your full name"),
   email: z.string().email("Enter a valid email"),
   password: z.string().min(8, "Password must be at least 8 characters"),
-  institution: z.string().optional(),
-  country: z.string().optional(),
-  timezone: z.string().optional(),
 })
 
 type SignupValues = z.infer<typeof signupSchema>
@@ -94,9 +91,6 @@ export default function SignupPage() {
       full_name: "",
       email: "",
       password: "",
-      institution: "",
-      country: "",
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "",
     },
   })
 
@@ -107,9 +101,8 @@ export default function SignupPage() {
     try {
       const result = await userApi.register({
         ...values,
-        institution: values.institution || undefined,
-        country: values.country || undefined,
-        timezone: values.timezone || undefined,
+        country: "India",
+        timezone: "Asia/Kolkata",
       })
 
       const user = await login(values.email, values.password)
@@ -169,13 +162,6 @@ export default function SignupPage() {
             <span className="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">{strength.label}</span>
           </div>
         </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <SignupField label="Institution" name="institution" placeholder="School or college" register={register} />
-          <SignupField label="Country" name="country" placeholder="India" register={register} />
-        </div>
-
-        <SignupField label="Timezone" name="timezone" placeholder="Asia/Calcutta" register={register} />
 
         <Button
           className="h-12 w-full rounded-2xl bg-[var(--brand-accent)] text-base font-bold text-white shadow-[0_16px_35px_rgba(34,197,94,0.28)] hover:bg-green-600 dark:text-black dark:hover:bg-green-300"

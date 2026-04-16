@@ -46,7 +46,7 @@ const tabs = [
 ] as const
 
 type SettingsTab = (typeof tabs)[number]["value"]
-type ProfileErrors = Partial<Record<"name" | "email" | "institution" | "timezone", string>>
+type ProfileErrors = Partial<Record<"name" | "email" | "institution" | "country" | "timezone", string>>
 
 function isSettingsTab(value: string | null): value is SettingsTab {
   return Boolean(value) && tabs.some((tab) => tab.value === value)
@@ -121,12 +121,13 @@ function getInitials(name: string, email: string) {
   return source.split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase() ?? "").join("")
 }
 
-function validateProfile(profile: { name: string; email: string; institution: string; timezone: string }): ProfileErrors {
+function validateProfile(profile: { name: string; email: string; institution: string; country: string; timezone: string }): ProfileErrors {
   const errors: ProfileErrors = {}
   if (!profile.name.trim()) errors.name = "Display name is required."
   if (!profile.email.trim()) errors.email = "Email is required."
   else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile.email.trim())) errors.email = "Enter a valid email address."
   if (!profile.institution.trim()) errors.institution = "Institution or organization is required."
+  if (!profile.country.trim()) errors.country = "Country is required."
   if (!profile.timezone.trim()) errors.timezone = "Timezone is required."
   return errors
 }
@@ -203,6 +204,7 @@ export function AccountSettingsWorkspace() {
       full_name: nextProfile.name.trim(),
       email: nextProfile.email.trim(),
       institution: nextProfile.institution.trim(),
+      country: nextProfile.country.trim(),
       timezone: nextProfile.timezone.trim(),
       avatar_url: nextProfile.avatar_url.trim(),
     }
@@ -391,6 +393,7 @@ export function AccountSettingsWorkspace() {
                       <Field label="Display name" helper="Used for display across quizzes." error={profileErrors.name}><Input value={profile.name} onChange={(e) => handleProfileField("name", e.target.value)} className={cn("bg-white dark:bg-[var(--bg-secondary)]", profileErrors.name ? "border-rose-300" : "focus-visible:ring-emerald-100 dark:focus-visible:ring-[color:var(--brand-accent)]/35")} /></Field>
                       <Field label="Email address" helper="Primary contact and login identity." error={profileErrors.email}><Input value={profile.email} onChange={(e) => handleProfileField("email", e.target.value)} className={cn("bg-white dark:bg-[var(--bg-secondary)]", profileErrors.email ? "border-rose-300" : "focus-visible:ring-emerald-100 dark:focus-visible:ring-[color:var(--brand-accent)]/35")} /></Field>
                       <Field label="Institution" helper="Displayed on exports and shared exam assets." error={profileErrors.institution}><Input value={profile.institution} onChange={(e) => handleProfileField("institution", e.target.value)} className={cn("bg-white dark:bg-[var(--bg-secondary)]", profileErrors.institution ? "border-rose-300" : "focus-visible:ring-emerald-100 dark:focus-visible:ring-[color:var(--brand-accent)]/35")} /></Field>
+                      <Field label="Country" helper="Defaults to India; update it here if your workspace changes." error={profileErrors.country}><Input value={profile.country} onChange={(e) => handleProfileField("country", e.target.value)} className={cn("bg-white dark:bg-[var(--bg-secondary)]", profileErrors.country ? "border-rose-300" : "focus-visible:ring-emerald-100 dark:focus-visible:ring-[color:var(--brand-accent)]/35")} /></Field>
                       <Field label="Timezone" helper="Used for scheduling and time-based alerts." error={profileErrors.timezone}><Input value={profile.timezone} onChange={(e) => handleProfileField("timezone", e.target.value)} className={cn("bg-white dark:bg-[var(--bg-secondary)]", profileErrors.timezone ? "border-rose-300" : "focus-visible:ring-emerald-100 dark:focus-visible:ring-[color:var(--brand-accent)]/35")} /></Field>
                       <div className="md:col-span-2"><Field label="Avatar URL" helper="Optional direct image URL if you prefer linking to a hosted avatar."><Input value={profile.avatar_url} onChange={(e) => handleProfileField("avatar_url", e.target.value)} className="bg-white focus-visible:ring-emerald-100 dark:bg-[var(--bg-secondary)] dark:focus-visible:ring-[color:var(--brand-accent)]/35" /></Field></div>
                     </div>
