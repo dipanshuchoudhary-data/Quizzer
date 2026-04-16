@@ -42,7 +42,7 @@ function extractErrorMessage(error: unknown) {
 }
 
 export function NotificationInbox() {
-  const { user } = useAuthStore()
+  const user = useAuthStore((s) => s.user)
   const canBroadcast = user?.role === "ADMIN" || user?.role === "STAFF"
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState<InboxNotification[]>([])

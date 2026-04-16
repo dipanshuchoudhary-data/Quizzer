@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo } from "react"
+import { useEffect, useMemo, useRef } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { Bell, ChevronRight, LifeBuoy, LogOut, Menu, Moon, Plus, Settings2, ShieldCheck, Sun, UserRound } from "lucide-react"
@@ -54,11 +54,17 @@ function useBreadcrumbs() {
 export function Topbar() {
   const router = useRouter()
   const { resolvedTheme, setTheme } = useTheme()
-  const { user, logout } = useAuthStore()
-  const { profile, hydrate } = useAccountSettingsStore()
-  const { toggleMobileSidebar } = useUIStore()
+  const user = useAuthStore((s) => s.user)
+  const logout = useAuthStore((s) => s.logout)
+  const profile = useAccountSettingsStore((s) => s.profile)
+  const hydrate = useAccountSettingsStore((s) => s.hydrate)
+  const toggleMobileSidebar = useUIStore((s) => s.toggleMobileSidebar)
   const breadcrumbs = useBreadcrumbs()
+  const hydratedUserId = useRef<string | null>(null)
   useEffect(() => {
+    const id = user?.id ?? null
+    if (id === hydratedUserId.current) return
+    hydratedUserId.current = id
     hydrate(user)
   }, [hydrate, user])
 

@@ -21,12 +21,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const redirectTargetRef = useRef<string | null>(null)
+  const bootstrapRan = useRef(false)
   const bootstrap = useAuthStore((state) => state.bootstrap)
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
   const isLoading = useAuthStore((state) => state.isLoading)
   const user = useAuthStore((state) => state.user)
+  // Track user identity by id to avoid re-running effects on object reference changes
+  const userId = user?.id
+  const userRole = user?.role
+  const userOnboardingCompleted = user?.onboarding_completed
 
   useEffect(() => {
+    if (bootstrapRan.current) return
+    bootstrapRan.current = true
     void bootstrap()
   }, [bootstrap])
 
@@ -56,7 +63,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (!isAuthenticated) return
 
-    const normalizedRole = normalizeAppRole(user?.role)
+    const normalizedRole = normalizeAppRole(userRole)
     const destination = getPostAuthRoute(user)
 
     if (destination === "/onboarding" && pathname !== "/onboarding") {
@@ -82,7 +89,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if ((normalizedRole === "teacher" || normalizedRole === "admin" || normalizedRole === "staff") && pathname.startsWith("/student/")) {
       replaceOnce("/teacher/dashboard")
     }
-  }, [isAuthenticated, isLoading, pathname, router, user])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, isLoading, pathname, router, userId, userRole, userOnboardingCompleted])
 
   if (isLoading && !AUTH_ROUTES.has(pathname) && !PUBLIC_ROUTES.has(pathname)) {
     return (

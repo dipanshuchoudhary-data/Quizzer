@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
@@ -17,11 +17,17 @@ import { getDisplayName, getInitials } from "@/lib/user"
 export function Topbar() {
   const router = useRouter()
   const { resolvedTheme, setTheme } = useTheme()
-  const { user, logout } = useAuthStore()
+  const user = useAuthStore((s) => s.user)
+  const logout = useAuthStore((s) => s.logout)
   const setCommandOpen = useUIStore((state) => state.setCommandOpen)
-  const { profile, hydrate } = useAccountSettingsStore()
+  const profile = useAccountSettingsStore((s) => s.profile)
+  const hydrate = useAccountSettingsStore((s) => s.hydrate)
+  const hydratedUserId = useRef<string | null>(null)
 
   useEffect(() => {
+    const id = user?.id ?? null
+    if (id === hydratedUserId.current) return
+    hydratedUserId.current = id
     hydrate(user)
   }, [hydrate, user])
 
