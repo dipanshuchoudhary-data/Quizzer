@@ -1,7 +1,7 @@
 import asyncio
+from urllib.parse import urlencode
 from types import SimpleNamespace
 
-from authlib.integrations.base_client.errors import OAuthError
 from starlette.requests import Request
 
 from backend.api import google_auth
@@ -33,7 +33,9 @@ def run(coro):
     return asyncio.run(coro)
 
 
-def test_google_callback_uses_authlib_userinfo(monkeypatch):
+def test_google_callback_uses_signed_state_nonce(monkeypatch):
+    nonce = "nonce-for-test"
+    state = google_auth._create_oauth_state(nonce)
     claims = {
         "iss": "https://accounts.google.com",
         "aud": google_auth.settings.GOOGLE_CLIENT_ID,
@@ -51,11 +53,15 @@ def test_google_callback_uses_authlib_userinfo(monkeypatch):
     )
     auth_session = SimpleNamespace(id="session-1")
 
-    async def authorize_access_token(_request):
-        return {"userinfo": claims}
+    async def fetch_access_token(**kwargs):
+        assert kwargs["redirect_uri"] == google_auth.settings.GOOGLE_REDIRECT_URI
+        assert kwargs["code"] == "ok"
+        return {"id_token": "google-id-token"}
 
-    async def parse_id_token(*_args, **_kwargs):
-        raise AssertionError("authorize_access_token already parses and nonce-validates the ID token")
+    async def parse_id_token(token, *, nonce):
+        assert token == {"id_token": "google-id-token"}
+        assert nonce == "nonce-for-test"
+        return claims
 
     async def get_or_create_google_user(_db, **_claims):
         assert _claims["email"] == "teacher@example.com"
@@ -64,12 +70,12 @@ def test_google_callback_uses_authlib_userinfo(monkeypatch):
     async def create_auth_session(_db, _user, _request):
         return auth_session
 
-    monkeypatch.setattr(google_auth.oauth.google, "authorize_access_token", authorize_access_token)
+    monkeypatch.setattr(google_auth.oauth.google, "fetch_access_token", fetch_access_token)
     monkeypatch.setattr(google_auth.oauth.google, "parse_id_token", parse_id_token)
     monkeypatch.setattr(google_auth, "get_or_create_google_user", get_or_create_google_user)
     monkeypatch.setattr(google_auth, "create_auth_session", create_auth_session)
 
-    response = run(google_auth.auth_callback(make_request(), FakeDb()))
+    response = run(google_auth.auth_callback(make_request(urlencode({"code": "ok", "state": state}).encode()), FakeDb()))
 
     assert response.status_code == 307
     assert response.headers["location"].startswith(f"{google_auth.settings.FRONTEND_URL}/auth/success?token=")
@@ -77,11 +83,6 @@ def test_google_callback_uses_authlib_userinfo(monkeypatch):
 
 
 def test_google_callback_maps_missing_state_to_session_error(monkeypatch):
-    async def authorize_access_token(_request):
-        raise OAuthError(error="mismatching_state")
-
-    monkeypatch.setattr(google_auth.oauth.google, "authorize_access_token", authorize_access_token)
-
     response = run(google_auth.auth_callback(make_request(), FakeDb()))
 
     assert response.status_code == 307

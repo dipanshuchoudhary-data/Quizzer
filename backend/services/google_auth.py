@@ -7,6 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.core.security import hash_password
 from backend.models.user import User
 
+DEFAULT_COUNTRY = "India"
+DEFAULT_TIMEZONE = "Asia/Kolkata"
+
 
 def validate_google_claims(claims: dict, *, expected_audience: str) -> dict:
     issuer = claims.get("iss")
@@ -71,6 +74,8 @@ async def get_or_create_google_user(
             google_id=google_id,
             auth_provider="google",
             avatar_url=avatar_url,
+            country=DEFAULT_COUNTRY,
+            timezone=DEFAULT_TIMEZONE,
             is_active=True,
             is_verified=True,
             is_staff=False,
@@ -94,6 +99,8 @@ async def get_or_create_google_user(
         user.full_name = full_name
     if avatar_url:
         user.avatar_url = avatar_url
+    user.country = user.country or DEFAULT_COUNTRY
+    user.timezone = user.timezone or DEFAULT_TIMEZONE
     user.is_active = True
     user.is_verified = True
     db.add(user)
