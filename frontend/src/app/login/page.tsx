@@ -122,7 +122,7 @@ function LoginPageContent() {
 
   const handleGoogleLogin = useCallback(() => {
     setIsGoogleLoading(true)
-    window.location.href = `${env.backendOrigin}/login/google`
+    window.location.href = env.googleAuthUrl
   }, [])
 
   return (

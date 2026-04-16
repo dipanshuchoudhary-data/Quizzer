@@ -102,6 +102,8 @@ class Settings(BaseSettings):
             self.APP_URL = (self.APP_URL or "http://localhost:8000").rstrip("/")
             self.FRONTEND_URL = (self.FRONTEND_URL or "http://localhost:3000").rstrip("/")
             self.CORS_ALLOW_ORIGINS = self.CORS_ALLOW_ORIGINS or self.FRONTEND_URL
+            self.COOKIE_DOMAIN = self.COOKIE_DOMAIN or None
+            self.COOKIE_SAMESITE = self.COOKIE_SAMESITE.lower()
             if self.API_DOCS_ENABLED is None:
                 self.API_DOCS_ENABLED = True
             if self.OPENAPI_ENABLED is None:
@@ -120,6 +122,8 @@ class Settings(BaseSettings):
         self.APP_URL = self.APP_URL.rstrip("/")
         self.FRONTEND_URL = self.FRONTEND_URL.rstrip("/")
         self.CORS_ALLOW_ORIGINS = ",".join(self.cors_origins)
+        self.COOKIE_DOMAIN = self.COOKIE_DOMAIN or None
+        self.COOKIE_SAMESITE = self.COOKIE_SAMESITE.lower()
         if self.API_DOCS_ENABLED is None:
             self.API_DOCS_ENABLED = False
         if self.OPENAPI_ENABLED is None:

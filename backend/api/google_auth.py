@@ -15,7 +15,6 @@ from backend.services.auth_sessions import create_auth_session
 from backend.services.google_auth import get_or_create_google_user, validate_google_claims
 
 router = APIRouter(tags=["Google Auth"])
-NONCE_SESSION_KEY = "google_oauth_nonce"
 logger = logging.getLogger(__name__)
 
 
@@ -66,7 +65,6 @@ async def login_google(request: Request):
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Google OAuth is not configured")
 
     nonce = secrets.token_urlsafe(32)
-    request.session[NONCE_SESSION_KEY] = nonce
     return await oauth.google.authorize_redirect(request, settings.GOOGLE_REDIRECT_URI, nonce=nonce)
 
 
@@ -77,22 +75,20 @@ async def auth_callback(request: Request, db: AsyncSession = Depends(get_db)):
         logger.warning("google_oauth_provider_error error=%s", provider_error)
         return _frontend_auth_error_redirect("google_oauth_failed")
 
-    nonce = request.session.pop(NONCE_SESSION_KEY, None)
-    if not nonce:
-        logger.warning("google_oauth_missing_session_state")
-        return _frontend_auth_error_redirect("google_oauth_session_missing")
-
     try:
         token = await oauth.google.authorize_access_token(request)
-        claims = await oauth.google.parse_id_token(request, token, nonce=nonce)
     except OAuthError as exc:
-        logger.warning("google_oauth_exchange_failed error=%s", getattr(exc, "error", "unknown"))
+        provider_error = getattr(exc, "error", "unknown")
+        logger.warning("google_oauth_exchange_failed error=%s", provider_error)
+        if provider_error in {"mismatching_state", "missing_state", "invalid_state"}:
+            return _frontend_auth_error_redirect("google_oauth_session_missing")
         return _frontend_auth_error_redirect("google_oauth_failed")
     except Exception as exc:
         error_code = _map_token_parse_error(str(exc))
         logger.exception("google_oauth_token_parse_failed code=%s", error_code)
         return _frontend_auth_error_redirect(error_code)
 
+    claims = token.get("userinfo") if isinstance(token, dict) else None
     if not claims:
         logger.warning("google_oauth_empty_claims")
         return _frontend_auth_error_redirect("google_token_invalid")

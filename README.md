@@ -431,6 +431,10 @@ GOOGLE_CLIENT_ID=your-google-oauth-client-id
 GOOGLE_CLIENT_SECRET=your-google-oauth-client-secret
 GOOGLE_REDIRECT_URI=http://localhost:8000/auth/google/callback
 
+# Vercel proxy option:
+# GOOGLE_REDIRECT_URI=https://your-frontend.vercel.app/backend/auth/google/callback
+# Add the same URI in Google Cloud Console > Authorized redirect URIs.
+
 # ── Cloud Storage (pick one or leave blank for local) ─────────────────
 GCS_BUCKET_NAME=your-gcs-bucket        # Google Cloud Storage bucket name
 GCP_PROJECT_ID=your-gcp-project        # GCP project ID
@@ -441,6 +445,9 @@ GCP_PROJECT_ID=your-gcp-project        # GCP project ID
 ```bash
 NEXT_PUBLIC_API_URL=http://localhost:8000
 # Backend API base URL used by the Next.js client
+
+NEXT_PUBLIC_GOOGLE_AUTH_URL=http://localhost:8000/login/google
+# Optional Google OAuth start URL. On Vercel proxy deployments, use /backend/login/google.
 ```
 
 ---
@@ -656,6 +663,7 @@ docker run -p 3000:3000 \
 - [ ] `JWT_SECRET_KEY` is a strong, randomly generated secret (32+ chars)
 - [ ] `COOKIE_SECURE=true` (requires HTTPS)
 - [ ] `CORS_ALLOW_ORIGINS` is set to your production frontend domain
+- [ ] Google OAuth redirect URI is registered in Google Cloud Console. For Vercel proxy deployments, use `https://your-frontend.vercel.app/backend/auth/google/callback` and set `NEXT_PUBLIC_GOOGLE_AUTH_URL=/backend/login/google`.
 - [ ] `LLM_API_KEY` is set with appropriate rate limits
 - [ ] `APP_ENV=production`
 
