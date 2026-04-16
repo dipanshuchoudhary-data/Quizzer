@@ -121,7 +121,7 @@ function DashboardBadge({ label, pulse }: { label: string; pulse?: boolean }) {
 }
 
 export default function DashboardPage() {
-  const { user } = useAuthStore()
+  const user = useAuthStore((s) => s.user)
 
   const { data: summary, isLoading } = useQuery({
     queryKey: ["dashboard-summary"],
