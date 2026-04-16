@@ -19,17 +19,16 @@ type TeacherProfileForm = {
   subject_area: string
   institution: string
   teaching_experience: string
-  country: string
-  timezone: string
   courses_taught: string
 }
+
+const DEFAULT_COUNTRY = "India"
+const DEFAULT_TIMEZONE = "Asia/Kolkata"
 
 const INITIAL_FORM: TeacherProfileForm = {
   subject_area: "",
   institution: "",
   teaching_experience: "",
-  country: "",
-  timezone: "",
   courses_taught: "",
 }
 
@@ -98,8 +97,6 @@ function OnboardingContent() {
           subject_area: me.subject_area ?? "",
           institution: me.institution ?? "",
           teaching_experience: me.teaching_experience ?? "",
-          country: me.country ?? "",
-          timezone: me.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? "",
           courses_taught: me.courses_taught ?? "",
         })
       } catch {
@@ -126,8 +123,6 @@ function OnboardingContent() {
       form.subject_area.trim() &&
       form.institution.trim() &&
       form.teaching_experience.trim() &&
-      form.country.trim() &&
-      form.timezone.trim() &&
       form.courses_taught.trim()
     )
   }, [form])
@@ -169,8 +164,8 @@ function OnboardingContent() {
         subject_area: form.subject_area.trim(),
         institution: form.institution.trim(),
         teaching_experience: form.teaching_experience.trim(),
-        country: form.country.trim(),
-        timezone: form.timezone.trim(),
+        country: user?.country?.trim() || DEFAULT_COUNTRY,
+        timezone: user?.timezone?.trim() || DEFAULT_TIMEZONE,
         courses_taught: form.courses_taught.trim(),
         onboarding_completed: true,
       })
@@ -265,18 +260,6 @@ function OnboardingContent() {
                 value={form.teaching_experience}
                 onChange={(event) => updateField("teaching_experience", event.target.value)}
                 placeholder="Teaching experience"
-                disabled={isSavingProfile}
-              />
-              <Input
-                value={form.country}
-                onChange={(event) => updateField("country", event.target.value)}
-                placeholder="Country"
-                disabled={isSavingProfile}
-              />
-              <Input
-                value={form.timezone}
-                onChange={(event) => updateField("timezone", event.target.value)}
-                placeholder="Timezone"
                 disabled={isSavingProfile}
               />
               <Input
