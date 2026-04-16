@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, useEffect, useMemo, useState } from "react"
+import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { BookOpen, GraduationCap, Loader2, Sparkles } from "lucide-react"
 import { toast } from "sonner"
@@ -57,21 +57,24 @@ export default function OnboardingPage() {
 function OnboardingContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const searchParamsString = searchParams.toString()
   const token = searchParams.get("token")
-  const { user, setUser, refreshMe } = useAuthStore((state) => ({
-    user: state.user,
-    setUser: state.setUser,
-    refreshMe: state.refreshMe,
-  }))
+  // Use individual selectors to avoid re-renders on unrelated store changes (zustand v5)
+  const user = useAuthStore((state) => state.user)
+  const setUser = useAuthStore((state) => state.setUser)
+  const refreshMe = useAuthStore((state) => state.refreshMe)
 
   const [isBootstrapping, setIsBootstrapping] = useState(true)
   const [isSavingRole, setIsSavingRole] = useState(false)
   const [isSavingProfile, setIsSavingProfile] = useState(false)
   const [selectedRole, setSelectedRole] = useState<RoleOption | null>(null)
   const [form, setForm] = useState<TeacherProfileForm>(INITIAL_FORM)
+  const bootstrapRan = useRef(false)
 
   useEffect(() => {
+    // Ensure bootstrap only runs once, not on every user object change
+    if (bootstrapRan.current) return
+    bootstrapRan.current = true
+
     let cancelled = false
 
     const bootstrap = async () => {
@@ -80,7 +83,8 @@ function OnboardingContent() {
       }
 
       try {
-        const me = user ?? (await refreshMe())
+        // Always fetch fresh user data on mount
+        const me = await refreshMe()
         if (cancelled) return
 
         if (me.onboarding_completed && me.role) {
@@ -114,7 +118,8 @@ function OnboardingContent() {
     return () => {
       cancelled = true
     }
-  }, [refreshMe, router, searchParamsString, token, user])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const teacherFormValid = useMemo(() => {
     return (
