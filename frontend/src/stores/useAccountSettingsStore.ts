@@ -12,6 +12,7 @@ type ProfileState = {
   avatar_url: string
   avatar_thumbnail_url: string
   institution: string
+  country: string
   timezone: string
 }
 
@@ -72,6 +73,7 @@ const defaults = {
     avatar_url: "",
     avatar_thumbnail_url: "",
     institution: "",
+    country: "India",
     timezone: "Asia/Kolkata",
   },
 
@@ -153,6 +155,7 @@ export const useAccountSettingsStore = create<AccountSettingsState>((set, get) =
         avatar_url: typeof user === "string" ? "" : user?.avatar_url ?? "",
         avatar_thumbnail_url: typeof user === "string" ? "" : user?.avatar_thumbnail_url ?? user?.avatar_url ?? "",
         institution: typeof user === "string" ? "" : user?.institution ?? "",
+        country: typeof user === "string" ? defaults.profile.country : user?.country ?? defaults.profile.country,
         timezone: typeof user === "string" ? defaults.profile.timezone : user?.timezone ?? defaults.profile.timezone,
       },
 
