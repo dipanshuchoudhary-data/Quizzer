@@ -2,10 +2,10 @@ import secrets
 from urllib.parse import urlencode
 import logging
 
-from authlib.integrations.base_client.errors import OAuthError
 from authlib.integrations.starlette_client import OAuth
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from starlette.responses import RedirectResponse
 
 from backend.api.auth import create_user_access_token, normalize_user_role, set_auth_cookies
@@ -16,6 +16,8 @@ from backend.services.google_auth import get_or_create_google_user, validate_goo
 
 router = APIRouter(tags=["Google Auth"])
 logger = logging.getLogger(__name__)
+OAUTH_STATE_MAX_AGE_SECONDS = 600
+oauth_state_serializer = URLSafeTimedSerializer(settings.JWT_SECRET_KEY, salt="google-oauth-state")
 
 
 def _frontend_auth_error_redirect(error_code: str) -> RedirectResponse:
@@ -48,6 +50,25 @@ def _map_token_parse_error(error_text: str) -> str:
         return "google_token_audience_invalid"
     return "google_token_invalid"
 
+
+def _create_oauth_state(nonce: str) -> str:
+    return oauth_state_serializer.dumps({"nonce": nonce})
+
+
+def _load_oauth_state(state: str | None) -> dict:
+    if not state:
+        raise ValueError("missing state")
+    try:
+        data = oauth_state_serializer.loads(state, max_age=OAUTH_STATE_MAX_AGE_SECONDS)
+    except SignatureExpired as exc:
+        raise ValueError("expired state") from exc
+    except BadSignature as exc:
+        raise ValueError("invalid state") from exc
+
+    if not isinstance(data, dict) or not data.get("nonce"):
+        raise ValueError("invalid state data")
+    return data
+
 oauth = OAuth()
 
 oauth.register(
@@ -65,7 +86,12 @@ async def login_google(request: Request):
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Google OAuth is not configured")
 
     nonce = secrets.token_urlsafe(32)
-    return await oauth.google.authorize_redirect(request, settings.GOOGLE_REDIRECT_URI, nonce=nonce)
+    authorization = await oauth.google.create_authorization_url(
+        settings.GOOGLE_REDIRECT_URI,
+        nonce=nonce,
+        state=_create_oauth_state(nonce),
+    )
+    return RedirectResponse(authorization["url"], status_code=302)
 
 
 @router.get("/auth/google/callback")
@@ -76,19 +102,27 @@ async def auth_callback(request: Request, db: AsyncSession = Depends(get_db)):
         return _frontend_auth_error_redirect("google_oauth_failed")
 
     try:
-        token = await oauth.google.authorize_access_token(request)
-    except OAuthError as exc:
-        provider_error = getattr(exc, "error", "unknown")
-        logger.warning("google_oauth_exchange_failed error=%s", provider_error)
-        if provider_error in {"mismatching_state", "missing_state", "invalid_state"}:
-            return _frontend_auth_error_redirect("google_oauth_session_missing")
+        state_data = _load_oauth_state(request.query_params.get("state"))
+    except ValueError as exc:
+        logger.warning("google_oauth_state_invalid reason=%s", exc)
+        return _frontend_auth_error_redirect("google_oauth_session_missing")
+
+    code = request.query_params.get("code")
+    if not code:
+        logger.warning("google_oauth_missing_code")
         return _frontend_auth_error_redirect("google_oauth_failed")
+
+    try:
+        token = await oauth.google.fetch_access_token(
+            redirect_uri=settings.GOOGLE_REDIRECT_URI,
+            code=code,
+        )
+        claims = await oauth.google.parse_id_token(token, nonce=state_data["nonce"])
     except Exception as exc:
         error_code = _map_token_parse_error(str(exc))
         logger.exception("google_oauth_token_parse_failed code=%s", error_code)
         return _frontend_auth_error_redirect(error_code)
 
-    claims = token.get("userinfo") if isinstance(token, dict) else None
     if not claims:
         logger.warning("google_oauth_empty_claims")
         return _frontend_auth_error_redirect("google_token_invalid")
