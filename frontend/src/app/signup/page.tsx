@@ -122,7 +122,7 @@ export default function SignupPage() {
 
   const handleGoogleSignup = () => {
     setIsGoogleLoading(true)
-    window.location.href = `${env.backendOrigin}/login/google`
+    window.location.href = env.googleAuthUrl
   }
 
   return (
