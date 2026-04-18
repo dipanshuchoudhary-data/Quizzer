@@ -45,25 +45,32 @@ export function PageHeader({ eyebrow, title, subtitle, actions, children, classN
   return (
     <section
       className={cn(
-        "animate-fade-in ui-gentle-float rounded-[32px] border border-slate-200/80 bg-[radial-gradient(circle_at_top_left,_rgba(34,197,94,0.12),_transparent_28%),radial-gradient(circle_at_85%_18%,_rgba(245,158,11,0.14),_transparent_34%),linear-gradient(135deg,_rgba(255,255,255,1)_0%,_rgba(250,250,249,1)_58%,_rgba(245,245,244,1)_100%)] px-6 py-6 shadow-[0_24px_80px_-48px_rgba(15,23,42,0.45)] transition-all duration-200 ease-in-out dark:border-[var(--border-color)] dark:bg-[radial-gradient(circle_at_top_left,_rgba(74,222,128,0.12),_transparent_28%),radial-gradient(circle_at_85%_18%,_rgba(245,158,11,0.14),_transparent_34%),linear-gradient(135deg,_#0f172a_0%,_#111827_58%,_#0b1220_100%)] dark:shadow-[0_0_20px_rgba(74,222,128,0.08)] sm:px-7",
+        "relative overflow-hidden animate-fade-in ui-gentle-float rounded-[32px] border border-white/60 bg-gradient-to-br from-emerald-50/90 via-slate-50/95 to-amber-50/90 px-6 py-8 shadow-[0_20px_60px_-20px_rgba(15,23,42,0.1)] backdrop-blur-xl transition-all duration-300 ease-in-out dark:border-slate-800/80 dark:bg-gradient-to-br dark:from-emerald-900/10 dark:via-slate-900/95 dark:to-amber-900/10 dark:shadow-[0_0_40px_rgba(74,222,128,0.03)] sm:px-8 sm:py-10",
         className
       )}
     >
-      <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+      {/* Animated glowing orbs for production-grade premium feel */}
+      <div className="pointer-events-none absolute -left-20 -top-20 -z-10 size-72 animate-pulse rounded-full bg-emerald-400/20 opacity-70 blur-[80px] dark:bg-emerald-500/10"></div>
+      <div className="pointer-events-none absolute -bottom-20 -right-20 -z-10 size-72 animate-pulse rounded-full bg-amber-400/20 opacity-70 blur-[80px] dark:bg-amber-500/10" style={{ animationDelay: "1.5s" }}></div>
+      <div className="pointer-events-none absolute left-1/2 top-1/2 -z-10 size-96 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/40 blur-[100px] dark:bg-transparent"></div>
+
+      <div className="relative z-10 flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
         <div className="max-w-3xl space-y-3">
           {eyebrow ? (
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-700 dark:text-[var(--brand-accent)]">
+            <p className="text-xs font-bold uppercase tracking-[0.3em] text-emerald-700 dark:text-[var(--brand-accent)]">
               {eyebrow}
             </p>
           ) : null}
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-4xl dark:text-[var(--text-primary)]">
+          <h1 className="bg-gradient-to-br from-slate-950 to-slate-700 bg-clip-text text-3xl font-bold tracking-tight text-transparent sm:text-4xl dark:from-white dark:to-slate-300">
             {title}
           </h1>
-          <p className="max-w-3xl text-sm leading-6 text-slate-600 dark:text-[var(--text-secondary)]">{subtitle}</p>
+          <p className="max-w-3xl text-[15px] leading-relaxed text-slate-600 dark:text-[var(--text-secondary)]">
+            {subtitle}
+          </p>
         </div>
         {actions ? <div className="flex w-full flex-col gap-3 xl:w-auto xl:min-w-[280px]">{actions}</div> : null}
       </div>
-      {children ? <div className="mt-6">{children}</div> : null}
+      {children ? <div className="relative z-10 mt-6">{children}</div> : null}
     </section>
   )
 }
