@@ -243,16 +243,6 @@ export default function DashboardPage() {
         eyebrow="Dashboard"
         title={`Welcome back, ${displayName}.`}
         subtitle="Review status, handle priorities, and move directly to the next action."
-        actions={
-          <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-            <Link href="/analytics" className={cn(buttonVariants({ variant: "outline" }), ctaOutlineClass)}>
-              View analytics
-            </Link>
-            <Link href="/quizzes/create" className={cn(buttonVariants(), ctaPrimaryClass)}>
-              Create quiz
-            </Link>
-          </div>
-        }
       />
 
       <section className="dashboard-fade-up grid gap-4 lg:grid-cols-[1.35fr_1fr]" style={{ animationDelay: "40ms" }}>
