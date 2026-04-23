@@ -13,9 +13,12 @@ Handles:
 from __future__ import annotations
 
 import asyncio
+import html
+import json
 import re
 import logging
 from typing import Optional
+from urllib.request import Request, urlopen
 
 import structlog
 
@@ -78,6 +81,153 @@ def extract_video_id(url: str) -> Optional[str]:
 def is_youtube_url(url: str) -> bool:
     """Return True if the URL points to a YouTube video."""
     return extract_video_id(url) is not None
+
+
+def _find_matching_bracket(text: str, start_index: int, open_bracket: str, close_bracket: str) -> int:
+    depth = 0
+    in_string = False
+    escaped = False
+
+    for index in range(start_index, len(text)):
+        char = text[index]
+
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+
+        if char == '"':
+            in_string = True
+            continue
+        if char == open_bracket:
+            depth += 1
+        elif char == close_bracket:
+            depth -= 1
+            if depth == 0:
+                return index
+
+    return -1
+
+
+def _fetch_watch_page(video_id: str) -> str:
+    request = Request(
+        f"https://www.youtube.com/watch?v={video_id}&hl=en",
+        headers={
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
+            )
+        },
+    )
+    with urlopen(request, timeout=15) as response:
+        return response.read().decode("utf-8", errors="ignore")
+
+
+def _extract_caption_tracks(page_html: str) -> list[dict]:
+    normalized = html.unescape(page_html)
+    marker = '"captionTracks":'
+    marker_index = normalized.find(marker)
+    if marker_index == -1:
+        return []
+
+    array_start = normalized.find("[", marker_index)
+    if array_start == -1:
+        return []
+
+    array_end = _find_matching_bracket(normalized, array_start, "[", "]")
+    if array_end == -1:
+        return []
+
+    try:
+        tracks = json.loads(normalized[array_start : array_end + 1])
+    except json.JSONDecodeError:
+        return []
+
+    return tracks if isinstance(tracks, list) else []
+
+
+def _select_caption_track(tracks: list[dict]) -> dict | None:
+    def _is_english(track: dict) -> bool:
+        language = str(track.get("languageCode") or "").lower()
+        name = track.get("name")
+        title = str(name.get("simpleText") if isinstance(name, dict) else "").lower()
+        return language.startswith("en") or "english" in title
+
+    manual_english = next(
+        (track for track in tracks if track.get("kind") != "asr" and _is_english(track)),
+        None,
+    )
+    if manual_english:
+        return manual_english
+
+    generated_english = next(
+        (track for track in tracks if track.get("kind") == "asr" and _is_english(track)),
+        None,
+    )
+    if generated_english:
+        return generated_english
+
+    return tracks[0] if tracks else None
+
+
+def _fetch_transcript_from_watch_page(video_id: str) -> list[dict]:
+    page_html = _fetch_watch_page(video_id)
+    tracks = _extract_caption_tracks(page_html)
+    if not tracks:
+        raise YouTubeTranscriptError("No captions found. Please paste the transcript manually.")
+
+    track = _select_caption_track(tracks)
+    if not track:
+        raise YouTubeTranscriptError("No captions found. Please paste the transcript manually.")
+
+    base_url = str(track.get("baseUrl") or "").strip()
+    if not base_url:
+        raise YouTubeTranscriptError("No captions found. Please paste the transcript manually.")
+
+    transcript_url = base_url if "fmt=" in base_url else f"{base_url}&fmt=json3"
+    request = Request(
+        transcript_url,
+        headers={
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
+            )
+        },
+    )
+    with urlopen(request, timeout=15) as response:
+        payload = json.loads(response.read().decode("utf-8", errors="ignore"))
+
+    events = payload.get("events", []) if isinstance(payload, dict) else []
+    segments: list[dict] = []
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        text = "".join(
+            part.get("utf8", "")
+            for part in event.get("segs", [])
+            if isinstance(part, dict)
+        ).strip()
+        if not text:
+            continue
+        start_ms = event.get("tStartMs")
+        duration_ms = event.get("dDurationMs") or 0
+        try:
+            start = float(start_ms or 0) / 1000.0
+            duration = float(duration_ms) / 1000.0
+        except (TypeError, ValueError):
+            continue
+        segments.append({"text": text, "start": start, "duration": duration})
+
+    if not segments:
+        raise YouTubeTranscriptError("No captions found. Please paste the transcript manually.")
+
+    return segments
 
 
 # ---------------------------------------------------------------------------
@@ -182,15 +332,23 @@ def fetch_transcript(video_id: str) -> list[dict]:
             return transcript.fetch()
 
         except (NoTranscriptFound, TranscriptsDisabled) as exc:
-            raise YouTubeTranscriptError(
-                "No captions found. Please paste the transcript manually."
-            ) from exc
+            logger.warning("youtube_transcript_api_denied", video_id=video_id, error=str(exc))
+        except Exception as exc:
+            logger.warning("youtube_transcript_api_failed", video_id=video_id, error=str(exc))
 
     except YouTubeTranscriptError:
         raise
     except Exception as exc:
+        logger.warning("youtube_transcript_api_import_failed", video_id=video_id, error=str(exc))
+
+    try:
+        return _fetch_transcript_from_watch_page(video_id)
+    except YouTubeTranscriptError:
+        raise
+    except Exception as exc:
+        logger.warning("youtube_watch_page_transcript_failed", video_id=video_id, error=str(exc))
         raise YouTubeTranscriptError(
-            "No captions found. Please paste the transcript manually."
+            "YouTube denied transcript access for this video, even though captions may exist. Please paste the transcript manually."
         ) from exc
 
 
