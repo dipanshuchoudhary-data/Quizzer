@@ -42,5 +42,6 @@ cloudinary>=1.44.1
 
 # YouTube ingestion
 youtube-transcript-api
+yt-dlp
 google-api-python-client
 google-auth
