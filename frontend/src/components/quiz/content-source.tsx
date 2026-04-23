@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { FileText, Link2, Pencil, Youtube, Globe, X, Plus } from "lucide-react"
+import { toast } from "sonner"
 import { ContentEditor } from "./content-input/editor"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -39,6 +40,14 @@ function getDomain(url: string): string {
   }
 }
 
+function normalizeUrl(value: string): string | null {
+  try {
+    return new URL(value.startsWith("http") ? value : `https://${value}`).toString()
+  } catch {
+    return null
+  }
+}
+
 // ── component ─────────────────────────────────────────────────────────────────
 
 export function ContentSource({
@@ -65,9 +74,18 @@ export function ContentSource({
   const addUrl = () => {
     const trimmed = urlInput.trim()
     if (!trimmed) return
-    const next = Array.from(new Set([...urls, trimmed]))
+
+    const normalized = normalizeUrl(trimmed)
+    if (!normalized) {
+      toast.error("Link not found or invalid URL.")
+      return
+    }
+
+    const next = Array.from(new Set([...urls, normalized]))
     onUrlsChange(next)
     setUrlInput("")
+
+    toast.success(isYouTubeUrl(normalized) ? "YouTube link added" : "Link added")
   }
 
   const cards: Array<{ mode: SourceMode; title: string; description: string; icon: React.ElementType }> = [
@@ -200,7 +218,7 @@ export function ContentSource({
           <div className="flex gap-2">
             <div className="relative flex-1">
               {urlInput && isYouTubeUrl(urlInput) ? (
-                <Youtube size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-red-500" />
+                <Youtube size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-teal-500" />
               ) : urlInput ? (
                 <Globe size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               ) : null}
@@ -212,7 +230,7 @@ export function ContentSource({
                 className={cn(
                   "transition-all",
                   urlInput && isYouTubeUrl(urlInput)
-                    ? "border-red-400/60 pl-8 focus-visible:ring-red-400/40"
+                    ? "border-teal-400/60 pl-8 focus-visible:ring-teal-400/40"
                     : urlInput ? "pl-8" : ""
                 )}
               />
@@ -225,7 +243,7 @@ export function ContentSource({
 
           {/* YouTube hint */}
           {urlInput && isYouTubeUrl(urlInput) && (
-            <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900 dark:bg-red-950/20 dark:text-red-400">
+            <div className="flex items-center gap-2 rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-xs text-teal-700 dark:border-teal-900 dark:bg-teal-950/20 dark:text-teal-300">
               <Youtube size={12} />
               YouTube video detected — we&apos;ll fetch captions automatically when you click Add.
             </div>
@@ -243,9 +261,9 @@ export function ContentSource({
                       <img src={thumb} alt="thumbnail" className="h-10 w-16 rounded-md object-cover flex-shrink-0" />
                     )}
                     <div className="flex flex-1 min-w-0 items-center gap-2">
-                      <Youtube size={12} className="text-red-500 flex-shrink-0" />
+                      <Youtube size={12} className="text-teal-500 flex-shrink-0" />
                       <span className="flex-1 truncate text-xs text-foreground">{url}</span>
-                      <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-[10px] px-1.5 border-0 flex-shrink-0">
+                      <Badge className="bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300 text-[10px] px-1.5 border-0 flex-shrink-0">
                         YouTube
                       </Badge>
                     </div>

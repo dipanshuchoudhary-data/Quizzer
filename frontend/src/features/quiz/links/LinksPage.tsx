@@ -60,7 +60,7 @@ export function LinksPage({ quizId }: { quizId: string }) {
       setPreviewRef(source)
       return
     }
-    toast.info("No preview URL/content available for this source.")
+    toast.error("No preview URL/content available for this source.")
   }
 
   return (
