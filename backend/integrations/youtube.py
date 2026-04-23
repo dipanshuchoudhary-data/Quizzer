@@ -113,9 +113,28 @@ def _find_matching_bracket(text: str, start_index: int, open_bracket: str, close
     return -1
 
 
-def _fetch_watch_page(video_id: str) -> str:
+def _extract_json_after_marker(text: str, marker: str, open_bracket: str, close_bracket: str) -> dict | list | None:
+    marker_index = text.find(marker)
+    if marker_index == -1:
+        return None
+
+    start_index = text.find(open_bracket, marker_index)
+    if start_index == -1:
+        return None
+
+    end_index = _find_matching_bracket(text, start_index, open_bracket, close_bracket)
+    if end_index == -1:
+        return None
+
+    try:
+        return json.loads(text[start_index : end_index + 1])
+    except json.JSONDecodeError:
+        return None
+
+
+def _fetch_page(page_url: str) -> str:
     request = Request(
-        f"https://www.youtube.com/watch?v={video_id}&hl=en",
+        page_url,
         headers={
             "User-Agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -130,24 +149,23 @@ def _fetch_watch_page(video_id: str) -> str:
 
 def _extract_caption_tracks(page_html: str) -> list[dict]:
     normalized = html.unescape(page_html)
-    marker = '"captionTracks":'
-    marker_index = normalized.find(marker)
-    if marker_index == -1:
-        return []
 
-    array_start = normalized.find("[", marker_index)
-    if array_start == -1:
-        return []
+    player_response = _extract_json_after_marker(
+        normalized,
+        "ytInitialPlayerResponse =",
+        "{",
+        "}",
+    )
+    if isinstance(player_response, dict):
+        captions = player_response.get("captions", {})
+        if isinstance(captions, dict):
+            tracklist = captions.get("playerCaptionsTracklistRenderer", {})
+            if isinstance(tracklist, dict):
+                tracks = tracklist.get("captionTracks", [])
+                if isinstance(tracks, list) and tracks:
+                    return tracks
 
-    array_end = _find_matching_bracket(normalized, array_start, "[", "]")
-    if array_end == -1:
-        return []
-
-    try:
-        tracks = json.loads(normalized[array_start : array_end + 1])
-    except json.JSONDecodeError:
-        return []
-
+    tracks = _extract_json_after_marker(normalized, '"captionTracks":', "[", "]")
     return tracks if isinstance(tracks, list) else []
 
 
@@ -176,18 +194,34 @@ def _select_caption_track(tracks: list[dict]) -> dict | None:
 
 
 def _fetch_transcript_from_watch_page(video_id: str) -> list[dict]:
-    page_html = _fetch_watch_page(video_id)
-    tracks = _extract_caption_tracks(page_html)
+    candidate_pages = [
+        f"https://www.youtube.com/watch?v={video_id}&hl=en",
+        f"https://www.youtube.com/embed/{video_id}?hl=en",
+    ]
+
+    tracks: list[dict] = []
+    for page_url in candidate_pages:
+        page_html = _fetch_page(page_url)
+        tracks = _extract_caption_tracks(page_html)
+        if tracks:
+            break
+
     if not tracks:
-        raise YouTubeTranscriptError("No captions found. Please paste the transcript manually.")
+        raise YouTubeTranscriptError(
+            "YouTube denied transcript access for this video, even though captions may exist. Please paste the transcript manually."
+        )
 
     track = _select_caption_track(tracks)
     if not track:
-        raise YouTubeTranscriptError("No captions found. Please paste the transcript manually.")
+        raise YouTubeTranscriptError(
+            "YouTube denied transcript access for this video, even though captions may exist. Please paste the transcript manually."
+        )
 
     base_url = str(track.get("baseUrl") or "").strip()
     if not base_url:
-        raise YouTubeTranscriptError("No captions found. Please paste the transcript manually.")
+        raise YouTubeTranscriptError(
+            "YouTube denied transcript access for this video, even though captions may exist. Please paste the transcript manually."
+        )
 
     transcript_url = base_url if "fmt=" in base_url else f"{base_url}&fmt=json3"
     request = Request(
@@ -225,7 +259,9 @@ def _fetch_transcript_from_watch_page(video_id: str) -> list[dict]:
         segments.append({"text": text, "start": start, "duration": duration})
 
     if not segments:
-        raise YouTubeTranscriptError("No captions found. Please paste the transcript manually.")
+        raise YouTubeTranscriptError(
+            "YouTube denied transcript access for this video, even though captions may exist. Please paste the transcript manually."
+        )
 
     return segments
 
@@ -315,22 +351,9 @@ def fetch_transcript(video_id: str) -> list[dict]:
         from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound, TranscriptsDisabled
 
         try:
-            # Prefer manual English captions, fall back to auto-generated
-            transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-            try:
-                transcript = transcript_list.find_manually_created_transcript(["en", "en-US", "en-GB"])
-            except NoTranscriptFound:
-                try:
-                    transcript = transcript_list.find_generated_transcript(["en", "en-US", "en-GB"])
-                except NoTranscriptFound:
-                    # Take any available transcript as last resort
-                    available = list(transcript_list)
-                    if not available:
-                        raise
-                    transcript = available[0]
-
-            return transcript.fetch()
-
+            api = YouTubeTranscriptApi()
+            transcript = api.fetch(video_id, languages=["en", "en-US", "en-GB"])
+            return transcript.to_raw_data()
         except (NoTranscriptFound, TranscriptsDisabled) as exc:
             logger.warning("youtube_transcript_api_denied", video_id=video_id, error=str(exc))
         except Exception as exc:
