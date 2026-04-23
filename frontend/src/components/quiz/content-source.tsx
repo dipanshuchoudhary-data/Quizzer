@@ -1,14 +1,45 @@
 "use client"
 
 import { useState } from "react"
-import { FileText, Link2, Pencil } from "lucide-react"
+import { FileText, Link2, Pencil, Youtube, Globe, X, Plus } from "lucide-react"
 import { ContentEditor } from "./content-input/editor"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import type { Document } from "@/types/document"
 
 type SourceMode = "paste" | "files" | "links"
+
+// ── helpers ──────────────────────────────────────────────────────────────────
+
+const YOUTUBE_PATTERNS = [
+  /(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?.*v=([A-Za-z0-9_-]{11})/,
+  /(?:https?:\/\/)?youtu\.be\/([A-Za-z0-9_-]{11})/,
+  /(?:https?:\/\/)?(?:www\.)?youtube\.com\/shorts\/([A-Za-z0-9_-]{11})/,
+]
+
+function isYouTubeUrl(url: string): boolean {
+  return YOUTUBE_PATTERNS.some((p) => p.test(url))
+}
+
+function getYouTubeThumbnail(url: string): string | null {
+  for (const pattern of YOUTUBE_PATTERNS) {
+    const match = pattern.exec(url)
+    if (match) return `https://img.youtube.com/vi/${match[1]}/default.jpg`
+  }
+  return null
+}
+
+function getDomain(url: string): string {
+  try {
+    return new URL(url.startsWith("http") ? url : `https://${url}`).hostname.replace(/^www\./, "")
+  } catch {
+    return url
+  }
+}
+
+// ── component ─────────────────────────────────────────────────────────────────
 
 export function ContentSource({
   mode,
@@ -31,6 +62,14 @@ export function ContentSource({
 }) {
   const [urlInput, setUrlInput] = useState("")
 
+  const addUrl = () => {
+    const trimmed = urlInput.trim()
+    if (!trimmed) return
+    const next = Array.from(new Set([...urls, trimmed]))
+    onUrlsChange(next)
+    setUrlInput("")
+  }
+
   const cards: Array<{ mode: SourceMode; title: string; description: string; icon: React.ElementType }> = [
     {
       mode: "paste",
@@ -46,14 +85,18 @@ export function ContentSource({
     },
     {
       mode: "links",
-      title: "Add Website Links",
-      description: "Extract content from online sources.",
+      title: "Add Links",
+      description: "Websites or YouTube videos — we'll extract content automatically.",
       icon: Link2,
     },
   ]
 
+  const youtubePreviews = urls.filter(isYouTubeUrl)
+  const regularUrls = urls.filter((u) => !isYouTubeUrl(u))
+
   return (
     <div className="space-y-6">
+      {/* ── Mode selector ── */}
       <div className="grid gap-4 md:grid-cols-3">
         {cards.map((card) => {
           const active = card.mode === mode
@@ -85,6 +128,7 @@ export function ContentSource({
         })}
       </div>
 
+      {/* ── Paste mode ── */}
       {mode === "paste" ? (
         <ContentEditor
           value={textValue}
@@ -94,6 +138,7 @@ export function ContentSource({
         />
       ) : null}
 
+      {/* ── Files mode ── */}
       {mode === "files" ? (
         <div className="space-y-4">
           <div className="rounded-2xl border border-dashed bg-muted/40 p-6 text-center">
@@ -148,45 +193,105 @@ export function ContentSource({
         </div>
       ) : null}
 
+      {/* ── Links mode ── */}
       {mode === "links" ? (
         <div className="space-y-4">
-          <div className="flex flex-wrap gap-2">
-            <Input
-              value={urlInput}
-              onChange={(event) => setUrlInput(event.target.value)}
-              placeholder="Paste a URL and press Add"
-              className="flex-1"
-            />
-            <Button
-              type="button"
-              onClick={() => {
-                if (!urlInput.trim()) return
-                const next = Array.from(new Set([...urls, urlInput.trim()]))
-                onUrlsChange(next)
-                setUrlInput("")
-              }}
-            >
+          {/* Input row */}
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              {urlInput && isYouTubeUrl(urlInput) ? (
+                <Youtube size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-red-500" />
+              ) : urlInput ? (
+                <Globe size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              ) : null}
+              <Input
+                value={urlInput}
+                onChange={(e) => setUrlInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addUrl() } }}
+                placeholder="Paste a YouTube link or any website URL…"
+                className={cn(
+                  "transition-all",
+                  urlInput && isYouTubeUrl(urlInput)
+                    ? "border-red-400/60 pl-8 focus-visible:ring-red-400/40"
+                    : urlInput ? "pl-8" : ""
+                )}
+              />
+            </div>
+            <Button type="button" onClick={addUrl} disabled={!urlInput.trim()} size="default">
+              <Plus size={14} className="mr-1" />
               Add
             </Button>
           </div>
-          <div className="space-y-2">
-            {urls.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No links added yet.</p>
-            ) : (
-              urls.map((url) => (
-                <div key={url} className="flex items-center justify-between rounded-xl border bg-background px-4 py-2 text-sm">
-                  <span className="truncate">{url}</span>
+
+          {/* YouTube hint */}
+          {urlInput && isYouTubeUrl(urlInput) && (
+            <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900 dark:bg-red-950/20 dark:text-red-400">
+              <Youtube size={12} />
+              YouTube video detected — we&apos;ll fetch captions automatically when you click Add.
+            </div>
+          )}
+
+          {/* YouTube video cards */}
+          {youtubePreviews.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">YouTube Videos</p>
+              {youtubePreviews.map((url) => {
+                const thumb = getYouTubeThumbnail(url)
+                return (
+                  <div key={url} className="flex items-center gap-3 rounded-xl border bg-background px-3 py-2">
+                    {thumb && (
+                      <img src={thumb} alt="thumbnail" className="h-10 w-16 rounded-md object-cover flex-shrink-0" />
+                    )}
+                    <div className="flex flex-1 min-w-0 items-center gap-2">
+                      <Youtube size={12} className="text-red-500 flex-shrink-0" />
+                      <span className="flex-1 truncate text-xs text-foreground">{url}</span>
+                      <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-[10px] px-1.5 border-0 flex-shrink-0">
+                        YouTube
+                      </Badge>
+                    </div>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 flex-shrink-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => onUrlsChange(urls.filter((u) => u !== url))}
+                    >
+                      <X size={12} />
+                    </Button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Regular URLs */}
+          {regularUrls.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">Websites</p>
+              {regularUrls.map((url) => (
+                <div key={url} className="flex items-center gap-3 rounded-xl border bg-background px-3 py-2">
+                  <Globe size={12} className="text-muted-foreground flex-shrink-0" />
+                  <div className="flex flex-1 min-w-0 items-center gap-2">
+                    <span className="flex-1 truncate text-xs text-foreground">{url}</span>
+                    <span className="text-[10px] text-muted-foreground flex-shrink-0">{getDomain(url)}</span>
+                  </div>
                   <Button
-                    size="sm"
+                    size="icon"
                     variant="ghost"
-                    onClick={() => onUrlsChange(urls.filter((item) => item !== url))}
+                    className="h-7 w-7 flex-shrink-0 text-muted-foreground hover:text-destructive"
+                    onClick={() => onUrlsChange(urls.filter((u) => u !== url))}
                   >
-                    Remove
+                    <X size={12} />
                   </Button>
                 </div>
-              ))
-            )}
-          </div>
+              ))}
+            </div>
+          )}
+
+          {urls.length === 0 && (
+            <p className="text-xs text-muted-foreground">
+              No links added yet. Add a YouTube video or any website to extract content.
+            </p>
+          )}
         </div>
       ) : null}
     </div>
