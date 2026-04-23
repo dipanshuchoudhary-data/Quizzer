@@ -39,3 +39,8 @@ pandas
 structlog
 python-multipart
 cloudinary>=1.44.1
+
+# YouTube ingestion
+youtube-transcript-api
+google-api-python-client
+google-auth
