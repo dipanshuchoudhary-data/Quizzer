@@ -87,6 +87,14 @@ class Settings(BaseSettings):
     # ----------------------
     USE_CELERY: bool = False  # Set to True when using Celery worker (GCP/Paid tier)
 
+    # ----------------------
+    # YouTube Integration
+    # ----------------------
+    YOUTUBE_API_ENABLED: bool = False
+    YOUTUBE_CLIENT_ID: str | None = None
+    YOUTUBE_CLIENT_SECRET: str | None = None
+    YOUTUBE_REFRESH_TOKEN: str | None = None
+
     @property
     def is_local(self) -> bool:
         return self.APP_ENV.lower() in {"local", "dev", "development"}
