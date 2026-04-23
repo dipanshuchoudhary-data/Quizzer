@@ -306,6 +306,8 @@ Quizzer/
 
 ## 🚀 Roadmap & Future Improvements
 
+- [x] YouTube API & OAuth Infrastructure
+- [ ] YouTube Video Transcript Ingestion (Long-video safe)
 - [ ] Mobile-responsive exam interface
 - [ ] Configurable AI model per quiz
 - [ ] LMS integrations (Canvas, Moodle, Google Classroom)
