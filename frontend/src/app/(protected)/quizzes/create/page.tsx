@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { quizApi } from "@/lib/api/quiz"
-import { aiApi } from "@/lib/api/ai"
+import { aiApi, type YouTubeChoiceRequired } from "@/lib/api/ai"
 import { getApiErrorMessage } from "@/lib/api/error"
 import { SectionBuilder } from "@/features/quiz/creation/SectionBuilder"
 import type { DraftSection } from "@/features/quiz/creation/SortableSectionCard"
@@ -24,6 +24,8 @@ import {
   loadCourseLibrary,
   parseCourseClusterValue,
 } from "@/features/quiz/organization/storage"
+import { YouTubeChoiceDialog } from "@/features/quiz/ai/YouTubeChoiceDialog"
+
 
 type SourceMode = "paste" | "files" | "links"
 type GenerationMode = "auto" | "custom"
@@ -97,6 +99,7 @@ export default function QuizCreatePage() {
   const [processingError, setProcessingError] = useState<string | null>(null)
   const [ingestState, setIngestState] = useState<"idle" | "processing" | "ready" | "failed">("idle")
   const [ingestMessage, setIngestMessage] = useState("")
+  const [ytChoiceData, setYtChoiceData] = useState<YouTubeChoiceRequired | null>(null)
   const trackedUploadIdsRef = useRef<Set<string>>(new Set())
   const fileToastStateRef = useRef({
     uploadNotified: false,
@@ -459,8 +462,17 @@ export default function QuizCreatePage() {
           return
         }
         setIngestState("processing")
-        setIngestMessage("Fetching and extracting website content…")
-        await aiApi.uploadSourceUrls(quizId, sourceUrls)
+        setIngestMessage("Fetching and extracting content…")
+        const result = await aiApi.uploadSourceUrls(quizId, sourceUrls)
+
+        // YouTube long-video choice required
+        if (result.status === "CHOICE_REQUIRED") {
+          setIngestState("idle")
+          setIngestMessage("")
+          setYtChoiceData(result as YouTubeChoiceRequired)
+          return  // don't advance step yet
+        }
+
         setIngestState("ready")
         setIngestMessage("Links processed successfully.")
       }
@@ -471,6 +483,7 @@ export default function QuizCreatePage() {
       toast.error(getApiErrorMessage(error, "Failed to ingest content"))
     }
   }
+
 
   const documents = (documentsQuery.data as { documents?: Document[] } | undefined)?.documents ?? EMPTY_DOCUMENTS
 
@@ -544,6 +557,7 @@ export default function QuizCreatePage() {
   }, [documents, sourceMode])
 
   return (
+    <>
     <QuizCreationLayout
       step={step}
       title="AI Quiz Creation Workflow"
@@ -849,5 +863,25 @@ export default function QuizCreatePage() {
 
       {step === 4 && quizId ? <QuizReview quizId={quizId} /> : null}
     </QuizCreationLayout>
+
+    {/* YouTube long-video choice dialog */}
+    {ytChoiceData && quizId && (
+      <YouTubeChoiceDialog
+        open={Boolean(ytChoiceData)}
+        quizId={quizId}
+        choiceData={ytChoiceData}
+        onSuccess={() => {
+          setIngestState("ready")
+          setIngestMessage("YouTube content processed successfully.")
+          setStep(2)
+        }}
+        onClose={() => {
+          setYtChoiceData(null)
+          setIngestState("idle")
+          setIngestMessage("")
+        }}
+      />
+    )}
+  </>
   )
 }

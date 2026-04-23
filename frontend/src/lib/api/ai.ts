@@ -12,6 +12,24 @@ export interface AISourceResponse {
   detail?: string
 }
 
+export interface YouTubeChoiceRequired {
+  status: "CHOICE_REQUIRED"
+  video_id: string
+  title: string
+  duration: number          // seconds
+  transcript_size: "LONG" | "HUGE"
+}
+
+export type UploadUrlResult = AISourceResponse | YouTubeChoiceRequired
+
+export interface YouTubeConfirmPayload {
+  quiz_id: string
+  video_id: string
+  mode: "time_range" | "full_video"
+  start_seconds?: number
+  end_seconds?: number
+}
+
 export interface AIGenerationResponse {
   message: string
   job_id: string
@@ -43,9 +61,16 @@ export const aiApi = {
     return data
   },
 
-  async uploadSourceUrls(quizId: string, urls: string[]): Promise<AISourceResponse> {
-    const { data } = await api.post<AISourceResponse>("/ai/quiz/source/url", { quiz_id: quizId, urls }, {
+  async uploadSourceUrls(quizId: string, urls: string[]): Promise<UploadUrlResult> {
+    const { data } = await api.post<UploadUrlResult>("/ai/quiz/source/url", { quiz_id: quizId, urls }, {
       timeout: AI_TIMEOUT,
+    })
+    return data
+  },
+
+  async confirmYouTubeSource(payload: YouTubeConfirmPayload): Promise<AISourceResponse> {
+    const { data } = await api.post<AISourceResponse>("/ai/quiz/source/youtube/confirm", payload, {
+      timeout: AI_TIMEOUT * 5, // full-video summarisation can be slow
     })
     return data
   },
