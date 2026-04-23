@@ -18,6 +18,17 @@ from backend.models.quiz import Quiz
 from backend.models.user import User
 from backend.utils.file_utils import save_upload_file
 from backend.services.task_dispatcher import dispatch_document_task
+from backend.integrations.youtube import (
+    is_youtube_url,
+    extract_video_id,
+    fetch_video_metadata,
+    fetch_transcript,
+    classify_transcript,
+    filter_by_time_range,
+    summarize_chunks_full_video,
+    YouTubeTranscriptError,
+    TranscriptTooLargeError,
+)
 
 
 router = APIRouter(prefix="/ai/quiz", tags=["AI Quiz"])
@@ -187,23 +198,185 @@ async def add_url_source(
 
     sources = await _load_sources(str(quiz_uuid))
     added = []
+
     for url in urls:
-        try:
-            content = _fetch_url_content(str(url))
-        except Exception as exc:
-            raise HTTPException(status_code=400, detail=f"Failed to fetch {url}: {exc}") from exc
-        source_id = str(uuid.uuid4())
-        sources["url_sources"].append(
-            {
-                "id": source_id,
-                "url": url,
-                "text": content[:60000],
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            }
-        )
-        added.append(source_id)
+        url = str(url)
+
+        # ------------------------------------------------------------------ #
+        # YouTube path                                                         #
+        # ------------------------------------------------------------------ #
+        if is_youtube_url(url):
+            video_id = extract_video_id(url)
+            if not video_id:
+                raise HTTPException(status_code=400, detail=f"Could not extract YouTube video ID from: {url}")
+
+            # Fetch metadata (non-blocking via thread pool)
+            loop = asyncio.get_event_loop()
+            try:
+                metadata = await loop.run_in_executor(None, fetch_video_metadata, video_id)
+            except Exception as exc:
+                logger.warning("youtube_metadata_error", url=url, error=str(exc))
+                metadata = {"title": f"YouTube video ({video_id})", "duration_seconds": 0}
+
+            # Fetch transcript
+            try:
+                segments = await loop.run_in_executor(None, fetch_transcript, video_id)
+            except YouTubeTranscriptError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No captions found. Please paste the transcript manually.",
+                ) from exc
+
+            full_text, size_class = classify_transcript(segments)
+
+            if size_class == "DIRECT":
+                # Store directly as a normal source
+                source_id = str(uuid.uuid4())
+                sources["url_sources"].append(
+                    {
+                        "id": source_id,
+                        "url": url,
+                        "text": full_text,
+                        "title": metadata["title"],
+                        "duration_seconds": metadata["duration_seconds"],
+                        "video_id": video_id,
+                        "source_type": "youtube_direct",
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                )
+                await _save_sources(str(quiz_uuid), sources)
+                added.append(source_id)
+            else:
+                # Long/huge video — ask the user to choose
+                return {
+                    "status": "CHOICE_REQUIRED",
+                    "video_id": video_id,
+                    "title": metadata["title"],
+                    "duration": metadata["duration_seconds"],
+                    "transcript_size": size_class,
+                }
+
+        # ------------------------------------------------------------------ #
+        # Regular URL path (unchanged)                                         #
+        # ------------------------------------------------------------------ #
+        else:
+            try:
+                content = _fetch_url_content(url)
+            except Exception as exc:
+                raise HTTPException(status_code=400, detail=f"Failed to fetch {url}: {exc}") from exc
+            source_id = str(uuid.uuid4())
+            sources["url_sources"].append(
+                {
+                    "id": source_id,
+                    "url": url,
+                    "text": content[:60000],
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                }
+            )
+            added.append(source_id)
+
     await _save_sources(str(quiz_uuid), sources)
     return {"source_id": added[0] if added else "", "status": "stored"}
+
+
+# --------------------------------------------------------------------------- #
+# YouTube long-video resolution endpoint                                       #
+# --------------------------------------------------------------------------- #
+
+@router.post("/source/youtube/confirm")
+async def confirm_youtube_source(
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Resolve a CHOICE_REQUIRED YouTube video.
+
+    Payload:
+        quiz_id       – existing quiz ID
+        video_id      – YouTube video ID (11 chars)
+        mode          – "time_range" | "full_video"
+        start_seconds – (time_range only) start of range in seconds
+        end_seconds   – (time_range only) end of range in seconds
+    """
+    quiz_id = payload.get("quiz_id")
+    video_id = payload.get("video_id")
+    mode = payload.get("mode")
+
+    if not quiz_id or not video_id or mode not in ("time_range", "full_video"):
+        raise HTTPException(
+            status_code=400,
+            detail="quiz_id, video_id, and mode (time_range|full_video) are required",
+        )
+
+    try:
+        quiz_uuid = uuid.UUID(str(quiz_id))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid quiz_id") from exc
+    await _get_quiz_or_404(quiz_uuid, db, current_user)
+
+    loop = asyncio.get_event_loop()
+
+    # Fetch transcript once
+    try:
+        segments = await loop.run_in_executor(None, fetch_transcript, video_id)
+    except YouTubeTranscriptError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="No captions found. Please paste the transcript manually.",
+        ) from exc
+
+    # Metadata for storing
+    try:
+        metadata = await loop.run_in_executor(None, fetch_video_metadata, video_id)
+    except Exception:
+        metadata = {"title": f"YouTube video ({video_id})", "duration_seconds": 0}
+
+    youtube_url = f"https://www.youtube.com/watch?v={video_id}"
+
+    if mode == "time_range":
+        start_sec = float(payload.get("start_seconds") or 0)
+        end_sec = float(payload.get("end_seconds") or 0)
+        if end_sec <= start_sec:
+            raise HTTPException(status_code=400, detail="end_seconds must be greater than start_seconds")
+
+        try:
+            text = await loop.run_in_executor(
+                None, lambda: filter_by_time_range(segments, start_sec, end_sec)
+            )
+        except TranscriptTooLargeError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        source_type = "youtube_time_range"
+        note = f"Time range {int(start_sec // 60)}:{int(start_sec % 60):02d} – {int(end_sec // 60)}:{int(end_sec % 60):02d}"
+
+    else:  # full_video
+        text = await summarize_chunks_full_video(segments)
+        source_type = "youtube_chunked_summary"
+        note = "Full-video study guide (chunked summarisation)"
+
+    sources = await _load_sources(str(quiz_uuid))
+    source_id = str(uuid.uuid4())
+    sources["url_sources"].append(
+        {
+            "id": source_id,
+            "url": youtube_url,
+            "text": text,
+            "title": metadata["title"],
+            "duration_seconds": metadata["duration_seconds"],
+            "video_id": video_id,
+            "source_type": source_type,
+            "note": note,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+    await _save_sources(str(quiz_uuid), sources)
+    return {"source_id": source_id, "status": "stored"}
+
 
 
 @router.post("/source/files")
