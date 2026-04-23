@@ -193,39 +193,42 @@ def _select_caption_track(tracks: list[dict]) -> dict | None:
     return tracks[0] if tracks else None
 
 
-def _fetch_transcript_from_watch_page(video_id: str) -> list[dict]:
-    candidate_pages = [
-        f"https://www.youtube.com/watch?v={video_id}&hl=en",
-        f"https://www.youtube.com/embed/{video_id}?hl=en",
-    ]
+def _fetch_transcript_via_ytdlp(video_id: str) -> list[dict]:
+    import yt_dlp
+    import json
+    from urllib.request import Request, urlopen
 
-    tracks: list[dict] = []
-    for page_url in candidate_pages:
-        page_html = _fetch_page(page_url)
-        tracks = _extract_caption_tracks(page_html)
-        if tracks:
-            break
-
-    if not tracks:
+    ydl_opts = {
+        'skip_download': True,
+        'writesubtitles': True,
+        'writeautomaticsub': True,
+        'subtitleslangs': ['en', 'en-US', 'en-GB'],
+        'quiet': True,
+        'no_warnings': True,
+    }
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(video_id, download=False)
+        
+    subs = info.get('subtitles', {})
+    if not subs:
+        subs = info.get('automatic_captions', {})
+        
+    en_subs = subs.get('en') or subs.get('en-US') or subs.get('en-GB')
+    if not en_subs:
         raise YouTubeTranscriptError(
             "YouTube denied transcript access for this video, even though captions may exist. Please paste the transcript manually."
         )
-
-    track = _select_caption_track(tracks)
-    if not track:
-        raise YouTubeTranscriptError(
-            "YouTube denied transcript access for this video, even though captions may exist. Please paste the transcript manually."
-        )
-
-    base_url = str(track.get("baseUrl") or "").strip()
-    if not base_url:
-        raise YouTubeTranscriptError(
-            "YouTube denied transcript access for this video, even though captions may exist. Please paste the transcript manually."
-        )
-
-    transcript_url = base_url if "fmt=" in base_url else f"{base_url}&fmt=json3"
+        
+    json3_fmt = next((f for f in en_subs if f.get('ext') == 'json3'), None)
+    if not json3_fmt:
+        json3_fmt = en_subs[0]
+        
+    sub_url = json3_fmt.get('url')
+    if not sub_url:
+        raise YouTubeTranscriptError("YouTube denied transcript access for this video. Please paste manually.")
+        
     request = Request(
-        transcript_url,
+        sub_url,
         headers={
             "User-Agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -365,11 +368,11 @@ def fetch_transcript(video_id: str) -> list[dict]:
         logger.warning("youtube_transcript_api_import_failed", video_id=video_id, error=str(exc))
 
     try:
-        return _fetch_transcript_from_watch_page(video_id)
+        return _fetch_transcript_via_ytdlp(video_id)
     except YouTubeTranscriptError:
         raise
     except Exception as exc:
-        logger.warning("youtube_watch_page_transcript_failed", video_id=video_id, error=str(exc))
+        logger.warning("youtube_ytdlp_transcript_failed", video_id=video_id, error=str(exc))
         raise YouTubeTranscriptError(
             "YouTube denied transcript access for this video, even though captions may exist. Please paste the transcript manually."
         ) from exc
