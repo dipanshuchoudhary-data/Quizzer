@@ -1,81 +1,83 @@
-import sys
-import types
-
 from backend.integrations.youtube import (
-    _caption_url_as_json3,
-    _json3_to_segments,
-    _select_caption_track,
-    fetch_transcript,
+    classify_transcript,
+    extract_video_id,
+    filter_by_time_range,
 )
+from backend.lib import getCaptions
 
 
-def test_select_caption_track_falls_back_to_any_language():
-    track = _select_caption_track(
+def test_extract_video_id_supports_common_youtube_urls():
+    assert extract_video_id("https://www.youtube.com/watch?v=abc123XYZ_0") == "abc123XYZ_0"
+    assert extract_video_id("https://youtu.be/abc123XYZ_0") == "abc123XYZ_0"
+    assert extract_video_id("https://www.youtube.com/shorts/abc123XYZ_0") == "abc123XYZ_0"
+
+
+def test_classify_transcript_uses_joined_segment_text():
+    text, size_class = classify_transcript(
         [
-            {
-                "languageCode": "hi",
-                "name": {"simpleText": "Hindi (auto-generated)"},
-                "kind": "asr",
-                "baseUrl": "https://example.test/captions",
-            }
+            {"text": "First idea", "start": 0.0, "duration": 1.0},
+            {"text": "second idea", "start": 1.0, "duration": 1.0},
         ]
     )
 
-    assert track is not None
-    assert track["languageCode"] == "hi"
+    assert text == "First idea second idea"
+    assert size_class == "DIRECT"
 
 
-def test_caption_url_as_json3_replaces_existing_format():
-    url = _caption_url_as_json3("https://example.test/api?lang=hi&fmt=srv3")
-
-    assert "lang=hi" in url
-    assert "fmt=json3" in url
-    assert "fmt=srv3" not in url
-
-
-def test_json3_to_segments_skips_empty_events():
-    segments = _json3_to_segments(
-        {
-            "events": [
-                {"tStartMs": 1200, "dDurationMs": 800, "segs": [{"utf8": "Hello "}, {"utf8": "there"}]},
-                {"tStartMs": 2000, "segs": [{"utf8": "\n"}]},
-            ]
-        }
+def test_filter_by_time_range_keeps_matching_segments():
+    text = filter_by_time_range(
+        [
+            {"text": "too early", "start": 5.0, "duration": 1.0},
+            {"text": "keep this", "start": 12.0, "duration": 1.0},
+            {"text": "too late", "start": 30.0, "duration": 1.0},
+        ],
+        10.0,
+        20.0,
     )
 
-    assert segments == [{"text": "Hello there", "start": 1.2, "duration": 0.8}]
+    assert text == "keep this"
 
 
-def test_fetch_transcript_uses_any_available_transcript(monkeypatch):
-    class NoTranscriptFound(Exception):
-        pass
-
-    class TranscriptsDisabled(Exception):
-        pass
-
-    class FakeFetchedTranscript:
-        def to_raw_data(self):
-            return [{"text": "Namaste", "start": 0.0, "duration": 1.0}]
-
+def test_get_captions_returns_supadata_transcript(monkeypatch):
     class FakeTranscript:
-        language_code = "hi"
-        is_translatable = False
+        content = "Hello from captions"
 
-        def fetch(self):
-            return FakeFetchedTranscript()
+    class FakeYouTube:
+        def transcript(self, video_id, lang, text):
+            assert video_id == "abc123XYZ_0"
+            assert lang == "en"
+            assert text is True
+            return FakeTranscript()
 
-    class FakeApi:
-        def fetch(self, video_id, languages):
-            raise NoTranscriptFound(video_id, languages, None)
+    class FakeSupadata:
+        def __init__(self, api_key):
+            assert api_key == "test-key"
+            self.youtube = FakeYouTube()
 
-        def list(self, video_id):
-            return [FakeTranscript()]
+    monkeypatch.setenv("SUPADATA_API_KEY", "test-key")
+    monkeypatch.setattr(getCaptions, "Supadata", FakeSupadata)
+    monkeypatch.setattr(getCaptions, "SupadataError", Exception)
+    assert getCaptions.get_captions("abc123XYZ_0") == "Hello from captions"
 
-    fake_module = types.SimpleNamespace(
-        YouTubeTranscriptApi=lambda: FakeApi(),
-        NoTranscriptFound=NoTranscriptFound,
-        TranscriptsDisabled=TranscriptsDisabled,
-    )
-    monkeypatch.setitem(sys.modules, "youtube_transcript_api", fake_module)
 
-    assert fetch_transcript("abc123xyz00") == [{"text": "Namaste", "start": 0.0, "duration": 1.0}]
+def test_get_captions_raises_supadata_error(monkeypatch):
+    class FakeSupadataError(Exception):
+        pass
+
+    class FakeYouTube:
+        def transcript(self, video_id, lang, text):
+            raise FakeSupadataError("No captions available")
+
+    class FakeSupadata:
+        def __init__(self, api_key):
+            self.youtube = FakeYouTube()
+
+    monkeypatch.setenv("SUPADATA_API_KEY", "test-key")
+    monkeypatch.setattr(getCaptions, "Supadata", FakeSupadata)
+    monkeypatch.setattr(getCaptions, "SupadataError", FakeSupadataError)
+    try:
+        getCaptions.get_captions("abc123XYZ_0")
+    except ValueError as exc:
+        assert "Could not fetch transcript: No captions available" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError")
