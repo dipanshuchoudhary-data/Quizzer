@@ -5,7 +5,6 @@ import Link from "next/link"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
-  Activity,
   ArrowUpDown,
   CheckSquare,
   Clock3,
@@ -13,6 +12,7 @@ import {
   Filter,
   FolderOpen,
   FolderPlus,
+  MoreHorizontal,
   PencilLine,
   Sparkles,
   Square,
@@ -38,6 +38,13 @@ import {
 } from "@/components/ui/dialog"
 import { Tooltip } from "@/components/ui/tooltip"
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
   assignQuizToCluster,
   assignQuizzesToCluster,
   buildCourseClusterOptions,
@@ -45,6 +52,7 @@ import {
   loadQuizOrganizationMap,
   mergeCourseFromAssignment,
   saveCourseLibrary,
+  saveQuizOrganizationMap,
   type CourseDefinition,
   type QuizOrganizationMap,
 } from "@/features/quiz/organization/storage"
@@ -88,10 +96,14 @@ export default function ExamsPage() {
   const [sortBy, setSortBy] = useState<SortOption>("updated")
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false)
+  const [examPendingDelete, setExamPendingDelete] = useState<{ id: string; title: string } | null>(null)
   const [courseLibrary, setCourseLibrary] = useState<CourseDefinition[]>([])
   const [organizationMap, setOrganizationMap] = useState<QuizOrganizationMap>({})
   const [clusterFilter, setClusterFilter] = useState("__all__")
   const [bulkClusterValue, setBulkClusterValue] = useState("__none__")
+  const [selectedClusterValues, setSelectedClusterValues] = useState<Set<string>>(new Set())
+  const [clusterPendingDelete, setClusterPendingDelete] = useState<{ value: string; label: string } | null>(null)
+  const [showBulkClusterDeleteDialog, setShowBulkClusterDeleteDialog] = useState(false)
   
   // Cluster UX new states
   const [activeClusterModal, setActiveClusterModal] = useState<string | null>(null)
@@ -183,6 +195,13 @@ export default function ExamsPage() {
       await Promise.all(ids.map((id) => quizApi.deleteById(id)))
     },
     onSuccess: () => {
+      const deletedIds = new Set(selectedIds)
+      const nextMap = { ...loadQuizOrganizationMap() }
+      deletedIds.forEach((id) => {
+        delete nextMap[id]
+      })
+      saveQuizOrganizationMap(nextMap)
+      setOrganizationMap(nextMap)
       toast.success(`${selectedIds.size} exam(s) deleted successfully`)
       queryClient.invalidateQueries({ queryKey: ["quizzes"] })
       queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] })
@@ -192,6 +211,32 @@ export default function ExamsPage() {
     onError: () => {
       toast.error("Failed to delete some exams")
       setShowBulkDeleteDialog(false)
+    },
+  })
+
+  const singleDeleteMutation = useMutation({
+    mutationFn: async (id: string) => quizApi.deleteById(id),
+    onSuccess: () => {
+      const deletedId = examPendingDelete?.id
+      if (deletedId) {
+        setSelectedIds((prev) => {
+          const next = new Set(prev)
+          next.delete(deletedId)
+          return next
+        })
+        const nextMap = { ...loadQuizOrganizationMap() }
+        delete nextMap[deletedId]
+        saveQuizOrganizationMap(nextMap)
+        setOrganizationMap(nextMap)
+      }
+      toast.success("Exam deleted successfully")
+      queryClient.invalidateQueries({ queryKey: ["quizzes"] })
+      queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] })
+      setExamPendingDelete(null)
+    },
+    onError: () => {
+      toast.error("Failed to delete exam")
+      setExamPendingDelete(null)
     },
   })
 
@@ -209,6 +254,78 @@ export default function ExamsPage() {
 
   const selectAll = () => setSelectedIds(new Set(visibleQuizzes.map((q) => q.id)))
   const clearSelection = () => setSelectedIds(new Set())
+
+  const toggleClusterSelection = (clusterValue: string) => {
+    setSelectedClusterValues((prev) => {
+      const next = new Set(prev)
+      if (next.has(clusterValue)) {
+        next.delete(clusterValue)
+      } else {
+        next.add(clusterValue)
+      }
+      return next
+    })
+  }
+
+  const clearClusterSelection = () => setSelectedClusterValues(new Set())
+
+  const deleteClusters = (clusterValues: string[]) => {
+    const valuesToDelete = new Set(clusterValues)
+    const optionsToDelete = clusterOptions.filter((option) => valuesToDelete.has(option.value))
+    if (optionsToDelete.length === 0) return
+
+    const courseNamesToDelete = new Set(
+      optionsToDelete.filter((option) => !option.unit_name).map((option) => option.course_name.toLowerCase())
+    )
+    const unitsByCourse = new Map<string, Set<string>>()
+
+    optionsToDelete.forEach((option) => {
+      if (!option.unit_name) return
+      const key = option.course_name.toLowerCase()
+      const units = unitsByCourse.get(key) ?? new Set<string>()
+      units.add(option.unit_name.toLowerCase())
+      unitsByCourse.set(key, units)
+    })
+
+    const nextLibrary = courseLibrary
+      .filter((course) => !courseNamesToDelete.has(course.name.toLowerCase()))
+      .map((course) => {
+        const unitsToDelete = unitsByCourse.get(course.name.toLowerCase())
+        if (!unitsToDelete) return course
+        return {
+          ...course,
+          units: course.units.filter((unit) => !unitsToDelete.has(unit.toLowerCase())),
+        }
+      })
+      .filter((course) => {
+        if (!unitsByCourse.has(course.name.toLowerCase())) return true
+        return course.units.length > 0
+      })
+
+    const nextMap = { ...loadQuizOrganizationMap() }
+    Object.keys(nextMap).forEach((quizId) => {
+      if (valuesToDelete.has(getQuizClusterValue(quizId))) {
+        delete nextMap[quizId]
+      }
+    })
+
+    setCourseLibrary(nextLibrary)
+    saveCourseLibrary(nextLibrary)
+    setOrganizationMap(nextMap)
+    saveQuizOrganizationMap(nextMap)
+    setSelectedClusterValues((prev) => {
+      const next = new Set(prev)
+      clusterValues.forEach((value) => next.delete(value))
+      return next
+    })
+    if (activeClusterModal && valuesToDelete.has(activeClusterModal)) {
+      setActiveClusterModal(null)
+    }
+    if (clusterFilter !== "__all__" && valuesToDelete.has(clusterFilter)) {
+      setClusterFilter("__all__")
+    }
+    toast.success(`${optionsToDelete.length} cluster${optionsToDelete.length === 1 ? "" : "s"} deleted`)
+  }
 
   const handleCreateCluster = () => {
     const courseName = newCourseName.trim()
@@ -385,22 +502,73 @@ export default function ExamsPage() {
             description="Organize exams effortlessly by linking them to specific courses and batches."
             icon={FolderOpen}
           />
-          <Button 
-            onClick={() => setShowCreateClusterDialog(true)}
-            variant="secondary" 
-            className="rounded-full shadow-sm"
-          >
-            <FolderPlus className="mr-2 size-4" />
-            New Cluster
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {clusterOptions.length > 0 ? (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full shadow-sm"
+                  onClick={() => setSelectedClusterValues(new Set(clusterOptions.map((cluster) => cluster.value)))}
+                >
+                  <CheckSquare className="mr-2 size-4" />
+                  Select All Clusters
+                </Button>
+                {selectedClusterValues.size > 0 ? (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="rounded-full shadow-sm"
+                    onClick={() => setShowBulkClusterDeleteDialog(true)}
+                  >
+                    <Trash2 className="mr-2 size-4" />
+                    Delete {selectedClusterValues.size}
+                  </Button>
+                ) : null}
+              </>
+            ) : null}
+            <Button
+              onClick={() => setShowCreateClusterDialog(true)}
+              variant="secondary"
+              className="rounded-full shadow-sm"
+            >
+              <FolderPlus className="mr-2 size-4" />
+              New Cluster
+            </Button>
+          </div>
         </div>
         
         {clusterOptions.length > 0 ? (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {clusterSnapshots.map((cluster) => (
-              <div key={cluster.value} className={cn(pageCardInteractiveClass, "group space-y-3 dashboard-fade-up")}>
+            {clusterSnapshots.map((cluster) => {
+              const isClusterSelected = selectedClusterValues.has(cluster.value)
+
+              return (
+              <div
+                key={cluster.value}
+                className={cn(
+                  pageCardInteractiveClass,
+                  "group relative space-y-3 dashboard-fade-up",
+                  isClusterSelected && "ring-2 ring-primary ring-offset-2 border-primary/50 bg-primary/5"
+                )}
+              >
+                <button
+                  type="button"
+                  onClick={() => toggleClusterSelection(cluster.value)}
+                  className={cn(
+                    "absolute left-3 top-3 z-10 flex size-6 items-center justify-center rounded border bg-background transition-all hover:bg-muted shadow-sm",
+                    isClusterSelected && "bg-primary border-primary hover:bg-primary/90"
+                  )}
+                  aria-label={isClusterSelected ? "Deselect cluster" : "Select cluster"}
+                >
+                  {isClusterSelected ? (
+                    <CheckSquare className="size-4 text-primary-foreground" />
+                  ) : (
+                    <Square className="size-4 text-muted-foreground" />
+                  )}
+                </button>
                 <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 pl-8">
                     <div className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary shrink-0">
                       <FolderOpen className="size-4" />
                     </div>
@@ -409,6 +577,32 @@ export default function ExamsPage() {
                       <p className="text-xs text-muted-foreground font-medium">{cluster.total} exam{cluster.total === 1 ? "" : "s"}</p>
                     </div>
                   </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg">
+                        <MoreHorizontal className="size-4" />
+                        <span className="sr-only">Cluster actions</span>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => setActiveClusterModal(cluster.value)}>
+                        <FolderOpen className="size-4" />
+                        Open cluster
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => selectClusterExams(cluster.value)}>
+                        <CheckSquare className="size-4" />
+                        Select exams inside
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onClick={() => setClusterPendingDelete({ value: cluster.value, label: cluster.label })}
+                      >
+                        <Trash2 className="size-4" />
+                        Delete cluster
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
 
                 <div className="rounded-xl border bg-background/50 p-3 flex-1">
@@ -440,7 +634,8 @@ export default function ExamsPage() {
                   </Tooltip>
                 </div>
               </div>
-            ))}
+              )
+            })}
           </div>
         ) : (
           <div className="rounded-2xl border-2 border-dashed bg-muted/10 p-8 flex flex-col items-center justify-center text-center">
@@ -495,8 +690,7 @@ export default function ExamsPage() {
               const durationLabel = quiz.duration_minutes ? `${quiz.duration_minutes} min` : "No limit"
               const readiness = getReadinessProgress(questionCount, Boolean(quiz.duration_minutes), isPublished)
               const isSelected = selectedIds.has(quiz.id)
-              const openExamId = isPublished && quiz.public_id ? quiz.public_id : quiz.id
-              const openExamHref = `/exam/${openExamId}`
+              const openExamHref = `/quiz/${quiz.id}`
               const quizCluster = organizationMap[quiz.id]
               const clusterLabel = quizCluster?.course_name
                 ? `${quizCluster.course_name}${quizCluster.unit_name ? ` • ${quizCluster.unit_name}` : ""}`
@@ -537,6 +731,17 @@ export default function ExamsPage() {
                     <Link href={`/quiz/${quiz.id}?tab=questions`} className={cn(buttonVariants({ size: "icon", variant: "outline" }), "h-8 w-8 shadow-sm bg-background")}>
                       <PencilLine className="size-4" />
                     </Link>
+                    <Tooltip content="Delete exam">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 bg-background text-muted-foreground shadow-sm hover:bg-destructive/10 hover:text-destructive"
+                        onClick={() => setExamPendingDelete({ id: quiz.id, title: quiz.title })}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </Tooltip>
                   </div>
 
                   <div className="flex items-start justify-between gap-3 pl-8">
@@ -549,7 +754,12 @@ export default function ExamsPage() {
 
                     <div className="flex flex-col items-end gap-1.5 shrink-0">
                       <Badge className={statusBadgeClasses(status)}>{status}</Badge>
-                      <Badge variant={quizCluster?.course_name ? "secondary" : "outline"} className="max-w-[120px] truncate text-[10px]">
+                      <Badge
+                        className={cn(
+                          "max-w-[120px] truncate text-[10px]",
+                          quizCluster?.course_name ? "bg-secondary text-secondary-foreground" : "border bg-transparent"
+                        )}
+                      >
                         {clusterLabel}
                       </Badge>
                     </div>
@@ -727,9 +937,12 @@ export default function ExamsPage() {
                             </div>
                             
                             <div className="flex items-center gap-2 shrink-0 ml-14 sm:ml-0">
-                              <Button size="sm" className="h-9 px-4 rounded-lg shadow-sm" asChild>
-                                <Link href={exam.is_published && exam.public_id ? `/exam/${exam.public_id}` : `/quiz/${exam.id}`}>Open Exam</Link>
-                              </Button>
+                              <Link
+                                href={`/quiz/${exam.id}`}
+                                className={cn(buttonVariants({ size: "sm" }), "h-9 rounded-lg px-4 shadow-sm")}
+                              >
+                                Open Exam
+                              </Link>
                               <Tooltip content="Remove exam from this cluster">
                                 <Button size="sm" variant="ghost" className="h-9 w-9 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg"
                                   onClick={() => {
@@ -807,6 +1020,83 @@ export default function ExamsPage() {
             </Button>
             <Button variant="destructive" onClick={() => bulkDeleteMutation.mutate(Array.from(selectedIds))} disabled={bulkDeleteMutation.isPending}>
               {bulkDeleteMutation.isPending ? "Deleting..." : `Delete ${selectedIds.size} Exam${selectedIds.size > 1 ? "s" : ""}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Single Exam Delete Dialog */}
+      <Dialog open={!!examPendingDelete} onOpenChange={(open) => !open && setExamPendingDelete(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Exam?</DialogTitle>
+            <DialogDescription>
+              Delete &quot;{examPendingDelete?.title}&quot; permanently? This removes its questions, results, and student attempts.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setExamPendingDelete(null)} disabled={singleDeleteMutation.isPending}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => examPendingDelete && singleDeleteMutation.mutate(examPendingDelete.id)}
+              disabled={singleDeleteMutation.isPending}
+            >
+              {singleDeleteMutation.isPending ? "Deleting..." : "Delete Exam"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cluster Delete Dialogs */}
+      <Dialog open={!!clusterPendingDelete} onOpenChange={(open) => !open && setClusterPendingDelete(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Cluster?</DialogTitle>
+            <DialogDescription>
+              Delete &quot;{clusterPendingDelete?.label}&quot; and remove this cluster from assigned exams? The exams themselves will stay.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setClusterPendingDelete(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (!clusterPendingDelete) return
+                deleteClusters([clusterPendingDelete.value])
+                setClusterPendingDelete(null)
+              }}
+            >
+              Delete Cluster
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showBulkClusterDeleteDialog} onOpenChange={setShowBulkClusterDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete {selectedClusterValues.size} Cluster{selectedClusterValues.size > 1 ? "s" : ""}?</DialogTitle>
+            <DialogDescription>
+              This removes the selected clusters from your workspace and clears those cluster labels from assigned exams. Exams will not be deleted.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBulkClusterDeleteDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                deleteClusters(Array.from(selectedClusterValues))
+                clearClusterSelection()
+                setShowBulkClusterDeleteDialog(false)
+              }}
+            >
+              Delete Clusters
             </Button>
           </DialogFooter>
         </DialogContent>
