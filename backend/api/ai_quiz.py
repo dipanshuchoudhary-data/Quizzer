@@ -6,6 +6,7 @@ from html.parser import HTMLParser
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -22,17 +23,17 @@ from backend.integrations.youtube import (
     is_youtube_url,
     extract_video_id,
     fetch_video_metadata,
-    fetch_transcript,
     classify_transcript,
     filter_by_time_range,
     summarize_chunks_full_video,
-    YouTubeTranscriptError,
     TranscriptTooLargeError,
 )
+from backend.lib.getCaptions import CaptionFetchError, get_captions
 
 
 router = APIRouter(prefix="/ai/quiz", tags=["AI Quiz"])
 logger = logging.getLogger(__name__)
+CAPTIONS_UNAVAILABLE_MESSAGE = "Captions not available for this video. Try a video with subtitles enabled."
 
 
 class _HTMLTextExtractor(HTMLParser):
@@ -78,6 +79,30 @@ def _fetch_url_content(url: str) -> str:
     parser = _HTMLTextExtractor()
     parser.feed(raw)
     return parser.get_text()
+
+
+def _transcript_text_to_segments(transcript: str, duration_seconds: int | float = 0) -> list[dict]:
+    words = transcript.split()
+    if not words:
+        return []
+
+    words_per_segment = 80
+    chunks = [
+        " ".join(words[index : index + words_per_segment])
+        for index in range(0, len(words), words_per_segment)
+    ]
+
+    total_duration = float(duration_seconds or 0)
+    segment_duration = total_duration / len(chunks) if total_duration > 0 else 5.0
+
+    return [
+        {
+            "text": chunk,
+            "start": index * segment_duration,
+            "duration": segment_duration,
+        }
+        for index, chunk in enumerate(chunks)
+    ]
 
 
 def _normalize_question_type_strict(value: str | None) -> str | None:
@@ -218,16 +243,16 @@ async def add_url_source(
                 logger.warning("youtube_metadata_error", url=url, error=str(exc))
                 metadata = {"title": f"YouTube video ({video_id})", "duration_seconds": 0}
 
-            # Fetch transcript
+            # Fetch transcript through Supadata.
             try:
-                segments = await loop.run_in_executor(None, fetch_transcript, video_id)
-            except YouTubeTranscriptError as exc:
-                raise HTTPException(status_code=400, detail=str(exc)) from exc
+                transcript = await loop.run_in_executor(None, get_captions, video_id)
+                segments = _transcript_text_to_segments(transcript, metadata.get("duration_seconds", 0))
+            except CaptionFetchError as exc:
+                logger.warning("youtube_caption_fetch_error", video_id=video_id, error=str(exc))
+                return JSONResponse(status_code=400, content={"error": CAPTIONS_UNAVAILABLE_MESSAGE})
             except Exception as exc:
-                raise HTTPException(
-                    status_code=400,
-                    detail="No captions found. Please paste the transcript manually.",
-                ) from exc
+                logger.warning("youtube_caption_fetch_unexpected_error", video_id=video_id, error=str(exc))
+                return JSONResponse(status_code=400, content={"error": CAPTIONS_UNAVAILABLE_MESSAGE})
 
             full_text, size_class = classify_transcript(segments)
 
@@ -319,22 +344,20 @@ async def confirm_youtube_source(
 
     loop = asyncio.get_event_loop()
 
-    # Fetch transcript once
+    # Fetch transcript once through Supadata.
     try:
-        segments = await loop.run_in_executor(None, fetch_transcript, video_id)
-    except YouTubeTranscriptError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        transcript = await loop.run_in_executor(None, get_captions, video_id)
     except Exception as exc:
-        raise HTTPException(
-            status_code=400,
-            detail="No captions found. Please paste the transcript manually.",
-        ) from exc
+        logger.warning("youtube_caption_fetch_error", video_id=video_id, error=str(exc))
+        return JSONResponse(status_code=400, content={"error": CAPTIONS_UNAVAILABLE_MESSAGE})
 
     # Metadata for storing
     try:
         metadata = await loop.run_in_executor(None, fetch_video_metadata, video_id)
     except Exception:
         metadata = {"title": f"YouTube video ({video_id})", "duration_seconds": 0}
+
+    segments = _transcript_text_to_segments(transcript, metadata.get("duration_seconds", 0))
 
     youtube_url = f"https://www.youtube.com/watch?v={video_id}"
 
