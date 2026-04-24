@@ -47,10 +47,8 @@ dependencies = [
     "pandas",
     "structlog",
     "cloudinary>=1.44.1",
+    "supadata",
     "authlib>=1.6.9",
-    # YouTube ingestion
-    "youtube-transcript-api",
-    "yt-dlp",
 ]
 
 [tool.uv]
