@@ -25,7 +25,7 @@ export function QuizHeader({ quiz }: { quiz: Quiz }) {
     void aiApi
       .getLatestQuizJob(quiz.id)
       .then((job) => {
-        if (!cancelled) setActiveJobId(job.id)
+        if (!cancelled && job.id) setActiveJobId(job.id)
       })
       .catch(() => undefined)
     return () => {

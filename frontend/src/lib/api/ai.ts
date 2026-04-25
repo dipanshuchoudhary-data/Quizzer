@@ -49,6 +49,11 @@ export const aiApi = {
     return data
   },
 
+  async getLatestQuizJob(quizId: string): Promise<AIJob> {
+    const { data } = await api.get<AIJob>(`/ai/jobs/quiz/${quizId}/latest`)
+    return data
+  },
+
   async getJobStatus(jobId: string): Promise<AIJob> {
     const { data } = await api.get<AIJob>(`/ai/jobs/${jobId}`)
     return data
