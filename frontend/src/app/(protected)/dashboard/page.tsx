@@ -1,34 +1,39 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useQuery } from "@tanstack/react-query"
 import { Manrope } from "next/font/google"
 import {
   Activity,
   AlertTriangle,
+  ArrowRight,
   BookOpen,
-  CalendarClock,
   CheckCircle2,
-  Rocket,
+  Clock3,
+  FileText,
+  Search,
   Sparkles,
   Users,
 } from "lucide-react"
 import { dashboardApi } from "@/lib/api/dashboard"
 import { cn } from "@/lib/utils"
-import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
-import { KpiCard, PageHeader, SectionHeader, StatusPill, pageCardClass, pageIcons, statusToneStyles } from "@/components/page/page-system"
+import { KpiCard, PageHeader, SectionHeader, pageCardClass, pageCardInteractiveClass, pageIcons } from "@/components/page/page-system"
 import { useAuthStore } from "@/stores/useAuthStore"
 import { getDisplayName } from "@/lib/user"
 
 const dashboardFont = Manrope({ subsets: ["latin"], weight: ["400", "500", "600", "700"] })
+const RECENT_SEARCHES_KEY = "quizzer:dashboard-recent-searches-v1"
 
-const statusStyles: Record<string, string> = {
-  Active: "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/30 dark:text-emerald-200",
-  Scheduled: "bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200",
-  Idle: "bg-muted text-foreground",
-  Issues: "bg-rose-100 text-rose-900 dark:bg-rose-900/40 dark:text-rose-200",
+type ExamTab = "ALL" | "ACTIVE" | "COMPLETED" | "DRAFTS"
+
+type SearchResultItem = {
+  id: string
+  title: string
+  meta: string
+  href?: string
 }
 
 function isRecent(dateText?: string, days = 7) {
@@ -39,89 +44,36 @@ function isRecent(dateText?: string, days = 7) {
   return parsed.getTime() >= cutoff
 }
 
-function usePrefersReducedMotion() {
-  const [reduced, setReduced] = useState(false)
-  useEffect(() => {
-    const media = window.matchMedia("(prefers-reduced-motion: reduce)")
-    setReduced(media.matches)
-    const handler = () => setReduced(media.matches)
-    media.addEventListener?.("change", handler)
-    return () => media.removeEventListener?.("change", handler)
-  }, [])
-  return reduced
+function formatDateLabel(dateText?: string) {
+  if (!dateText) return "Updated recently"
+  const parsed = new Date(dateText)
+  if (Number.isNaN(parsed.getTime())) return "Updated recently"
+  return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(parsed)
 }
 
-function useCountUp(value: number, duration = 700) {
-  const reducedMotion = usePrefersReducedMotion()
-  const [display, setDisplay] = useState(value)
-  const previous = useRef(value)
-
-  useEffect(() => {
-    if (reducedMotion) {
-      setDisplay(value)
-      previous.current = value
-      return
-    }
-
-    const startValue = previous.current
-    const delta = value - startValue
-    if (delta === 0) return
-
-    const startTime = performance.now()
-    let frame = 0
-
-    const tick = (now: number) => {
-      const progress = Math.min((now - startTime) / duration, 1)
-      const nextValue = Math.round(startValue + delta * progress)
-      setDisplay(nextValue)
-      if (progress < 1) {
-        frame = requestAnimationFrame(tick)
-      } else {
-        previous.current = value
-      }
-    }
-
-    frame = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(frame)
-  }, [duration, reducedMotion, value])
-
-  return display
+function statusTone(status: "Active" | "Completed" | "Draft") {
+  if (status === "Active") return "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200"
+  if (status === "Completed") return "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
+  return "bg-muted text-foreground"
 }
 
-function formatTimeRemaining(seconds: number | null) {
-  if (seconds == null) return "No time limit"
-  if (seconds <= 0) return "Ending now"
-  const hrs = Math.floor(seconds / 3600)
-  const mins = Math.floor((seconds % 3600) / 60)
-  if (hrs > 0) return `${hrs}h ${mins}m left`
-  return `${mins}m left`
-}
-
-type TrendDirection = "up" | "down" | "flat"
-
-const ctaPrimaryClass =
-  "!bg-slate-900 !text-white hover:!bg-slate-800 focus-visible:ring-2 focus-visible:ring-ring dark:!bg-slate-100 dark:!text-slate-950 dark:hover:!bg-white"
-const ctaSecondaryClass =
-  "!bg-muted !text-foreground border border-border hover:!bg-accent"
-const ctaOutlineClass =
-  "!bg-background !text-foreground border border-border hover:!bg-accent"
-
-function DashboardBadge({ label, pulse }: { label: string; pulse?: boolean }) {
-  return (
-    <Badge
-      className={cn(
-        "rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wide transition-colors",
-        statusStyles[label] ?? "bg-muted text-muted-foreground",
-        pulse && "dash-pulse"
-      )}
-    >
-      {label}
-    </Badge>
-  )
+function normalizeQuery(value: string) {
+  return value.trim().toLowerCase()
 }
 
 export default function DashboardPage() {
+  const router = useRouter()
   const user = useAuthStore((s) => s.user)
+  const displayName = getDisplayName(user)
+
+  const [examTab, setExamTab] = useState<ExamTab>("ALL")
+  const [searchQuery, setSearchQuery] = useState("")
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("")
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchLoading, setSearchLoading] = useState(false)
+  const [activeSearchIndex, setActiveSearchIndex] = useState(0)
+  const [recentSearches, setRecentSearches] = useState<string[]>([])
+  const searchContainerRef = useRef<HTMLDivElement | null>(null)
 
   const { data: summary, isLoading } = useQuery({
     queryKey: ["dashboard-summary"],
@@ -135,6 +87,57 @@ export default function DashboardPage() {
     staleTime: 15_000,
   })
 
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery)
+    }, 300)
+    return () => window.clearTimeout(timeout)
+  }, [searchQuery])
+
+  useEffect(() => {
+    const normalized = normalizeQuery(searchQuery)
+    if (normalized.length === 0) {
+      setSearchLoading(false)
+      return
+    }
+    setSearchLoading(true)
+    const timeout = window.setTimeout(() => setSearchLoading(false), 220)
+    return () => window.clearTimeout(timeout)
+  }, [searchQuery])
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem(RECENT_SEARCHES_KEY)
+    if (!stored) return
+    try {
+      const parsed = JSON.parse(stored) as string[]
+      if (Array.isArray(parsed)) {
+        setRecentSearches(parsed.slice(0, 5))
+      }
+    } catch {
+      setRecentSearches([])
+    }
+  }, [])
+
+  useEffect(() => {
+    const onMouseDown = (event: MouseEvent) => {
+      if (!searchContainerRef.current) return
+      if (!searchContainerRef.current.contains(event.target as Node)) {
+        setSearchOpen(false)
+      }
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSearchOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", onMouseDown)
+    window.addEventListener("keydown", onKeyDown)
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown)
+      window.removeEventListener("keydown", onKeyDown)
+    }
+  }, [])
+
   const snapshot = useMemo(() => {
     const total = summary?.stats.total_quizzes ?? 0
     const published = summary?.stats.published_exams ?? 0
@@ -145,10 +148,6 @@ export default function DashboardPage() {
     const totalUpdatedThisWeek = summary?.recent_quizzes.filter((quiz) => isRecent(quiz.updated_at)).length ?? 0
     const publishedThisWeek =
       summary?.recent_quizzes.filter((quiz) => quiz.is_published && isRecent(quiz.updated_at)).length ?? 0
-    const attemptActivityThisWeek =
-      summary?.recent_activity.filter((item) => isRecent(item.updated_at) && /attempt|submission|started/i.test(item.event)).length ??
-      0
-    const jobsThisWeek = summary?.running_jobs.filter((job) => isRecent(job.created_at)).length ?? 0
 
     return {
       total,
@@ -158,84 +157,154 @@ export default function DashboardPage() {
       trends: {
         total: totalUpdatedThisWeek,
         published: publishedThisWeek,
-        activeAttempts: attemptActivityThisWeek,
-        aiJobs: jobsThisWeek,
       },
     }
   }, [summary])
 
-  const totalDisplay = useCountUp(snapshot.total)
-  const publishedDisplay = useCountUp(snapshot.published)
-  const activeAttemptsDisplay = useCountUp(snapshot.activeAttempts)
-  const aiJobsDisplay = useCountUp(snapshot.aiJobs)
+  const activeExamsById = useMemo(() => {
+    const map = new Map<string, { active_students: number; violations_count: number; time_remaining_seconds: number | null }>()
+    ;(summary?.active_exams ?? []).forEach((exam) => {
+      map.set(exam.id, {
+        active_students: exam.active_students,
+        violations_count: exam.violations_count,
+        time_remaining_seconds: exam.time_remaining_seconds,
+      })
+    })
+    return map
+  }, [summary?.active_exams])
 
-  const displayName = getDisplayName(user)
-  const activeExams = summary?.active_exams ?? []
-  const draftQuiz = summary?.recent_quizzes.find((quiz) => !quiz.is_published && !quiz.is_archived)
-  const publishedQuiz = summary?.recent_quizzes.find((quiz) => quiz.is_published && !quiz.is_archived)
+  const examCards = useMemo(() => {
+    const cards = (summary?.recent_quizzes ?? []).map((quiz) => {
+      const active = activeExamsById.get(quiz.id)
+      const status = active && (active.time_remaining_seconds ?? 0) > 0 ? "Active" : quiz.is_published ? "Completed" : "Draft"
+      return {
+        id: quiz.id,
+        title: quiz.title,
+        description: quiz.description || "No description provided yet.",
+        status: status as "Active" | "Completed" | "Draft",
+        updated_at: quiz.updated_at,
+        duration: quiz.duration_minutes,
+        question_count: quiz.question_count ?? 0,
+        active_students: active?.active_students ?? 0,
+        violations_count: active?.violations_count ?? 0,
+      }
+    })
 
-  const todayOverview = useMemo(() => {
-    const activeNow = activeExams.filter((exam) => (exam.time_remaining_seconds ?? 0) > 0)
-    const endingSoonIds = new Set(
-      activeNow.filter((exam) => exam.time_remaining_seconds != null && exam.time_remaining_seconds <= 30 * 60).map((exam) => exam.id)
-    )
-    const violationIds = new Set(activeExams.filter((exam) => exam.violations_count > 0).map((exam) => exam.id))
-    const needsAttention = new Set([...endingSoonIds, ...violationIds]).size
-    const scheduled = Math.max(snapshot.published - activeNow.length, 0)
+    const byTab = cards.filter((card) => {
+      if (examTab === "ALL") return true
+      if (examTab === "ACTIVE") return card.status === "Active"
+      if (examTab === "COMPLETED") return card.status === "Completed"
+      return card.status === "Draft"
+    })
 
-    return {
-      activeNow: activeNow.length,
-      scheduled,
-      needsAttention,
-      endingSoon: endingSoonIds.size,
-      withViolations: violationIds.size,
-    }
-  }, [activeExams, snapshot.published])
+    const query = normalizeQuery(debouncedSearchQuery)
+    const bySearch =
+      query.length === 0
+        ? byTab
+        : byTab.filter((card) => {
+            const haystack = `${card.title} ${card.description} ${card.status}`.toLowerCase()
+            return haystack.includes(query)
+          })
 
-  const activeNowDisplay = useCountUp(todayOverview.activeNow, 450)
-  const scheduledDisplay = useCountUp(todayOverview.scheduled, 450)
-  const needsAttentionDisplay = useCountUp(todayOverview.needsAttention, 450)
+    return bySearch.sort((a, b) => {
+      const dateA = a.updated_at ? new Date(a.updated_at).getTime() : 0
+      const dateB = b.updated_at ? new Date(b.updated_at).getTime() : 0
+      return dateB - dateA
+    })
+  }, [activeExamsById, debouncedSearchQuery, examTab, summary?.recent_quizzes])
 
-  const alertCards = useMemo(() => {
-    const alerts = [
-      ...(liveExamsData?.alerts ?? []).map((alert) => ({
-        message: `${alert.quiz_name}: ${alert.message}`,
-        severity: alert.severity,
-      })),
-      ...(todayOverview.endingSoon > 0
-        ? [{ message: `${todayOverview.endingSoon} exam${todayOverview.endingSoon > 1 ? "s" : ""} ending soon`, severity: "warning" }]
-        : []),
-      ...(todayOverview.withViolations > 0
-        ? [{ message: `${todayOverview.withViolations} exam${todayOverview.withViolations > 1 ? "s" : ""} with violations`, severity: "critical" }]
-        : []),
+  const searchSections = useMemo(() => {
+    const query = normalizeQuery(debouncedSearchQuery)
+
+    const examsItems: SearchResultItem[] = (summary?.recent_quizzes ?? [])
+      .filter((quiz) => {
+        if (!query) return true
+        return `${quiz.title} ${quiz.description ?? ""}`.toLowerCase().includes(query)
+      })
+      .slice(0, 6)
+      .map((quiz) => ({
+        id: `exam-${quiz.id}`,
+        title: quiz.title,
+        meta: `Exam • ${formatDateLabel(quiz.updated_at)}`,
+        href: `/quiz/${quiz.id}`,
+      }))
+
+    const questionItems: SearchResultItem[] = (summary?.recent_activity ?? [])
+      .filter((item) => /question|section|answer|submission/i.test(item.event))
+      .filter((item) => {
+        if (!query) return true
+        return `${item.title} ${item.event}`.toLowerCase().includes(query)
+      })
+      .slice(0, 6)
+      .map((item) => ({
+        id: `question-${item.id}`,
+        title: item.title,
+        meta: `${item.event} • ${formatDateLabel(item.updated_at)}`,
+      }))
+
+    const recentItems: SearchResultItem[] = recentSearches.slice(0, 5).map((entry, index) => ({
+      id: `recent-${index}`,
+      title: entry,
+      meta: "Recent search",
+    }))
+
+    return [
+      { title: "Exams", items: examsItems },
+      { title: "Questions", items: questionItems },
+      { title: "Recent Searches", items: recentItems },
     ]
+  }, [debouncedSearchQuery, recentSearches, summary?.recent_activity, summary?.recent_quizzes])
 
-    const seen = new Set<string>()
-    return alerts.filter((item) => {
-      const key = `${item.severity}:${item.message}`
-      if (seen.has(key)) return false
-      seen.add(key)
-      return true
-    })
-  }, [liveExamsData?.alerts, todayOverview.endingSoon, todayOverview.withViolations])
+  const flattenedSearchItems = useMemo(() => searchSections.flatMap((section) => section.items), [searchSections])
 
-  const prioritizedExams = useMemo(() => {
-    const withPriority = activeExams.map((exam) => {
-      const isActive = (exam.time_remaining_seconds ?? 0) > 0
-      const endingSoon = isActive && exam.time_remaining_seconds != null && exam.time_remaining_seconds <= 30 * 60
-      const hasViolations = exam.violations_count > 0
-      const rank = endingSoon ? 1 : hasViolations ? 2 : isActive ? 3 : 4
-      const status = hasViolations ? "Issues" : isActive ? "Active" : "Scheduled"
-      return { ...exam, isActive, endingSoon, hasViolations, rank, status }
-    })
+  useEffect(() => {
+    if (activeSearchIndex >= flattenedSearchItems.length) {
+      setActiveSearchIndex(0)
+    }
+  }, [activeSearchIndex, flattenedSearchItems.length])
 
-    return withPriority.sort((a, b) => {
-      if (a.rank !== b.rank) return a.rank - b.rank
-      const aTime = a.time_remaining_seconds ?? Number.POSITIVE_INFINITY
-      const bTime = b.time_remaining_seconds ?? Number.POSITIVE_INFINITY
-      return aTime - bTime
-    })
-  }, [activeExams])
+  const commitRecentSearch = (query: string) => {
+    const normalized = query.trim()
+    if (!normalized) return
+    const next = [normalized, ...recentSearches.filter((entry) => entry.toLowerCase() !== normalized.toLowerCase())].slice(0, 5)
+    setRecentSearches(next)
+    window.localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next))
+  }
+
+  const selectSearchItem = (item: SearchResultItem) => {
+    commitRecentSearch(searchQuery)
+    setSearchOpen(false)
+    if (item.href) {
+      router.push(item.href)
+      return
+    }
+    if (item.meta === "Recent search") {
+      setSearchQuery(item.title)
+      setSearchOpen(true)
+    }
+  }
+
+  const handleSearchKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (!searchOpen) setSearchOpen(true)
+    if (event.key === "ArrowDown") {
+      event.preventDefault()
+      setActiveSearchIndex((current) => Math.min(current + 1, Math.max(flattenedSearchItems.length - 1, 0)))
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault()
+      setActiveSearchIndex((current) => Math.max(current - 1, 0))
+    }
+    if (event.key === "Enter" && flattenedSearchItems[activeSearchIndex]) {
+      event.preventDefault()
+      selectSearchItem(flattenedSearchItems[activeSearchIndex])
+    }
+  }
+
+  const topAlert = useMemo(() => {
+    const alerts = liveExamsData?.alerts ?? []
+    if (alerts.length === 0) return null
+    return alerts[0]
+  }, [liveExamsData?.alerts])
 
   return (
     <div className={cn("space-y-8", dashboardFont.className)}>
@@ -245,325 +314,280 @@ export default function DashboardPage() {
         subtitle="Review status, handle priorities, and move directly to the next action."
       />
 
-      <section className="dashboard-fade-up grid gap-4 lg:grid-cols-[1.35fr_1fr]" style={{ animationDelay: "40ms" }}>
-        <div
-          className={cn(
-            `${pageCardClass} dashboard-fade-up`,
-            todayOverview.needsAttention > 0
-              ? "border-red-300 shadow-red-100/50 dark:border-red-800"
-              : "border-green-200 dark:border-green-900"
-          )}
-          style={{ animationDelay: "220ms" }}
-        >
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <SectionHeader title="Operational Snapshot" description="Live system status and priorities" icon={pageIcons.active} />
-            </div>
-            <StatusPill tone={todayOverview.needsAttention > 0 ? "error" : "success"} label={todayOverview.needsAttention > 0 ? "Attention needed" : "All systems stable"} />
+      <section className={cn(pageCardClass, "relative overflow-visible bg-gradient-to-r from-emerald-50/80 via-background to-amber-50/70")}>
+        <div ref={searchContainerRef} className="relative max-w-4xl">
+          <label htmlFor="dashboard-search" className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            Search workspace
+          </label>
+          <div className="group relative">
+            <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              id="dashboard-search"
+              value={searchQuery}
+              onChange={(event) => {
+                setSearchQuery(event.target.value)
+                setActiveSearchIndex(0)
+              }}
+              onFocus={() => setSearchOpen(true)}
+              onKeyDown={handleSearchKeyDown}
+              placeholder="Search exams, questions, or topics..."
+              className="h-12 w-full rounded-full border border-border/90 bg-background pl-11 pr-4 text-sm text-foreground shadow-sm transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-accent)] focus-visible:ring-offset-2 group-hover:shadow-md"
+              aria-expanded={searchOpen}
+              aria-haspopup="listbox"
+            />
           </div>
 
-          {todayOverview.needsAttention > 0 ? (
-            <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-red-200 bg-red-100 px-3 py-1 text-xs font-semibold text-red-800 dark:border-red-800 dark:bg-red-900 dark:text-red-200">
-              <AlertTriangle className="size-3.5" />
-              {needsAttentionDisplay} issue{needsAttentionDisplay === 1 ? "" : "s"} detected
-            </div>
-          ) : null}
-
-          <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
-            <div className={cn("rounded-xl border px-3 py-3 transition-all duration-200 hover:scale-[1.02] hover:shadow-sm", statusToneStyles.info)}>
-              <div className="flex items-center gap-2">
-                <Activity className="size-4 text-orange-800 dark:text-orange-200" />
-                <span className="text-xs font-semibold uppercase tracking-wide text-orange-800 dark:text-orange-200">Active</span>
-              </div>
-              <p className="mt-1 text-xl font-bold text-foreground">{activeNowDisplay}</p>
-            </div>
-
-            <div className={cn("rounded-xl border px-3 py-3 transition-all duration-200 hover:scale-[1.02] hover:shadow-sm", statusToneStyles.warning)}>
-              <div className="flex items-center gap-2">
-                <CalendarClock className="size-4 text-yellow-800 dark:text-yellow-200" />
-                <span className="text-xs font-semibold uppercase tracking-wide text-yellow-800 dark:text-yellow-200">Scheduled</span>
-              </div>
-              <p className="mt-1 text-xl font-bold text-foreground">{scheduledDisplay}</p>
-            </div>
-
-            <div
-              className={cn(
-                "rounded-xl border px-3 py-3 transition-all duration-200 hover:scale-[1.02] hover:shadow-sm",
-                needsAttentionDisplay > 0
-                  ? statusToneStyles.error
-                  : statusToneStyles.success
-              )}
-            >
-              <div className="flex items-center gap-2">
-                <AlertTriangle
-                  className={cn(
-                    "size-4",
-                    needsAttentionDisplay > 0 ? "text-red-800 dark:text-red-200" : "text-green-800 dark:text-green-200"
-                  )}
-                />
-                <span
-                  className={cn(
-                    "text-xs font-semibold uppercase tracking-wide",
-                    needsAttentionDisplay > 0 ? "text-red-800 dark:text-red-200" : "text-green-800 dark:text-green-200"
-                  )}
-                >
-                  Issues
-                </span>
-              </div>
-              <p className="mt-1 text-xl font-bold text-foreground">{needsAttentionDisplay}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className={pageCardClass}>
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <SectionHeader title="Insights" description="Live alerts and anomaly signals" icon={AlertTriangle} />
-            </div>
-          </div>
-
-          {alertCards.length === 0 ? (
-            <div className="mt-4 flex items-center gap-2 rounded-2xl border border-green-200 bg-green-100 px-3 py-3 text-sm font-semibold text-green-800 dark:border-green-800 dark:bg-green-900 dark:text-green-200">
-              <CheckCircle2 className="size-4" />
-              <span>No urgent alerts</span>
-            </div>
-          ) : (
-            <div className="mt-4 space-y-2">
-              {alertCards.slice(0, 4).map((alert, index) => {
-                const isCritical = String(alert.severity).toLowerCase() === "critical"
-                return (
-                  <div
-                    key={`${alert.message}-${index}`}
-                    className={cn(
-                      "flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm font-medium",
-                      isCritical
-                        ? "border-red-200 bg-red-100 text-red-800 dark:border-red-800 dark:bg-red-900 dark:text-red-200"
-                        : "border-yellow-200 bg-yellow-100 text-yellow-800 dark:border-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
-                    )}
-                  >
-                    <AlertTriangle className="size-4" />
-                    <span>{alert.message}</span>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-      </section>
-
-      <section className="dashboard-fade-up" style={{ animationDelay: "80ms" }}>
-        <SectionHeader title="Quick Snapshot" description="Core metrics with directional context." icon={Sparkles} />
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {isLoading ? (
-            Array.from({ length: 4 }).map((_, index) => (
-              <div key={`stat-skeleton-${index}`} className={cn(pageCardClass, "p-4")}>
-                <div className="skeleton h-4 w-24" />
-                <div className="mt-4 skeleton h-8 w-20" />
-                <div className="mt-2 skeleton h-3 w-28" />
-              </div>
-            ))
-          ) : (
-            [
-              {
-                label: "Total Quizzes",
-                value: totalDisplay,
-                icon: BookOpen,
-                trendDirection: (snapshot.trends.total > 0 ? "up" : "flat") as TrendDirection,
-                trendContext: snapshot.trends.total > 0 ? `+${snapshot.trends.total} this week` : "No change this week",
-                href: "/exams",
-              },
-              {
-                label: "Published Exams",
-                value: publishedDisplay,
-                icon: Rocket,
-                trendDirection: (snapshot.trends.published > 0 ? "up" : "flat") as TrendDirection,
-                trendContext:
-                  snapshot.trends.published > 0 ? `+${snapshot.trends.published} published this week` : "No new publishes this week",
-                href: "/exams",
-              },
-              {
-                label: "Active Attempts",
-                value: activeAttemptsDisplay,
-                icon: Activity,
-                trendDirection: (snapshot.activeAttempts > 0 ? "up" : "down") as TrendDirection,
-                trendContext:
-                  snapshot.activeAttempts > 0
-                    ? `${snapshot.activeAttempts} live now`
-                    : snapshot.trends.activeAttempts > 0
-                    ? `${snapshot.trends.activeAttempts} updates this week`
-                    : "No live attempts now",
-                href: "/exams",
-              },
-              {
-                label: "AI Jobs Running",
-                value: aiJobsDisplay,
-                icon: Sparkles,
-                trendDirection: (snapshot.aiJobs > 0 ? "up" : "flat") as TrendDirection,
-                trendContext: snapshot.aiJobs > 0 ? `${snapshot.aiJobs} in progress` : "Idle right now",
-                href: "/exams#ai-jobs",
-              },
-            ].map((stat, index) => {
-              return (
-                <Link
-                  key={stat.label}
-                  href={stat.href}
-                  className={cn("dashboard-fade-up block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70")}
-                  style={{ animationDelay: `${120 + index * 60}ms` }}
-                >
-                  <KpiCard
-                    title={stat.label}
-                    value={stat.value}
-                    trend={stat.trendDirection === "up" ? "Improving" : stat.trendDirection === "down" ? "Watch closely" : "Stable"}
-                    trendContext={stat.trendContext}
-                    status={stat.trendDirection === "up" ? "positive" : stat.trendDirection === "down" ? "negative" : "neutral"}
-                    icon={stat.icon}
-                  />
-                </Link>
-              )
-            })
-          )}
-        </div>
-      </section>
-
-      <section className="dashboard-fade-up grid gap-4 xl:grid-cols-[1.6fr_1fr]" style={{ animationDelay: "120ms" }}>
-        <div className={cn(pageCardClass, "p-6")}>
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <SectionHeader title="Prioritized Exams" description="Ordered by urgency: ending soon, issues, active, then scheduled." icon={pageIcons.exams} />
-            </div>
-            <Link
-              href="/exams"
-              className="text-xs font-semibold uppercase tracking-widest text-muted-foreground transition-colors hover:text-foreground"
-            >
-              View all
-            </Link>
-          </div>
-
-          <div className="mt-4 space-y-3">
-            {isLoading ? (
-              Array.from({ length: 3 }).map((_, index) => (
-                <div key={`exam-skeleton-${index}`} className="rounded-2xl border bg-background p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="skeleton h-4 w-40" />
-                    <div className="skeleton h-5 w-16" />
-                  </div>
-                  <div className="mt-3 grid grid-cols-2 gap-3">
-                    <div className="skeleton h-3 w-20" />
-                    <div className="skeleton h-3 w-24" />
-                  </div>
+          {searchOpen ? (
+            <div className="absolute z-40 mt-2 w-full rounded-2xl border border-border/90 bg-background p-3 shadow-xl motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-1 motion-safe:duration-200">
+              {searchLoading ? (
+                <div className="space-y-2">
+                  {Array.from({ length: 4 }).map((_, index) => (
+                    <div key={`search-skeleton-${index}`} className="h-12 animate-pulse rounded-xl bg-muted/60" />
+                  ))}
                 </div>
-              ))
-            ) : prioritizedExams.length === 0 ? (
-              <div className="rounded-2xl border bg-background p-6 text-center">
-                <p className="text-sm text-muted-foreground">No active exams right now.</p>
-                <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-                  <Link href="/exams" className={cn(buttonVariants({ size: "sm", variant: "outline" }), ctaOutlineClass)}>
-                    Schedule Exam
-                  </Link>
-                </div>
-              </div>
-            ) : (
-              prioritizedExams.map((exam) => {
-                return (
-                  <div
-                    key={exam.id}
-                    className={cn(
-                      "group rounded-2xl border p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md",
-                      exam.endingSoon
-                        ? "border-yellow-200 bg-yellow-100 dark:border-yellow-800 dark:bg-yellow-900/40"
-                        : exam.hasViolations
-                        ? "border-red-200 bg-red-100 dark:border-red-800 dark:bg-red-900/40"
-                        : exam.isActive
-                        ? "border-green-200 bg-green-100 dark:border-green-800 dark:bg-green-900/40"
-                        : "bg-background"
-                    )}
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-4">
-                      <div className="space-y-2">
-                        <p className="font-semibold text-foreground">{exam.title}</p>
-                        <div className="flex items-center gap-2 text-sm text-foreground">
-                          <Users className="size-4 text-muted-foreground" />
-                          <span>{exam.active_students} students</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <DashboardBadge label={exam.status} pulse={exam.status === "Active"} />
-                          {exam.endingSoon ? (
-                            <Badge className="rounded-full bg-amber-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-900 dark:bg-amber-900/40 dark:text-amber-200">
-                              Ending Soon
-                            </Badge>
-                          ) : null}
-                        </div>
-                      </div>
-
-                      <div className="min-w-[210px] space-y-2">
-                        <div className="flex items-center justify-between text-sm text-foreground">
-                          <span className="text-muted-foreground">
-                            Time remaining
-                          </span>
-                          <span className="font-medium text-foreground">{formatTimeRemaining(exam.time_remaining_seconds)}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-sm text-foreground">
-                          <span className="text-muted-foreground">
-                            Violations
-                          </span>
-                          <span className={cn("font-medium", exam.violations_count > 0 ? "text-rose-700 dark:text-rose-300" : "text-foreground")}>{exam.violations_count}</span>
-                        </div>
-                        <div className="flex items-center justify-end gap-2 pt-1">
-                          <Link href={`/quiz/${exam.id}?tab=monitoring`} className={cn(buttonVariants({ size: "sm" }), ctaPrimaryClass)}>
-                            Monitor Live Exam
-                          </Link>
-                          <Link href={`/quiz/${exam.id}`} className={cn(buttonVariants({ size: "sm", variant: "outline" }), ctaOutlineClass)}>
-                            View Details
-                          </Link>
-                        </div>
+              ) : flattenedSearchItems.length === 0 ? (
+                <div className="rounded-xl border border-dashed p-4 text-center text-sm text-muted-foreground">No matching results. Try a broader keyword.</div>
+              ) : (
+                <div className="space-y-3">
+                  {searchSections.map((section) => (
+                    <div key={section.title} className="space-y-1">
+                      <p className="px-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-muted-foreground">{section.title}</p>
+                      <div className="space-y-1">
+                        {section.items.map((item) => {
+                          const index = flattenedSearchItems.findIndex((entry) => entry.id === item.id)
+                          const isActive = index === activeSearchIndex
+                          return (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onMouseEnter={() => setActiveSearchIndex(index)}
+                              onClick={() => selectSearchItem(item)}
+                              className={cn(
+                                "flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left transition-all duration-150",
+                                isActive
+                                  ? "border-emerald-200 bg-emerald-50/80 dark:border-emerald-800/70 dark:bg-emerald-900/20"
+                                  : "border-transparent hover:border-border hover:bg-muted/40"
+                              )}
+                              role="option"
+                              aria-selected={isActive}
+                            >
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold text-foreground">{item.title}</p>
+                                <p className="truncate text-xs text-muted-foreground">{item.meta}</p>
+                              </div>
+                              {item.href ? <ArrowRight className="size-4 text-muted-foreground" /> : null}
+                            </button>
+                          )
+                        })}
                       </div>
                     </div>
+                  ))}
+                  <div className="border-t pt-2">
+                    <Link
+                      href="/exams"
+                      onClick={() => commitRecentSearch(searchQuery)}
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--brand-accent)] hover:underline"
+                    >
+                      View all results
+                      <ArrowRight className="size-3.5" />
+                    </Link>
                   </div>
-                )
-              })
-            )}
+                </div>
+              )}
+            </div>
+          ) : null}
+        </div>
+      </section>
+
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {isLoading ? (
+          Array.from({ length: 4 }).map((_, index) => (
+            <div key={`stat-skeleton-${index}`} className={cn(pageCardClass, "animate-pulse p-4")}>
+              <div className="h-4 w-24 rounded bg-muted" />
+              <div className="mt-4 h-8 w-20 rounded bg-muted" />
+              <div className="mt-2 h-3 w-28 rounded bg-muted" />
+            </div>
+          ))
+        ) : (
+          [
+            {
+              title: "Total Quizzes",
+              value: snapshot.total,
+              trend: snapshot.trends.total > 0 ? "Improving" : "Stable",
+              trendContext: snapshot.trends.total > 0 ? `+${snapshot.trends.total} this week` : "No change this week",
+              status: snapshot.trends.total > 0 ? "positive" : "neutral",
+              icon: BookOpen,
+            },
+            {
+              title: "Published Exams",
+              value: snapshot.published,
+              trend: snapshot.trends.published > 0 ? "Growing" : "Stable",
+              trendContext: snapshot.trends.published > 0 ? `+${snapshot.trends.published} this week` : "No new publishes",
+              status: snapshot.trends.published > 0 ? "positive" : "neutral",
+              icon: CheckCircle2,
+            },
+            {
+              title: "Active Attempts",
+              value: snapshot.activeAttempts,
+              trend: snapshot.activeAttempts > 0 ? "Live now" : "Idle",
+              trendContext: snapshot.activeAttempts > 0 ? `${snapshot.activeAttempts} students active` : "No live attempts now",
+              status: snapshot.activeAttempts > 0 ? "positive" : "neutral",
+              icon: Users,
+            },
+            {
+              title: "AI Jobs Running",
+              value: snapshot.aiJobs,
+              trend: snapshot.aiJobs > 0 ? "In progress" : "Idle",
+              trendContext: snapshot.aiJobs > 0 ? `${snapshot.aiJobs} jobs running` : "No active jobs",
+              status: snapshot.aiJobs > 0 ? "positive" : "neutral",
+              icon: Sparkles,
+            },
+          ].map((item) => (
+            <KpiCard
+              key={item.title}
+              title={item.title}
+              value={item.value}
+              trend={item.trend}
+              trendContext={item.trendContext}
+              status={item.status as "positive" | "neutral"}
+              icon={item.icon}
+            />
+          ))
+        )}
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-[1.75fr_1fr]">
+        <div className={cn(pageCardClass, "space-y-4 p-6")}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <SectionHeader title="Exam Hub" description="Scannable exam cards with clear state and metadata." icon={pageIcons.exams} />
+            <Link href="/exams" className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground hover:text-foreground">
+              View all exams
+            </Link>
           </div>
+
+          <div className="flex flex-wrap gap-2">
+            {(["ALL", "ACTIVE", "COMPLETED", "DRAFTS"] as ExamTab[]).map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setExamTab(tab)}
+                className={cn(
+                  "h-9 rounded-full border px-4 text-xs font-semibold tracking-wide transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-accent)] focus-visible:ring-offset-2",
+                  examTab === tab
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-200"
+                    : "border-border bg-background text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                )}
+              >
+                {tab === "ALL" ? "All" : tab === "ACTIVE" ? "Active" : tab === "COMPLETED" ? "Completed" : "Drafts"}
+              </button>
+            ))}
+          </div>
+
+          {isLoading ? (
+            <div className="space-y-3">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div key={`exam-row-skeleton-${index}`} className="rounded-2xl border p-4">
+                  <div className="h-4 w-44 animate-pulse rounded bg-muted" />
+                  <div className="mt-2 h-3 w-4/5 animate-pulse rounded bg-muted" />
+                  <div className="mt-4 grid grid-cols-3 gap-2">
+                    <div className="h-3 animate-pulse rounded bg-muted" />
+                    <div className="h-3 animate-pulse rounded bg-muted" />
+                    <div className="h-3 animate-pulse rounded bg-muted" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : examCards.length === 0 ? (
+            <div className="rounded-2xl border border-dashed bg-muted/10 p-10 text-center">
+              <FileText className="mx-auto size-10 text-muted-foreground" />
+              <p className="mt-3 text-lg font-semibold text-foreground">No exams found</p>
+              <p className="mt-1 text-sm text-muted-foreground">Try adjusting your search or exam filter.</p>
+              <p className="mt-3 text-xs text-muted-foreground">Use the Create menu in the top navigation to add a new exam.</p>
+            </div>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2">
+              {examCards.map((exam) => (
+                <Link
+                  key={exam.id}
+                  href={`/quiz/${exam.id}`}
+                  className={cn(
+                    pageCardInteractiveClass,
+                    "space-y-3 rounded-2xl border border-border/80 bg-gradient-to-br from-background via-emerald-50/20 to-amber-50/30 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-accent)] focus-visible:ring-offset-2"
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-base font-semibold text-foreground">{exam.title}</p>
+                      <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{exam.description}</p>
+                    </div>
+                    <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-semibold", statusTone(exam.status))}>{exam.status}</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-1.5">
+                      <Clock3 className="size-3.5" />
+                      {exam.duration ? `${exam.duration} min` : "No limit"}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <FileText className="size-3.5" />
+                      {exam.question_count} questions
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Users className="size-3.5" />
+                      {exam.active_students} active
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <AlertTriangle className="size-3.5" />
+                      {exam.violations_count} violations
+                    </div>
+                  </div>
+
+                  <div className="pt-1 text-[11px] font-medium text-muted-foreground">Updated {formatDateLabel(exam.updated_at)}</div>
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
 
-        <aside className={cn(pageCardClass, "p-6")}>
-          <div className="flex items-center justify-between">
-            <div>
-              <SectionHeader title="Quick Actions" description="High-frequency tasks." icon={Rocket} />
+        <aside className={cn(pageCardClass, "space-y-4 p-6")}>
+          <SectionHeader title="Live attention" description="What requires action right now." icon={Activity} />
+          {topAlert ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/60 dark:bg-amber-900/20">
+              <p className="text-sm font-semibold text-foreground">{topAlert.quiz_name}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{topAlert.message}</p>
+              <Link href={`/quiz/${topAlert.quiz_id}?tab=monitoring`} className={cn(buttonVariants({ size: "sm" }), "mt-3 h-9 rounded-[10px]")}>
+                Open monitoring
+              </Link>
             </div>
-          </div>
+          ) : (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900/60 dark:bg-emerald-900/20">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="size-4 text-emerald-700 dark:text-emerald-300" />
+                <p className="text-sm font-semibold text-foreground">Everything looks stable</p>
+              </div>
+              <p className="mt-2 text-sm text-muted-foreground">No urgent alerts in live exams right now.</p>
+            </div>
+          )}
 
-          <div className="mt-4 space-y-2">
-            <Link
-              href={publishedQuiz ? `/quiz/${publishedQuiz.id}?tab=settings` : "/exams"}
-              className={cn(buttonVariants({ variant: "secondary" }), ctaSecondaryClass, "w-full justify-start")}
-            >
-              <CalendarClock className="mr-2 size-4" />
-              Schedule Exam
-            </Link>
-            <Link
-              href={draftQuiz ? `/quiz/${draftQuiz.id}` : "/exams"}
-              className={cn(buttonVariants({ variant: "outline" }), ctaOutlineClass, "w-full justify-start")}
-            >
-              Resume Draft
-            </Link>
-            <Link href="/quizzes/create" className={cn(buttonVariants({ variant: "outline" }), ctaOutlineClass, "w-full justify-start")}>Import Questions</Link>
+          <div className="rounded-2xl border bg-background p-4">
+            <p className="text-sm font-semibold text-foreground">Recommendations</p>
+            <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
+              <li className="flex items-start gap-2">
+                <span className="mt-1 size-1.5 rounded-full bg-emerald-500" />
+                Review exams with high violation counts first.
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-1 size-1.5 rounded-full bg-emerald-500" />
+                Keep drafts lightweight and publish only complete sets.
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-1 size-1.5 rounded-full bg-emerald-500" />
+                Use search to jump directly to questions and activity logs.
+              </li>
+            </ul>
           </div>
         </aside>
       </section>
-
-      {!isLoading && summary && summary.stats.total_quizzes === 0 ? (
-        <section className="dashboard-fade-up" style={{ animationDelay: "160ms" }}>
-          <div className="rounded-3xl border bg-background p-10 text-center">
-            <p className="text-base font-semibold text-foreground">No quizzes yet</p>
-            <p className="mt-2 text-sm text-muted-foreground">Create your first quiz to start scheduling and monitoring exams.</p>
-            <div className="mt-4 flex justify-center">
-              <Link href="/exams" className={cn(buttonVariants({ variant: "outline" }), ctaOutlineClass)}>
-                Schedule an exam
-              </Link>
-            </div>
-          </div>
-        </section>
-      ) : null}
     </div>
   )
 }
