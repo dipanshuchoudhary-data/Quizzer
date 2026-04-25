@@ -55,9 +55,9 @@ export function PageHeader({ eyebrow, title, subtitle, actions, children, classN
       />
       <div
         className="pointer-events-none absolute -bottom-20 -right-20 -z-10 size-72 animate-pulse rounded-full opacity-70 blur-[80px]"
-        style={{ animationDelay: "1.5s", backgroundColor: "color-mix(in srgb, var(--brand-warm) 24%, transparent)" }}
+        style={{ animationDelay: "1.5s", backgroundColor: "color-mix(in srgb, var(--brand-accent) 18%, transparent)" }}
       />
-      <div className="pointer-events-none absolute left-1/2 top-1/2 -z-10 size-96 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/30 blur-[100px]" />
+      <div className="pointer-events-none absolute left-1/2 top-1/2 -z-10 size-96 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/10 dark:bg-transparent blur-[100px]" />
 
       <div className="relative z-10 flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
         <div className="max-w-3xl space-y-3">
@@ -155,7 +155,10 @@ export function KpiCard({
   const TrendIcon = status === "positive" ? ArrowUpRight : status === "negative" ? ArrowDownRight : Minus
 
   return (
-    <div className={cn(pageCardInteractiveClass, "space-y-4", className)}>
+    <div className={cn(
+      "flex flex-col justify-between min-h-[140px] rounded-[12px] p-5 border shadow-sm transition-all duration-200 ease-in-out hover:shadow-md hover:scale-[1.01] bg-card border-border dark:bg-[#1A1D27] dark:border-[#2A2D3A]",
+      className
+    )}>
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm font-medium text-slate-600 dark:text-[var(--text-secondary)]">{title}</p>
         {Icon ? (

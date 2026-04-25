@@ -316,11 +316,11 @@ export default function DashboardPage() {
 
       <section className={cn(pageCardClass, "relative overflow-visible border-none bg-none p-0 shadow-none")}>
         <div ref={searchContainerRef} className="relative max-w-4xl">
-          <label htmlFor="dashboard-search" className="mb-2 block text-xs font-bold uppercase tracking-[0.16em] text-[var(--brand-accent)]">
-            Search workspace
+          <label htmlFor="dashboard-search" className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.1em] text-[#64748B]">
+            SEARCH WORKSPACE
           </label>
           <div className="group relative">
-            <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-[#4ADE80]" />
             <input
               id="dashboard-search"
               value={searchQuery}
@@ -331,7 +331,7 @@ export default function DashboardPage() {
               onFocus={() => setSearchOpen(true)}
               onKeyDown={handleSearchKeyDown}
               placeholder="Search exams, questions, or topics..."
-              className="h-12 w-full rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] pl-11 pr-4 text-sm text-[var(--text-primary)] shadow-sm transition-all duration-200 focus-visible:border-[var(--brand-accent)] focus-visible:outline-none focus-visible:ring-0 focus-visible:shadow-[var(--brand-accent-glow)] group-hover:shadow-md"
+              className="h-[48px] w-full rounded-[10px] border border-border bg-background dark:bg-[#1A1D27] dark:border-[#2A2D3A] pl-11 pr-4 text-sm text-foreground shadow-sm transition-all duration-200 focus-visible:border-[#4ADE80] focus-visible:outline-none focus-visible:ring-0 focus-visible:shadow-[0_0_0_3px_rgba(74,222,128,0.15)] group-hover:shadow-md placeholder-[#64748B]"
               aria-expanded={searchOpen}
               aria-haspopup="listbox"
             />
@@ -399,7 +399,7 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-4 grid-cols-4">
         {isLoading ? (
           Array.from({ length: 4 }).map((_, index) => (
             <div key={`stat-skeleton-${index}`} className={cn(pageCardClass, "animate-pulse p-4")}>
