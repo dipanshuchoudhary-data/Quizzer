@@ -25,7 +25,7 @@ export function QuizCreationLayout({
 }) {
   return (
     <div className="min-h-screen space-y-5 sm:space-y-6">
-      <section className="rounded-3xl border bg-gradient-to-br from-background via-background to-muted/40 p-4 shadow-sm sm:p-6">
+      <section className="surface-gradient-soft rounded-3xl border p-4 shadow-sm sm:p-6">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0 space-y-2">
             <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">AI Quiz Studio</p>
@@ -44,8 +44,8 @@ export function QuizCreationLayout({
                         "flex min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl border px-3 py-2 text-sm font-semibold transition-all sm:px-4",
                         active
                           ? "border-primary/50 bg-primary/10 text-primary"
-                          : completed
-                          ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-600"
+                        : completed
+                          ? "border-primary/40 bg-primary/10 text-primary"
                           : "border-border bg-background text-muted-foreground"
                       )}
                     >
@@ -54,8 +54,8 @@ export function QuizCreationLayout({
                           "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs",
                           active
                             ? "bg-primary text-primary-foreground"
-                            : completed
-                            ? "bg-emerald-500 text-white"
+                          : completed
+                            ? "bg-primary text-primary-foreground"
                             : "bg-muted text-muted-foreground"
                         )}
                       >
@@ -76,7 +76,7 @@ export function QuizCreationLayout({
                     key={`connector-${item.id}`}
                     className={cn(
                       "h-1.5 rounded-full transition-all",
-                      completed ? "bg-emerald-400/70" : flowing ? "pipeline-mini-flow bg-transparent" : "bg-border"
+                      completed ? "bg-primary/55" : flowing ? "pipeline-mini-flow bg-transparent" : "bg-border"
                     )}
                   />
                 )
