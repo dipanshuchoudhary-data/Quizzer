@@ -52,9 +52,9 @@ function formatDateLabel(dateText?: string) {
 }
 
 function statusTone(status: "Active" | "Completed" | "Draft") {
-  if (status === "Active") return "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200"
-  if (status === "Completed") return "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
-  return "bg-muted text-foreground"
+  if (status === "Active") return "bg-[var(--brand-accent-soft)] text-[var(--brand-accent)] border border-[var(--brand-accent)]/20"
+  if (status === "Completed") return "bg-blue-500/10 text-blue-400 border border-blue-500/20"
+  return "bg-[var(--bg-tertiary)] text-[var(--text-muted)] border border-[var(--border-color)]"
 }
 
 function normalizeQuery(value: string) {
@@ -314,9 +314,9 @@ export default function DashboardPage() {
         subtitle="Review status, handle priorities, and move directly to the next action."
       />
 
-      <section className={cn(pageCardClass, "relative overflow-visible bg-gradient-to-r from-emerald-50/80 via-background to-amber-50/70")}>
+      <section className={cn(pageCardClass, "relative overflow-visible border-none bg-none p-0 shadow-none")}>
         <div ref={searchContainerRef} className="relative max-w-4xl">
-          <label htmlFor="dashboard-search" className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+          <label htmlFor="dashboard-search" className="mb-2 block text-xs font-bold uppercase tracking-[0.16em] text-[var(--brand-accent)]">
             Search workspace
           </label>
           <div className="group relative">
@@ -331,14 +331,14 @@ export default function DashboardPage() {
               onFocus={() => setSearchOpen(true)}
               onKeyDown={handleSearchKeyDown}
               placeholder="Search exams, questions, or topics..."
-              className="h-12 w-full rounded-full border border-border/90 bg-background pl-11 pr-4 text-sm text-foreground shadow-sm transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-accent)] focus-visible:ring-offset-2 group-hover:shadow-md"
+              className="h-12 w-full rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] pl-11 pr-4 text-sm text-[var(--text-primary)] shadow-sm transition-all duration-200 focus-visible:border-[var(--brand-accent)] focus-visible:outline-none focus-visible:ring-0 focus-visible:shadow-[var(--brand-accent-glow)] group-hover:shadow-md"
               aria-expanded={searchOpen}
               aria-haspopup="listbox"
             />
           </div>
 
           {searchOpen ? (
-            <div className="absolute z-40 mt-2 w-full rounded-2xl border border-border/90 bg-background p-3 shadow-xl motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-1 motion-safe:duration-200">
+            <div className="absolute z-40 mt-2 w-full rounded-2xl border border-[var(--border-color)] bg-[var(--bg-secondary)] p-3 shadow-2xl motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-1 motion-safe:duration-200">
               {searchLoading ? (
                 <div className="space-y-2">
                   {Array.from({ length: 4 }).map((_, index) => (
@@ -365,8 +365,8 @@ export default function DashboardPage() {
                               className={cn(
                                 "flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left transition-all duration-150",
                                 isActive
-                                  ? "border-emerald-200 bg-emerald-50/80 dark:border-emerald-800/70 dark:bg-emerald-900/20"
-                                  : "border-transparent hover:border-border hover:bg-muted/40"
+                                  ? "border-[rgba(74,222,128,0.3)] bg-[var(--bg-tertiary)]"
+                                  : "border-transparent hover:border-[var(--border-color)] hover:bg-[var(--bg-tertiary)]/50"
                               )}
                               role="option"
                               aria-selected={isActive}
@@ -382,7 +382,7 @@ export default function DashboardPage() {
                       </div>
                     </div>
                   ))}
-                  <div className="border-t pt-2">
+                  <div className="border-t border-[var(--border-color)] pt-2">
                     <Link
                       href="/exams"
                       onClick={() => commitRecentSearch(searchQuery)}
@@ -474,8 +474,8 @@ export default function DashboardPage() {
                 className={cn(
                   "h-9 rounded-full border px-4 text-xs font-semibold tracking-wide transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-accent)] focus-visible:ring-offset-2",
                   examTab === tab
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-200"
-                    : "border-border bg-background text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                    ? "border-[var(--brand-accent)] bg-[var(--brand-accent-soft)] text-[var(--brand-accent)]"
+                    : "border-[var(--border-color)] bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:bg-[var(--bg-tertiary)]/80 hover:text-[var(--text-secondary)]"
                 )}
               >
                 {tab === "ALL" ? "All" : tab === "ACTIVE" ? "Active" : tab === "COMPLETED" ? "Completed" : "Drafts"}
@@ -512,7 +512,7 @@ export default function DashboardPage() {
                   href={`/quiz/${exam.id}`}
                   className={cn(
                     pageCardInteractiveClass,
-                    "space-y-3 rounded-2xl border border-border/80 bg-gradient-to-br from-background via-emerald-50/20 to-amber-50/30 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-accent)] focus-visible:ring-offset-2"
+                    "space-y-3 rounded-2xl border border-[var(--border-color)] bg-[var(--bg-tertiary)] p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-accent)] focus-visible:ring-offset-2"
                   )}
                 >
                   <div className="flex items-start justify-between gap-2">
@@ -552,7 +552,7 @@ export default function DashboardPage() {
         <aside className={cn(pageCardClass, "space-y-4 p-6")}>
           <SectionHeader title="Live attention" description="What requires action right now." icon={Activity} />
           {topAlert ? (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/60 dark:bg-amber-900/20">
+            <div className="rounded-2xl border border-amber-900/30 bg-amber-900/10 p-4">
               <p className="text-sm font-semibold text-foreground">{topAlert.quiz_name}</p>
               <p className="mt-1 text-sm text-muted-foreground">{topAlert.message}</p>
               <Link href={`/quiz/${topAlert.quiz_id}?tab=monitoring`} className={cn(buttonVariants({ size: "sm" }), "mt-3 h-9 rounded-[10px]")}>
@@ -560,7 +560,7 @@ export default function DashboardPage() {
               </Link>
             </div>
           ) : (
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900/60 dark:bg-emerald-900/20">
+            <div className="rounded-2xl border border-[var(--brand-accent)]/20 bg-[var(--brand-accent)]/5 p-4">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="size-4 text-emerald-700 dark:text-emerald-300" />
                 <p className="text-sm font-semibold text-foreground">Everything looks stable</p>
@@ -569,7 +569,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          <div className="rounded-2xl border bg-background p-4">
+          <div className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-tertiary)] p-4">
             <p className="text-sm font-semibold text-foreground">Recommendations</p>
             <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
               <li className="flex items-start gap-2">

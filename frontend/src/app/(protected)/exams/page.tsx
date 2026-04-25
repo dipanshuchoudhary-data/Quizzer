@@ -14,7 +14,6 @@ import {
   Clock3,
   FileText,
   FolderOpen,
-  FolderPlus,
   MoreHorizontal,
   PencilLine,
   Plus,
@@ -32,7 +31,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { SectionHeader, pageCardClass, pageCardInteractiveClass, pageIcons } from "@/components/page/page-system"
+import { PageHeader, SectionHeader, pageCardClass, pageCardInteractiveClass, pageIcons } from "@/components/page/page-system"
 import { cn } from "@/lib/utils"
 import {
   Dialog,
@@ -163,9 +162,9 @@ function normalizeJobProgress(progress: number) {
 
 function statusBadgeClasses(status: ExamFilter | "COMPLETED") {
   if (status === "LIVE") return "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-200"
-  if (status === "PUBLISHED") return "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200"
+  if (status === "PUBLISHED") return "border border-[var(--brand-accent-border)] bg-[var(--brand-accent-tint)] text-[var(--brand-accent-text)] dark:border-[var(--brand-accent-border)] dark:bg-[var(--brand-accent-soft)] dark:text-[var(--brand-accent)]"
   if (status === "PROCESSING") return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-200"
-  if (status === "COMPLETED") return "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200"
+  if (status === "COMPLETED") return "border border-[var(--brand-accent-border)] bg-[var(--brand-accent-tint)] text-[var(--brand-accent-text)] dark:border-[var(--brand-accent-border)] dark:bg-[var(--brand-accent-soft)] dark:text-[var(--brand-accent)]"
   return "bg-muted text-foreground"
 }
 
@@ -810,55 +809,40 @@ export default function ExamsPage() {
 
   return (
     <section className="space-y-8 pb-32">
-      <header className="rounded-2xl border border-border/70 bg-background px-6 py-6 shadow-sm">
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground">Exams</p>
-            <h1 className="text-[28px] font-medium leading-tight text-foreground">Manage and monitor exams</h1>
-            <p className="max-w-[480px] text-sm text-muted-foreground">
-              Track live, published, processing, and draft quizzes from one operational workspace.
-            </p>
-          </div>
-          <Link
-            href="/quizzes/create"
-            className={cn(
-              buttonVariants({ size: "sm" }),
-              "h-9 rounded-[8px] border-[0.5px] border-primary bg-primary px-4 text-primary-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-            )}
-          >
-            Create exam
-          </Link>
-        </div>
-      </header>
+      <PageHeader
+        eyebrow="EXAMS"
+        title="Manage and monitor exams"
+        subtitle="Track live, published, processing, and draft quizzes from one operational workspace."
+      />
 
-      <div className="rounded-xl border-y border-border/70 bg-background/80 px-3 py-2">
+      <div className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-secondary)] px-3 py-2 shadow-sm">
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div className="relative flex min-h-9 flex-1 items-center gap-2">
-            <Button
-              ref={searchButtonRef}
-              type="button"
-              variant="outline"
-              size="icon"
-              aria-label="Open advanced exam filters"
-              onClick={() => setSearchPanelOpen((current) => !current)}
-              className="relative h-9 w-9 rounded-full border-[0.5px] border-border bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-            >
-              <Search className="size-4" />
-              {activeFilterCount > 0 ? (
-                <span className="absolute -right-1 -top-1 inline-flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
-                  {activeFilterCount}
-                </span>
-              ) : null}
+              <Button
+                ref={searchButtonRef}
+                type="button"
+                variant="outline"
+                size="icon"
+                aria-label="Open advanced exam filters"
+                onClick={() => setSearchPanelOpen((current) => !current)}
+                className="relative h-9 w-9 rounded-xl border border-[var(--border-color)] bg-[var(--bg-tertiary)] text-[var(--text-muted)] shadow-sm hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-accent)]/40 focus-visible:ring-offset-2"
+              >
+                <Search className="size-4" />
+                {activeFilterCount > 0 ? (
+                  <span className="absolute -right-1 -top-1 inline-flex min-w-4 items-center justify-center rounded-full bg-[var(--brand-accent)] px-1 text-[10px] font-semibold text-[var(--text-on-green)]">
+                    {activeFilterCount}
+                  </span>
+                ) : null}
             </Button>
 
             <div className="flex min-h-9 flex-1 items-center gap-2 overflow-x-auto whitespace-nowrap">
               {activeFilterPills.map((pill) => (
-                <span key={pill.key} className="inline-flex h-9 items-center gap-2 rounded-full border border-border bg-muted/30 px-3 text-xs font-medium text-foreground">
+                <span key={pill.key} className="inline-flex h-9 items-center gap-2 rounded-full border border-[var(--border-color)] bg-[var(--bg-tertiary)] px-3 text-xs font-medium text-[var(--text-secondary)]">
                   {pill.label}
                   <button
                     type="button"
                     onClick={pill.onRemove}
-                    className="inline-flex size-4 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                    className="inline-flex size-4 items-center justify-center rounded-full text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-primary)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-accent)] focus-visible:ring-offset-2"
                     aria-label={`Remove ${pill.label} filter`}
                   >
                     <X className="size-3" />
@@ -866,13 +850,13 @@ export default function ExamsPage() {
                 </span>
               ))}
               {activeFilterPills.length > 0 ? (
-                <button
-                  type="button"
-                  onClick={clearAllFilters}
-                  className="h-9 px-1 text-xs font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                >
-                  Clear all filters
-                </button>
+                  <button
+                    type="button"
+                    onClick={clearAllFilters}
+                    className="h-9 px-1 text-xs font-medium text-[var(--brand-accent-text)] underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-accent)]/40 focus-visible:ring-offset-2"
+                  >
+                    Clear all filters
+                  </button>
               ) : null}
             </div>
 
@@ -883,7 +867,7 @@ export default function ExamsPage() {
                 aria-modal="false"
                 aria-label="Advanced exam filters"
                 onKeyDown={handleSearchPanelKeyDown}
-                className="absolute left-0 top-11 z-40 w-full max-w-[620px] rounded-xl border border-border bg-background p-4 shadow-xl motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-200 motion-safe:ease-out motion-reduce:transition-none"
+                className="absolute left-0 top-11 z-40 w-full max-w-[620px] rounded-2xl border border-[var(--border-color)] bg-[var(--bg-secondary)] p-4 shadow-[0_24px_64px_rgba(0,0,0,0.6)] motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-200 motion-safe:ease-out motion-reduce:transition-none"
               >
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="space-y-1.5 md:col-span-2">
@@ -1093,7 +1077,7 @@ export default function ExamsPage() {
                       setAppliedFilters(draftFilters)
                       setSearchPanelOpen(false)
                     }}
-                    className="h-9 rounded-[8px] border-[0.5px] border-primary bg-primary px-4 text-primary-foreground focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                    className="h-9 rounded-xl border border-primary bg-primary px-4 text-primary-foreground focus-visible:ring-2 focus-visible:ring-[var(--brand-accent)]/40 focus-visible:ring-offset-2"
                   >
                     Apply filters
                   </Button>
@@ -1104,12 +1088,12 @@ export default function ExamsPage() {
 
           <div className="flex w-full flex-wrap items-center justify-end gap-2 md:w-auto">
             <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
-              <SelectTrigger className="h-9 w-[190px] rounded-[8px] border-[0.5px] border-border bg-background text-sm focus:ring-2 focus:ring-primary focus:ring-offset-2 [&>svg]:hidden">
+              <SelectTrigger className="h-9 w-[190px] rounded-xl border border-[var(--border-color)] bg-[var(--bg-tertiary)] text-sm shadow-sm focus:ring-2 focus:ring-[var(--brand-accent)]/40 focus:ring-offset-2 [&>svg]:hidden text-[var(--text-secondary)]">
                 <span className="inline-flex min-w-0 items-center gap-2">
-                  <ArrowUpDown className="size-4 shrink-0 text-muted-foreground" />
+                  <ArrowUpDown className="size-4 shrink-0 text-[var(--text-muted)]" />
                   <SelectValue placeholder="Last updated" />
                 </span>
-                <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+                <ChevronDown className="size-4 shrink-0 text-[var(--text-muted)]" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="updated">Last updated</SelectItem>
@@ -1119,15 +1103,6 @@ export default function ExamsPage() {
                 <SelectItem value="status">Status</SelectItem>
               </SelectContent>
             </Select>
-            <Link
-              href="/quizzes/create"
-              className={cn(
-                buttonVariants({ size: "sm" }),
-                "h-9 rounded-[8px] border-[0.5px] border-primary bg-primary px-4 text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-              )}
-            >
-              Create exam
-            </Link>
           </div>
         </div>
       </div>
@@ -1185,15 +1160,15 @@ export default function ExamsPage() {
 
       {/* Unified Exam Clusters Grid */}
       <section className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <SectionHeader
-            title="Exam Clusters"
-            description="Organize exams effortlessly by linking them to specific courses and batches."
-            icon={FolderOpen}
-          />
-          <div className="flex flex-wrap items-center gap-2">
-            {clusterOptions.length > 0 ? (
-              <>
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <SectionHeader
+              title="Exam Clusters"
+              description="Organize exams effortlessly by linking them to specific courses and batches."
+              icon={FolderOpen}
+            />
+            <div className="flex flex-wrap items-center gap-2">
+              {clusterOptions.length > 0 ? (
+                <>
                 <Button
                   variant="outline"
                   size="sm"
@@ -1214,17 +1189,9 @@ export default function ExamsPage() {
                     Delete {selectedClusterValues.size}
                   </Button>
                 ) : null}
-              </>
-            ) : null}
-            <Button
-              onClick={() => setShowCreateClusterDialog(true)}
-              variant="secondary"
-              className="rounded-full shadow-sm"
-            >
-              <FolderPlus className="mr-2 size-4" />
-              New Cluster
-            </Button>
-          </div>
+                </>
+              ) : null}
+            </div>
         </div>
         
         {clusterOptions.length > 0 ? (
@@ -1237,8 +1204,8 @@ export default function ExamsPage() {
                 key={cluster.value}
                 className={cn(
                   pageCardInteractiveClass,
-                  "group relative space-y-3 dashboard-fade-up",
-                  isClusterSelected && "ring-2 ring-primary ring-offset-2 border-primary/50 bg-primary/5"
+                  "group relative space-y-3 rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] dashboard-fade-up",
+                  isClusterSelected && "ring-2 ring-[var(--brand-accent)] ring-offset-2 border-[var(--brand-accent)]/50 bg-[var(--brand-accent)]/5"
                 )}
               >
                 <button
@@ -1258,7 +1225,7 @@ export default function ExamsPage() {
                 </button>
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2 pl-8">
-                    <div className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary shrink-0">
+                    <div className="flex size-8 items-center justify-center rounded-lg bg-[var(--brand-accent-tint)] text-[var(--brand-accent-text)] shrink-0">
                       <FolderOpen className="size-4" />
                     </div>
                     <div>
@@ -1272,7 +1239,7 @@ export default function ExamsPage() {
                         variant="ghost"
                         size="icon"
                         type="button"
-                        className="relative z-20 h-8 w-8 rounded-lg transition-all duration-200 hover:scale-105 hover:bg-primary/10 group-hover:shadow-sm"
+                        className="relative z-20 h-8 w-8 rounded-lg transition-all duration-200 hover:bg-[var(--brand-accent-tint)] group-hover:shadow-sm"
                       >
                         <MoreHorizontal className="size-4" />
                         <span className="sr-only">Cluster actions</span>
@@ -1303,15 +1270,15 @@ export default function ExamsPage() {
                   </DropdownMenu>
                 </div>
 
-                <div className="rounded-xl border bg-background/50 p-3 flex-1">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground flex items-center gap-1.5">
+                <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-tertiary)] p-3 flex-1">
+                  <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[#64748B]">
                     <Layers className="size-3" /> Recent Activity
                   </p>
                   {cluster.recent.length > 0 ? (
                     <ul className="mt-2 space-y-2">
                       {cluster.recent.map((quiz) => (
                         <li key={`${cluster.value}-${quiz.id}`} className="truncate text-xs font-medium text-foreground/80 flex items-center gap-2">
-                          <div className="size-1 rounded-full bg-primary/50 shrink-0" />
+                          <div className="size-1 rounded-full bg-[var(--brand-accent)] shrink-0" />
                           <span className="truncate">{quiz.title}</span>
                         </li>
                       ))}
@@ -1322,7 +1289,7 @@ export default function ExamsPage() {
                 </div>
 
                 <div className="flex flex-wrap gap-2 pt-1 border-t border-border/40">
-                  <Button size="sm" variant="default" className="flex-1 rounded-lg shadow-sm" onClick={() => setActiveClusterModal(cluster.value)}>
+                  <Button size="sm" variant="default" className="flex-1 rounded-lg bg-[var(--brand-accent)] text-[var(--text-primary)] shadow-sm hover:bg-[var(--brand-accent-strong)]" onClick={() => setActiveClusterModal(cluster.value)}>
                     Open Cluster
                   </Button>
                   <Tooltip content="Add unclustered exams">
@@ -1351,17 +1318,14 @@ export default function ExamsPage() {
             })}
           </div>
         ) : (
-          <div className="rounded-2xl border-2 border-dashed bg-muted/10 p-8 flex flex-col items-center justify-center text-center">
-            <div className="size-12 rounded-full bg-muted flex items-center justify-center text-muted-foreground mb-3">
-              <FolderOpen className="size-6" />
+            <div className="rounded-2xl border-2 border-dashed bg-muted/10 p-8 flex flex-col items-center justify-center text-center">
+              <div className="size-12 rounded-full bg-muted flex items-center justify-center text-muted-foreground mb-3">
+                <FolderOpen className="size-6" />
+              </div>
+              <p className="font-semibold">No clusters yet</p>
+            <p className="text-sm text-muted-foreground max-w-[300px] mt-1">Use the Create menu in the top navigation when you need a new cluster.</p>
             </div>
-            <p className="font-semibold">No clusters yet</p>
-            <p className="text-sm text-muted-foreground max-w-[300px] mt-1 mb-4">Clusters help you cleanly separate your math tests from your history tests.</p>
-            <Button onClick={() => setShowCreateClusterDialog(true)} variant="outline">
-              Create your first cluster
-            </Button>
-          </div>
-        )}
+          )}
       </section>
 
       {/* Filterable List */}
@@ -1432,7 +1396,7 @@ export default function ExamsPage() {
                 ? `${quizCluster.course_name}${quizCluster.unit_name ? ` • ${quizCluster.unit_name}` : ""}`
                 : "Unclustered"
 
-              const progressBarColor = readiness >= 80 ? "bg-emerald-500" : readiness >= 40 ? "bg-amber-500" : "bg-rose-500"
+              const progressBarColor = readiness >= 80 ? "bg-[var(--brand-accent)]" : readiness >= 40 ? "bg-amber-500" : "bg-rose-500"
 
               return (
                 <div
@@ -1440,8 +1404,8 @@ export default function ExamsPage() {
                   className={cn(
                     "dashboard-fade-up group relative",
                     pageCardInteractiveClass,
-                    "hover:border-primary/30 hover:shadow-lg",
-                    isSelected && "ring-2 ring-primary ring-offset-2 border-primary/50 bg-primary/5"
+                    "hover:border-[var(--brand-accent)]/30 hover:shadow-lg",
+                    isSelected && "ring-2 ring-[var(--brand-accent)] ring-offset-2 border-[var(--brand-accent)]/50 bg-[var(--brand-accent)]/5"
                   )}
                   style={{ animationDelay: `${120 + index * 60}ms` }}
                 >
@@ -1452,8 +1416,8 @@ export default function ExamsPage() {
                       toggleSelection(quiz.id)
                     }}
                     className={cn(
-                      "absolute left-3 top-3 z-10 flex size-6 items-center justify-center rounded border bg-background transition-all hover:bg-muted shadow-sm",
-                      isSelected && "bg-primary border-primary hover:bg-primary/90"
+                      "absolute left-3 top-3 z-10 flex size-6 items-center justify-center rounded border border-[var(--border-color)] bg-[var(--bg-secondary)] transition-all hover:bg-[var(--bg-tertiary)] shadow-sm",
+                      isSelected && "bg-[var(--brand-accent)] border-[var(--brand-accent)] hover:bg-[var(--brand-accent-strong)]"
                     )}
                   >
                     {isSelected ? (
@@ -1466,7 +1430,7 @@ export default function ExamsPage() {
                   <div className="absolute right-3 top-3 z-10">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg bg-background/90 shadow-sm">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg bg-[var(--bg-secondary)]/90 shadow-sm border border-[var(--border-color)]">
                           <MoreHorizontal className="size-4" />
                           <span className="sr-only">Exam actions</span>
                         </Button>
@@ -1543,7 +1507,7 @@ export default function ExamsPage() {
                   <div className="mt-4 space-y-1.5">
                     <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
                       <span>Setup progress</span>
-                      <span className={cn(readiness >= 80 ? "text-emerald-600 dark:text-emerald-400" : "")}>{readiness}%</span>
+                      <span className={cn(readiness >= 80 ? "text-[var(--brand-accent-text)] dark:text-[var(--brand-accent)]" : "")}>{readiness}%</span>
                     </div>
                     <div className="h-1.5 overflow-hidden rounded-full bg-muted/50">
                       <div className={cn("h-full rounded-full transition-all duration-300", progressBarColor)} style={{ width: `${readiness}%` }} />
@@ -1553,7 +1517,7 @@ export default function ExamsPage() {
                   <div className="mt-5 flex items-center justify-between gap-2 border-t pt-4">
                     <Link
                       href={openExamHref}
-                      className={cn(buttonVariants({ size: "sm" }), "flex-1 rounded-lg bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 shadow-sm")}
+                      className={cn(buttonVariants({ size: "sm" }), "flex-1 rounded-lg bg-[var(--brand-accent)] text-[var(--text-primary)] shadow-sm hover:bg-[var(--brand-accent-strong)]")}
                     >
                       Open Exam
                     </Link>
@@ -1571,7 +1535,7 @@ export default function ExamsPage() {
       </section>
 
       {!isLoading && visibleQuizzes.length === 0 ? (
-        <div className="rounded-3xl border bg-background p-10 text-center shadow-sm">
+        <div className="rounded-3xl border border-[var(--border-color)] bg-[var(--bg-secondary)] p-10 text-center shadow-sm">
           <div className="mx-auto mb-6 flex size-24 items-center justify-center rounded-full border border-border bg-muted/20">
             <FileText className="size-10 text-muted-foreground" />
           </div>
@@ -1587,27 +1551,12 @@ export default function ExamsPage() {
           </p>
           <div className="mt-6 flex items-center justify-center gap-2">
             {quizzes.length === 0 ? (
-              <Link href="/quizzes/create" className={cn(buttonVariants({ size: "lg" }), "rounded-[8px] shadow-md")}>
-                Create Exam
-              </Link>
+              <p className="text-sm text-muted-foreground">Use the Create menu in the top navigation to add your first exam.</p>
             ) : !isDefaultAdvancedFilters(appliedFilters) ? (
-              <Button variant="outline" className="h-9 rounded-[8px]" onClick={clearAllFilters}>
+              <Button variant="outline" className="h-9 rounded-xl" onClick={clearAllFilters}>
                 Clear filters
               </Button>
             ) : null}
-          </div>
-        </div>
-      ) : null}
-
-      {/* Floating Sticky Bulk Actions Bar */}
-      {selectedIds.size > 0 && (
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[60] animate-in slide-in-from-bottom-5 fade-in duration-200">
-          <div className="flex flex-wrap items-center gap-3 rounded-full border border-border/80 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 px-4 py-2.5 shadow-2xl shadow-primary/10">
-            <span className="flex items-center justify-center rounded-full bg-primary/10 px-3 py-1 text-sm font-bold text-primary tracking-wide">
-              {selectedIds.size} selected
-            </span>
-            <div className="hidden sm:block h-5 w-px bg-border/80" />
-            
             <Select value={bulkClusterValue} onValueChange={setBulkClusterValue}>
               <SelectTrigger className="h-9 w-[190px] rounded-full border-dashed bg-transparent hover:bg-muted/50 focus:ring-0 text-xs font-medium">
                 <SelectValue placeholder="Move to cluster..." />
