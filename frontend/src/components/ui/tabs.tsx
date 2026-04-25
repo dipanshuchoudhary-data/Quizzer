@@ -46,7 +46,10 @@ function TabsList({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       role="tablist"
-      className={cn("inline-flex max-w-full items-center gap-1 rounded-md border bg-muted p-1", className)}
+      className={cn(
+        "inline-flex h-10 max-w-full items-center gap-1 rounded-xl border border-border/70 bg-muted/70 p-1 shadow-sm",
+        className
+      )}
       {...props}
     />
   )
@@ -70,8 +73,10 @@ function TabsTrigger({ value, className, onClick, ...props }: TabsTriggerProps) 
         onClick?.(event)
       }}
       className={cn(
-        "rounded px-3 py-1.5 text-sm transition",
-        active ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground",
+        "inline-flex h-8 items-center rounded-lg px-3 text-sm transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+        active
+          ? "bg-background text-foreground shadow-[0_1px_2px_rgba(15,23,42,0.08)]"
+          : "text-muted-foreground hover:bg-background/70 hover:text-foreground",
         className
       )}
       {...props}
