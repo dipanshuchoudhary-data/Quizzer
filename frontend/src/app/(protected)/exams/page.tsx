@@ -1534,7 +1534,7 @@ export default function ExamsPage() {
         </div>
       </section>
 
-      {!isLoading && visibleQuizzes.length === 0 ? (
+      {!isLoading && visibleQuizzes.length === 0 && (
         <div className="rounded-3xl border border-[var(--border-color)] bg-[var(--bg-secondary)] p-10 text-center shadow-sm">
           <div className="mx-auto mb-6 flex size-24 items-center justify-center rounded-full border border-border bg-muted/20">
             <FileText className="size-10 text-muted-foreground" />

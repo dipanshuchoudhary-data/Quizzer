@@ -5,12 +5,6 @@ import { usePathname } from "next/navigation"
 import type { NavItem } from "./nav-config"
 import { cn } from "@/lib/utils"
 
-"use client"
-
-import Link from "next/link"
-import { usePathname } from "next/navigation"
-import type { NavItem } from "./nav-config"
-import { cn } from "@/lib/utils"
 
 interface NavItemProps {
   item: NavItem
