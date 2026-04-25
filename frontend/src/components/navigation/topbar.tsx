@@ -123,31 +123,10 @@ export function Topbar() {
         <div className="ml-auto flex items-center gap-2">
           {!isStudent ? (
             <>
-              <DropdownMenu modal={false}>
-                <DropdownMenuTrigger asChild>
-                  <Button className="h-[44px] rounded-[10px] bg-[var(--brand-accent)] px-[18px] font-semibold text-[var(--text-on-green)] shadow-[0_2px_8px_rgba(74,222,128,0.25)] transition hover:bg-[var(--brand-accent-strong)]">
-                    <Plus className="size-4" />
-                    <span className="hidden sm:inline">Create</span>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" sideOffset={10} className="z-[80] w-64 rounded-2xl border border-[var(--border-color)] bg-[var(--bg-secondary)] p-1.5 shadow-[0_18px_44px_rgba(0,0,0,0.5)]">
-                  <DropdownMenuLabel className="px-2 py-1 text-xs font-semibold uppercase tracking-[0.15em] text-[var(--text-muted)]">
-                    Create menu
-                  </DropdownMenuLabel>
-                  <DropdownMenuItem onSelect={() => navigateTo("/quizzes/create?new=1")}>
-                    <Plus className="size-4 text-[var(--text-muted)]" />
-                    Create Exam
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => navigateTo("/quizzes/create?source=import")}>
-                    <BookOpen className="size-4 text-[var(--text-muted)]" />
-                    Import Questions
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => navigateTo("/quizzes/courses")}>
-                    <FolderPlus className="size-4 text-[var(--text-muted)]" />
-                    Create Cluster
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <Button onClick={() => navigateTo("/quizzes/create?new=1")} className="h-[44px] rounded-[10px] bg-[var(--brand-accent)] px-[18px] font-semibold text-[var(--text-on-green)] shadow-[0_2px_8px_rgba(74,222,128,0.25)] transition hover:bg-[var(--brand-accent-strong)]">
+                <Plus className="size-4" />
+                <span className="hidden sm:inline">Create</span>
+              </Button>
               <NotificationInbox />
             </>
           ) : null}
