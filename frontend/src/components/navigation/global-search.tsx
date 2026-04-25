@@ -2,60 +2,29 @@
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowRight, Clock3, FileQuestion, FileText, Plus, Search, Sparkles } from "lucide-react"
+import { ArrowRight, FileQuestion, FileText, Search, Sparkles, User } from "lucide-react"
+import { useQuery } from "@tanstack/react-query"
 import { cn } from "@/lib/utils"
-import { ALL_NAV_ITEMS, NAV_ACTIONS } from "./nav-config"
+import { dashboardApi } from "@/lib/api/dashboard"
+import { quizApi } from "@/lib/api/quiz"
 
 type SearchItem = {
   id: string
   label: string
   href: string
   description?: string
-  keywords?: string[]
-  kind: "exam" | "question" | "page"
+  kind: "exam" | "question" | "student"
 }
-
-const RECENT_KEY = "quizzer:recent-searches"
-const MAX_RECENT = 5
 
 function normalize(value: string) {
   return value.toLowerCase().trim()
 }
 
-function scoreMatch(query: string, text: string) {
-  const q = normalize(query)
-  const t = normalize(text)
-  if (!q) return 0
-  if (t.includes(q)) return 100 - t.indexOf(q) * 2
-  let qi = 0
-  let score = 0
-  for (let i = 0; i < t.length; i += 1) {
-    if (t[i] === q[qi]) {
-      qi += 1
-      score += 4
-    }
-    if (qi >= q.length) return score
-  }
-  return 0
-}
-
-function rankResults(query: string, items: SearchItem[]) {
-  if (!query) return items
-  return items
-    .map((item) => {
-      const haystack = [item.label, item.description, item.keywords?.join(" ")].filter(Boolean).join(" ")
-      return { item, score: scoreMatch(query, haystack) }
-    })
-    .filter((entry) => entry.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .map((entry) => entry.item)
-}
-
 function highlightMatch(text: string, query: string) {
-  if (!query) return text
+  if (!query || !text) return <>{text}</>
   const lowered = text.toLowerCase()
   const match = lowered.indexOf(query.toLowerCase())
-  if (match === -1) return text
+  if (match === -1) return <>{text}</>
   return (
     <>
       {text.slice(0, match)}
@@ -71,56 +40,32 @@ export function GlobalSearch({ className }: { className?: string }) {
   const [debouncedQuery, setDebouncedQuery] = useState("")
   const [open, setOpen] = useState(false)
   const [activeIndex, setActiveIndex] = useState(0)
-  const [isSearching, setIsSearching] = useState(false)
   const [isFocused, setIsFocused] = useState(false)
-  const [recent, setRecent] = useState<SearchItem[]>([])
   const containerRef = useRef<HTMLDivElement | null>(null)
   const listId = "global-search-list"
 
-  const items = useMemo<SearchItem[]>(() => {
-    const navItems = ALL_NAV_ITEMS.map((item) => ({
-      id: item.id,
-      label: item.label,
-      href: item.href,
-      description: item.description,
-      keywords: item.keywords,
-      kind: item.href.includes("exam") || item.href.includes("quiz") ? ("exam" as const) : ("page" as const),
-    }))
-    const actionItems = NAV_ACTIONS.filter((action) => action.href).map((action) => ({
-      id: action.id,
-      label: action.label,
-      href: action.href ?? "/dashboard",
-      description: action.description,
-      keywords: action.keywords,
-      kind: /question|import|review/i.test(action.label) ? ("question" as const) : ("exam" as const),
-    }))
-    return [...actionItems, ...navItems]
-  }, [])
+  const { data: quizzes = [], isLoading: loadingQuizzes } = useQuery({
+    queryKey: ["search-quizzes"],
+    queryFn: quizApi.getAll,
+    staleTime: 60000,
+  })
 
-  useEffect(() => {
-    const stored = window.localStorage.getItem(RECENT_KEY)
-    if (!stored) return
-    try {
-      const parsed = JSON.parse(stored) as SearchItem[]
-      setRecent(Array.isArray(parsed) ? parsed.slice(0, MAX_RECENT) : [])
-    } catch {
-      setRecent([])
-    }
-  }, [])
+  const { data: liveExams, isLoading: loadingLive } = useQuery({
+    queryKey: ["search-live-exams"],
+    queryFn: dashboardApi.getLiveExams,
+    staleTime: 60000,
+  })
+
+  const { data: summary, isLoading: loadingSummary } = useQuery({
+    queryKey: ["search-summary"],
+    queryFn: dashboardApi.getSummary,
+    staleTime: 60000,
+  })
+
+  const isSearching = loadingQuizzes || loadingLive || loadingSummary
 
   useEffect(() => {
     const handler = window.setTimeout(() => setDebouncedQuery(query), 300)
-    return () => window.clearTimeout(handler)
-  }, [query])
-
-  useEffect(() => {
-    const normalized = normalize(query)
-    if (!normalized) {
-      setIsSearching(false)
-      return
-    }
-    setIsSearching(true)
-    const handler = window.setTimeout(() => setIsSearching(false), 220)
     return () => window.clearTimeout(handler)
   }, [query])
 
@@ -135,34 +80,54 @@ export function GlobalSearch({ className }: { className?: string }) {
     return () => document.removeEventListener("mousedown", handler)
   }, [])
 
-  const ranked = useMemo(() => rankResults(debouncedQuery, items), [debouncedQuery, items])
-
   const grouped = useMemo(() => {
     const queryText = normalize(debouncedQuery)
-    const exams = ranked.filter((item) => item.kind === "exam").slice(0, 6)
-    const questions = ranked.filter((item) => item.kind === "question").slice(0, 6)
-    const recentItems = recent
-      .filter((entry) => (queryText ? entry.label.toLowerCase().includes(queryText) : true))
-      .slice(0, 5)
-    return [
-      { title: "Exams", items: exams },
-      { title: "Questions", items: questions },
-      { title: "Recent Searches", items: recentItems },
-    ]
-  }, [debouncedQuery, ranked, recent])
+    if (!queryText) return []
+
+    const exams: SearchItem[] = quizzes
+      .filter((q) => q.title.toLowerCase().includes(queryText) || (q.description && q.description.toLowerCase().includes(queryText)))
+      .map((q) => ({
+        id: `exam-${q.id}`,
+        label: q.title,
+        description: q.description || "Exam",
+        href: `/quiz/${q.id}`,
+        kind: "exam" as const,
+      }))
+      .slice(0, 4)
+
+    const questions: SearchItem[] = (summary?.recent_activity || [])
+      .filter((a) => /question/i.test(a.event))
+      .filter((a) => a.title.toLowerCase().includes(queryText))
+      .map((a) => ({
+        id: `q-${a.id}`,
+        label: a.title,
+        description: `Recent question activity`,
+        href: `/dashboard`,
+        kind: "question" as const,
+      }))
+      .slice(0, 4)
+
+    const students: SearchItem[] = (liveExams?.items || [])
+      .flatMap((exam) => exam.students.map((s) => ({ ...s, quiz_id: exam.quiz_id, quiz_name: exam.quiz_name })))
+      .filter((s) => s.student_name.toLowerCase().includes(queryText))
+      .map((s) => ({
+        id: `student-${s.attempt_id}`,
+        label: s.student_name,
+        description: `Active in ${s.quiz_name}`,
+        href: `/quiz/${s.quiz_id}?tab=monitoring`,
+        kind: "student" as const,
+      }))
+      .slice(0, 4)
+
+    const sections = []
+    if (exams.length > 0) sections.push({ title: "Exams", items: exams })
+    if (questions.length > 0) sections.push({ title: "Questions", items: questions })
+    if (students.length > 0) sections.push({ title: "Students", items: students })
+
+    return sections
+  }, [debouncedQuery, quizzes, summary, liveExams])
 
   const flattened = useMemo(() => grouped.flatMap((group) => group.items), [grouped])
-  const createItem = useMemo(
-    () =>
-      NAV_ACTIONS.find((action) => /create/i.test(action.label) && action.href)?.href
-        ? {
-            href: NAV_ACTIONS.find((action) => /create/i.test(action.label) && action.href)!.href!,
-            label: "Create Quiz",
-            description: "Start a fresh exam workflow from the global create flow.",
-          }
-        : null,
-    []
-  )
 
   useEffect(() => {
     if (activeIndex >= flattened.length) {
@@ -174,9 +139,6 @@ export function GlobalSearch({ className }: { className?: string }) {
     setOpen(false)
     setQuery("")
     router.push(item.href)
-    const nextRecent = [item, ...recent.filter((entry) => entry.id !== item.id)].slice(0, MAX_RECENT)
-    setRecent(nextRecent)
-    window.localStorage.setItem(RECENT_KEY, JSON.stringify(nextRecent))
   }
 
   const onKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
@@ -212,62 +174,46 @@ export function GlobalSearch({ className }: { className?: string }) {
           onChange={(event) => {
             setQuery(event.target.value)
             setActiveIndex(0)
+            if (!open) setOpen(true)
           }}
           onFocus={() => {
-            setOpen(true)
+            if (query) setOpen(true)
             setIsFocused(true)
           }}
           onBlur={() => setIsFocused(false)}
           onKeyDown={onKeyDown}
-          placeholder="Search exams, questions, or topics..."
+          placeholder="Search exams, questions, students..."
           className="h-11 w-full rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] pl-11 pr-24 text-sm text-[var(--text-primary)] transition-[border-color,box-shadow] duration-200 ease-in-out placeholder:text-[var(--text-muted)] focus-visible:border-[var(--brand-accent)] focus-visible:outline-none focus-visible:ring-0 focus-visible:shadow-[var(--brand-accent-glow)]"
           aria-haspopup="listbox"
           aria-controls={listId}
           aria-activedescendant={flattened[activeIndex]?.id}
         />
-        <div className="absolute right-3 top-2.5 flex items-center gap-1 rounded-md border border-[var(--brand-accent-border)] bg-[var(--sidebar-accent)] px-2 py-0.5 text-[10px] font-semibold text-[var(--brand-accent)]">
-          <Sparkles className="size-3" />
-          Smart
-        </div>
+        {!query && (
+          <div className="absolute right-3 top-2.5 flex items-center gap-1 rounded-md border border-[var(--brand-accent-border)] bg-[var(--sidebar-accent)] px-2 py-0.5 text-[10px] font-semibold text-[var(--brand-accent)]">
+            <Sparkles className="size-3" />
+            Smart
+          </div>
+        )}
       </div>
 
-      {open ? (
+      {open && query ? (
         <div
           id={listId}
           className="absolute z-30 mt-3 w-full rounded-2xl border border-[var(--border-color)] bg-[var(--bg-secondary)] p-2 shadow-[0_16px_48px_rgba(0,0,0,0.5)]"
           style={{ animation: "dropdown-enter 150ms ease forwards" }}
           role="listbox"
         >
-          {isSearching ? (
-            <div className="space-y-2 p-2">
-              {Array.from({ length: 4 }).map((_, index) => (
-                <div key={`search-loading-${index}`} className="h-12 animate-pulse rounded-xl bg-[var(--bg-tertiary)]" />
-              ))}
-            </div>
+          {isSearching && !debouncedQuery ? (
+             <div className="space-y-2 p-2">
+               <div className="h-12 animate-pulse rounded-xl bg-[var(--bg-tertiary)]" />
+               <div className="h-12 animate-pulse rounded-xl bg-[var(--bg-tertiary)]" />
+             </div>
           ) : flattened.length === 0 ? (
             <div className="rounded-xl border border-dashed border-[var(--border-color)] bg-[var(--bg-primary)]/70 p-4 text-center text-sm text-[var(--text-muted)]">
-              No results. Try a broader keyword.
+              No results found for your search.
             </div>
           ) : (
             <div className="space-y-3">
-              {createItem ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOpen(false)
-                    router.push(createItem.href)
-                  }}
-                  className="flex w-full items-start gap-3 rounded-lg border-l-[3px] border-[var(--brand-accent)] bg-[var(--brand-accent-soft)] px-3 py-3 text-left transition-colors hover:bg-[var(--bg-tertiary)]"
-                >
-                  <span className="mt-0.5 inline-flex size-8 items-center justify-center rounded-full bg-[var(--bg-secondary)] text-[var(--brand-accent)] shadow-sm">
-                    <Plus className="size-4" />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block text-sm font-semibold text-[var(--brand-accent)]">{createItem.label}</span>
-                    <span className="block text-xs text-[var(--text-secondary)]">{createItem.description}</span>
-                  </span>
-                </button>
-              ) : null}
               {grouped.map((group) => (
                 <div key={group.title} className="space-y-1">
                   <p className="px-3 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">{group.title}</p>
@@ -275,7 +221,7 @@ export function GlobalSearch({ className }: { className?: string }) {
                     {group.items.map((item) => {
                       const index = flattened.findIndex((entry) => entry.id === item.id)
                       const active = index === activeIndex
-                      const Icon = group.title === "Questions" ? FileQuestion : group.title === "Recent Searches" ? Clock3 : FileText
+                      const Icon = item.kind === "question" ? FileQuestion : item.kind === "student" ? User : FileText
                       return (
                         <button
                           key={item.id}
@@ -308,19 +254,6 @@ export function GlobalSearch({ className }: { className?: string }) {
                   </div>
                 </div>
               ))}
-              <div className="border-t border-[var(--border-color)] pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOpen(false)
-                    router.push("/exams")
-                  }}
-                  className="flex w-full items-center justify-center gap-1 p-2 text-xs font-semibold text-[var(--brand-accent)] hover:underline"
-                >
-                  View all results
-                  <ArrowRight className="size-3.5" />
-                </button>
-              </div>
             </div>
           )}
         </div>
