@@ -4,21 +4,22 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all duration-150 disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring hover:brightness-105 active:scale-[0.96]",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-bold transition-all duration-200 disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-accent)]/30 active:scale-[0.98]",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:opacity-90 dark:bg-white dark:text-black dark:hover:bg-zinc-200",
-        outline: "border border-input bg-background hover:bg-accent hover:text-accent-foreground dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)] dark:text-[var(--text-primary)] dark:hover:bg-[var(--card-hover)] dark:hover:text-[var(--text-primary)]",
-        secondary: "bg-secondary text-secondary-foreground hover:opacity-90 dark:bg-[var(--bg-secondary)] dark:text-[var(--text-primary)] dark:hover:bg-[var(--bg-tertiary)]",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
-        destructive: "bg-destructive text-white hover:opacity-90",
+        default: "bg-[var(--brand-accent)] text-[var(--bg-primary)] shadow-lg shadow-[var(--brand-accent)]/20 hover:bg-[var(--brand-accent-strong)] hover:shadow-[var(--brand-accent)]/30 hover:scale-[1.02]",
+        outline: "border border-[var(--border-color)] bg-transparent text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] hover:border-[var(--brand-accent)]/30",
+        secondary: "bg-[var(--bg-tertiary)] text-[var(--text-primary)] border border-[var(--border-color)] hover:bg-[var(--bg-tertiary)]/80",
+        ghost: "text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]",
+        link: "text-[var(--brand-accent)] underline-offset-4 hover:underline",
+        destructive: "bg-rose-500 text-white shadow-sm hover:bg-rose-600",
       },
       size: {
-        default: "h-10 px-4 py-2",
-        sm: "h-9 px-3",
-        lg: "h-11 px-8",
-        icon: "h-9 w-9 p-0",
+        default: "h-11 px-5 py-2",
+        sm: "h-9 px-3 text-xs",
+        lg: "h-12 px-8 text-base",
+        icon: "h-10 w-10 p-0",
       },
     },
     defaultVariants: {
@@ -31,8 +32,12 @@ const buttonVariants = cva(
 type ButtonProps = React.ComponentProps<"button"> &
   VariantProps<typeof buttonVariants>
 
-function Button({ className, variant, size, ...props }: ButtonProps) {
-  return <button className={cn(buttonVariants({ variant, size, className }))} {...props} />
-}
+const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ className, variant, size, ...props }, ref) => {
+    return <button ref={ref} className={cn(buttonVariants({ variant, size, className }))} {...props} />
+  }
+)
+
+Button.displayName = "Button"
 
 export { Button, buttonVariants }

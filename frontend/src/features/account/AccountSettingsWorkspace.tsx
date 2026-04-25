@@ -21,6 +21,7 @@ import {
   ShieldCheck,
   Upload,
   UserRound,
+  Sparkles,
 } from "lucide-react"
 import { useAuthStore } from "@/stores/useAuthStore"
 import { useAccountSettingsStore } from "@/stores/useAccountSettingsStore"
@@ -55,9 +56,9 @@ function isSettingsTab(value: string | null): value is SettingsTab {
 function SectionIntro({ eyebrow, title, description }: { eyebrow?: string; title: string; description: string }) {
   return (
     <div className="space-y-1">
-      {eyebrow ? <p className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-700">{eyebrow}</p> : null}
-      <h2 className="text-xl font-semibold tracking-tight text-slate-950 dark:text-[var(--text-primary)]">{title}</h2>
-      <p className="text-sm leading-6 text-slate-600 dark:text-[var(--text-secondary)]">{description}</p>
+      {eyebrow ? <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--brand-accent)]">{eyebrow}</p> : null}
+      <h2 className="text-xl font-bold tracking-tight text-[var(--text-primary)]">{title}</h2>
+      <p className="text-sm leading-6 text-[var(--text-secondary)]">{description}</p>
     </div>
   )
 }
@@ -66,8 +67,8 @@ function Field({ label, helper, error, children }: { label: string; helper: stri
   return (
     <label className="space-y-2">
       <div>
-        <p className="text-sm font-medium text-slate-800 dark:text-[var(--text-primary)]">{label}</p>
-        <p className={cn("mt-1 text-xs leading-5", error ? "text-rose-600" : "text-slate-500 dark:text-[var(--text-muted)]")}>{error ?? helper}</p>
+        <p className="text-sm font-bold text-[var(--text-primary)]">{label}</p>
+        <p className={cn("mt-1 text-xs leading-5", error ? "text-rose-500 font-medium" : "text-[var(--text-muted)]")}>{error ?? helper}</p>
       </div>
       {children}
     </label>
@@ -76,10 +77,10 @@ function Field({ label, helper, error, children }: { label: string; helper: stri
 
 function ToggleRow({ title, description, checked, onCheckedChange, disabled = false }: { title: string; description: string; checked: boolean; onCheckedChange: (checked: boolean) => void; disabled?: boolean }) {
   return (
-    <div className="flex flex-col gap-3 rounded-2xl border border-slate-200/80 bg-white/85 p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)]">
+    <div className="flex flex-col gap-3 rounded-2xl border border-[var(--border-color)] bg-[var(--bg-tertiary)] p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <p className="text-sm font-medium text-slate-900 dark:text-[var(--text-primary)]">{title}</p>
-        <p className="mt-1 text-sm text-slate-500 dark:text-[var(--text-secondary)]">{description}</p>
+        <p className="text-sm font-bold text-[var(--text-primary)]">{title}</p>
+        <p className="mt-1 text-sm text-[var(--text-secondary)]">{description}</p>
       </div>
       <Switch checked={checked} onCheckedChange={onCheckedChange} disabled={disabled} />
     </div>
@@ -92,10 +93,10 @@ function ChoicePill({ active, label, onClick }: { active: boolean; label: string
       type="button"
       onClick={onClick}
       className={cn(
-        "rounded-full border px-4 py-2 text-sm font-medium transition-all duration-150",
+        "rounded-full border px-4 py-2 text-sm font-bold transition-all duration-200",
         active
-          ? "border-emerald-500 bg-emerald-500 text-white shadow-[0_10px_30px_-16px_rgba(16,185,129,0.9)]"
-          : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900 dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)] dark:text-[var(--text-secondary)] dark:hover:border-[var(--brand-accent)] dark:hover:text-[var(--text-primary)]"
+          ? "border-[var(--brand-accent)] bg-[var(--brand-accent)] text-[var(--bg-primary)] shadow-lg shadow-[var(--brand-accent)]/10"
+          : "border-[var(--border-color)] bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:border-[var(--brand-accent)]/30 hover:text-[var(--text-primary)]"
       )}
     >
       {label}
@@ -107,8 +108,8 @@ function PasswordField({ label, helper, value, onChange, error, visible, onToggl
   return (
     <Field label={label} helper={helper} error={error}>
       <div className="relative">
-        <Input type={visible ? "text" : "password"} value={value} onChange={(event) => onChange(event.target.value)} className={cn("bg-white pr-10 dark:bg-[var(--bg-secondary)]", error ? "border-rose-300" : "")} />
-        <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 dark:text-[var(--text-muted)]" aria-label={visible ? "Hide password" : "Show password"} onClick={onToggle}>
+        <Input type={visible ? "text" : "password"} value={value} onChange={(event) => onChange(event.target.value)} className={cn("bg-[var(--bg-tertiary)] pr-10 border-[var(--border-color)] text-[var(--text-primary)] focus-visible:ring-[var(--brand-accent)]/30", error ? "border-rose-500/50" : "")} />
+        <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-label={visible ? "Hide password" : "Show password"} onClick={onToggle}>
           {visible ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
         </button>
       </div>
@@ -182,7 +183,7 @@ export function AccountSettingsWorkspace() {
 
   const displayName = getDisplayName(user)
   const saveLabel = useMemo(() => Object.keys(profileErrors).length > 0 ? "Needs attention" : saveState === "saving" ? "Syncing..." : saveState === "saved" ? "Saved" : "All changes saved", [profileErrors, saveState])
-  const saveTone = useMemo(() => Object.keys(profileErrors).length > 0 ? "border-rose-200 bg-rose-50 text-rose-700" : saveState === "saving" ? "border-amber-200 bg-amber-50 text-amber-700" : saveState === "saved" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white text-slate-600 dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)] dark:text-[var(--text-secondary)]", [profileErrors, saveState])
+  const saveTone = useMemo(() => Object.keys(profileErrors).length > 0 ? "border-rose-500/30 bg-rose-500/10 text-rose-500" : saveState === "saving" ? "border-amber-500/30 bg-amber-500/10 text-amber-500" : saveState === "saved" ? "border-[var(--brand-accent)]/30 bg-[var(--brand-accent)]/10 text-[var(--brand-accent)]" : "border-[var(--border-color)] bg-[var(--bg-secondary)] text-[var(--text-secondary)]", [profileErrors, saveState])
 
   const updateTab = (tab: SettingsTab) => {
     const next = new URLSearchParams(searchParams.toString())
@@ -349,20 +350,32 @@ export function AccountSettingsWorkspace() {
         eyebrow="Settings"
         title="High-trust control center"
         subtitle="Update identity, workspace defaults, and security posture with clear feedback and structured controls."
-        actions={<div className={cn("rounded-full border px-3 py-1.5 text-xs font-medium shadow-sm transition xl:ml-auto", saveTone)}>{saveLabel}</div>}
+        actions={<div className={cn("rounded-full border px-3 py-1.5 text-xs font-bold shadow-sm transition xl:ml-auto", saveTone)}>{saveLabel}</div>}
       >
         <div className="overflow-x-auto">
-          <div className="inline-flex min-w-full gap-2 rounded-[24px] border border-slate-200/80 bg-white/70 p-2 shadow-inner dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)]">
+          <div className="inline-flex min-w-full gap-2 rounded-2xl border border-[var(--border-color)] bg-[var(--bg-secondary)]/50 p-2 shadow-inner">
             {tabs.map((tab) => {
               const Icon = tab.icon
               const active = activeTab === tab.value
               return (
-                <button key={tab.value} type="button" onClick={() => updateTab(tab.value)} className={cn("min-w-[170px] flex-1 rounded-[18px] border px-4 py-3 text-left transition-all duration-150", active ? "border-emerald-300 bg-white shadow-[0_18px_40px_-28px_rgba(16,185,129,0.8)] dark:border-[var(--brand-accent)] dark:bg-[var(--card-hover)] dark:text-[var(--text-primary)] dark:shadow-[0_0_20px_rgba(74,222,128,0.15)]" : "border-transparent text-slate-600 hover:border-slate-200 hover:bg-white/80 hover:text-slate-900 dark:text-[var(--text-secondary)] dark:hover:border-[var(--border-color)] dark:hover:bg-[var(--card-hover)] dark:hover:text-[var(--text-primary)]") }>
+                <button 
+                  key={tab.value} 
+                  type="button" 
+                  onClick={() => updateTab(tab.value)} 
+                  className={cn(
+                    "min-w-[170px] flex-1 rounded-xl border px-4 py-3 text-left transition-all duration-200", 
+                    active 
+                      ? "border-[var(--brand-accent)] bg-[var(--bg-secondary)] shadow-lg shadow-[var(--brand-accent)]/10 text-[var(--text-primary)]" 
+                      : "border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]/50"
+                  )}
+                >
                   <div className="flex items-center gap-2">
-                    <div className={cn("rounded-full p-2", active ? "bg-emerald-50 text-emerald-700 dark:bg-[var(--brand-accent-soft)] dark:text-[var(--brand-accent)]" : "bg-slate-100 text-slate-500 dark:bg-[var(--bg-tertiary)] dark:text-[var(--text-secondary)]")}><Icon className="size-4" /></div>
+                    <div className={cn("rounded-full p-2", active ? "bg-[var(--brand-accent)]/10 text-[var(--brand-accent)]" : "bg-[var(--bg-tertiary)] text-[var(--text-muted)]")}>
+                      <Icon className="size-4" />
+                    </div>
                     <div>
-                      <p className="text-sm font-semibold dark:text-[var(--text-primary)]">{tab.label}</p>
-                      <p className="text-xs text-slate-500 dark:text-[var(--text-muted)]">{tab.description}</p>
+                      <p className="text-sm font-bold">{tab.label}</p>
+                      <p className="text-xs text-[var(--text-muted)]">{tab.description}</p>
                     </div>
                   </div>
                 </button>
@@ -376,47 +389,97 @@ export function AccountSettingsWorkspace() {
         <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.18 }} className="space-y-8">
           {activeTab === "profile" ? (
             <>
-              <Card className="border-slate-200/80 bg-white/95 shadow-[0_18px_60px_-46px_rgba(15,23,42,0.6)] transition-all duration-200 hover:scale-[1.01] hover:shadow-md dark:border-[var(--border-color)] dark:bg-[var(--card-bg)] dark:hover:bg-[var(--card-hover)]">
+              <Card className="border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-xl transition-all duration-200 hover:scale-[1.01] hover:shadow-2xl">
                 <CardHeader><SectionIntro eyebrow="Profile" title="Profile information" description="These details shape how your identity appears across quizzes, reports, and shared workspaces." /></CardHeader>
                 <CardContent className="space-y-6">
-                  {!hydrated ? <p className="text-sm text-slate-500 dark:text-[var(--text-muted)]">Loading profile...</p> : null}
+                  {!hydrated ? <p className="text-sm text-[var(--text-muted)]">Loading profile...</p> : null}
                   <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
-                    <div className="rounded-3xl border border-slate-200 bg-slate-50/80 p-5 text-center shadow-inner dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)]">
-                      {avatarSrc ? <Image src={avatarSrc} alt="Profile avatar" width={96} height={96} className="mx-auto size-24 rounded-full border border-slate-200 object-cover shadow-sm dark:border-[var(--border-color)]" unoptimized /> : <div className="mx-auto flex size-24 items-center justify-center rounded-full bg-slate-900 text-xl font-semibold text-white dark:bg-[var(--bg-tertiary)] dark:text-[var(--text-primary)]">{getInitials(profile.name, profile.email)}</div>}
-                      <p className="mt-4 text-sm font-medium text-slate-900 dark:text-[var(--text-primary)]">{profile.name || displayName}</p>
-                      <p className="text-xs text-slate-500 dark:text-[var(--text-secondary)]">{profile.email || "No email set"}</p>
-                      <Button variant="outline" className="mt-4 w-full" onClick={() => avatarInputRef.current?.click()} disabled={avatarUploading}>{avatarUploading ? <LoaderCircle className="size-4 animate-spin" /> : <Upload className="size-4" />}{avatarUploading ? "Uploading..." : "Upload avatar"}</Button>
+                    <div className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-tertiary)] p-5 text-center shadow-inner">
+                      {avatarSrc ? <Image src={avatarSrc} alt="Profile avatar" width={96} height={96} className="mx-auto size-24 rounded-full border border-[var(--border-color)] object-cover shadow-sm" unoptimized /> : <div className="mx-auto flex size-24 items-center justify-center rounded-full bg-[var(--bg-tertiary)] text-xl font-bold text-[var(--text-primary)] border border-[var(--border-color)]">{getInitials(profile.name, profile.email)}</div>}
+                      <p className="mt-4 text-sm font-bold text-[var(--text-primary)]">{profile.name || displayName}</p>
+                      <p className="text-xs text-[var(--text-secondary)]">{profile.email || "No email set"}</p>
+                      <Button variant="outline" className="mt-4 w-full border-[var(--border-color)] bg-[var(--bg-secondary)]" onClick={() => avatarInputRef.current?.click()} disabled={avatarUploading}>{avatarUploading ? <LoaderCircle className="size-4 animate-spin" /> : <Upload className="size-4" />}{avatarUploading ? "Uploading..." : "Upload avatar"}</Button>
                       <input ref={avatarInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={handleAvatarUpload} />
-                      <p className="mt-2 text-xs leading-5 text-slate-500 dark:text-[var(--text-muted)]">PNG, JPG, or WebP. Images are compressed before upload, resized to 512px max, and stored in Cloudinary.</p>
+                      <p className="mt-2 text-xs leading-5 text-[var(--text-muted)]">PNG, JPG, or WebP. Images are compressed before upload, resized to 512px max, and stored in Cloudinary.</p>
                     </div>
                     <div className="grid gap-5 md:grid-cols-2">
-                      <Field label="Display name" helper="Used for display across quizzes." error={profileErrors.name}><Input value={profile.name} onChange={(e) => handleProfileField("name", e.target.value)} className={cn("bg-white dark:bg-[var(--bg-secondary)]", profileErrors.name ? "border-rose-300" : "focus-visible:ring-emerald-100 dark:focus-visible:ring-[color:var(--brand-accent)]/35")} /></Field>
-                      <Field label="Email address" helper="Primary contact and login identity." error={profileErrors.email}><Input value={profile.email} onChange={(e) => handleProfileField("email", e.target.value)} className={cn("bg-white dark:bg-[var(--bg-secondary)]", profileErrors.email ? "border-rose-300" : "focus-visible:ring-emerald-100 dark:focus-visible:ring-[color:var(--brand-accent)]/35")} /></Field>
-                      <Field label="Institution" helper="Displayed on exports and shared exam assets." error={profileErrors.institution}><Input value={profile.institution} onChange={(e) => handleProfileField("institution", e.target.value)} className={cn("bg-white dark:bg-[var(--bg-secondary)]", profileErrors.institution ? "border-rose-300" : "focus-visible:ring-emerald-100 dark:focus-visible:ring-[color:var(--brand-accent)]/35")} /></Field>
-                      <Field label="Country" helper="Defaults to India; update it here if your workspace changes." error={profileErrors.country}><Input value={profile.country} onChange={(e) => handleProfileField("country", e.target.value)} className={cn("bg-white dark:bg-[var(--bg-secondary)]", profileErrors.country ? "border-rose-300" : "focus-visible:ring-emerald-100 dark:focus-visible:ring-[color:var(--brand-accent)]/35")} /></Field>
-                      <Field label="Timezone" helper="Used for scheduling and time-based alerts." error={profileErrors.timezone}><Input value={profile.timezone} onChange={(e) => handleProfileField("timezone", e.target.value)} className={cn("bg-white dark:bg-[var(--bg-secondary)]", profileErrors.timezone ? "border-rose-300" : "focus-visible:ring-emerald-100 dark:focus-visible:ring-[color:var(--brand-accent)]/35")} /></Field>
-                      <div className="md:col-span-2"><Field label="Avatar URL" helper="Optional direct image URL if you prefer linking to a hosted avatar."><Input value={profile.avatar_url} onChange={(e) => handleProfileField("avatar_url", e.target.value)} className="bg-white focus-visible:ring-emerald-100 dark:bg-[var(--bg-secondary)] dark:focus-visible:ring-[color:var(--brand-accent)]/35" /></Field></div>
+                      <Field label="Display name" helper="Used for display across quizzes." error={profileErrors.name}><Input value={profile.name} onChange={(e) => handleProfileField("name", e.target.value)} className={cn("bg-[var(--bg-tertiary)] border-[var(--border-color)] text-[var(--text-primary)]", profileErrors.name ? "border-rose-500/50" : "focus-visible:ring-[var(--brand-accent)]/30")} /></Field>
+                      <Field label="Email address" helper="Primary contact and login identity." error={profileErrors.email}><Input value={profile.email} onChange={(e) => handleProfileField("email", e.target.value)} className={cn("bg-[var(--bg-tertiary)] border-[var(--border-color)] text-[var(--text-primary)]", profileErrors.email ? "border-rose-500/50" : "focus-visible:ring-[var(--brand-accent)]/30")} /></Field>
+                      <Field label="Institution" helper="Displayed on exports and shared exam assets." error={profileErrors.institution}><Input value={profile.institution} onChange={(e) => handleProfileField("institution", e.target.value)} className={cn("bg-[var(--bg-tertiary)] border-[var(--border-color)] text-[var(--text-primary)]", profileErrors.institution ? "border-rose-500/50" : "focus-visible:ring-[var(--brand-accent)]/30")} /></Field>
+                      <Field label="Country" helper="Defaults to India; update it here if your workspace changes." error={profileErrors.country}><Input value={profile.country} onChange={(e) => handleProfileField("country", e.target.value)} className={cn("bg-[var(--bg-tertiary)] border-[var(--border-color)] text-[var(--text-primary)]", profileErrors.country ? "border-rose-500/50" : "focus-visible:ring-[var(--brand-accent)]/30")} /></Field>
+                      <Field label="Timezone" helper="Used for scheduling and time-based alerts." error={profileErrors.timezone}><Input value={profile.timezone} onChange={(e) => handleProfileField("timezone", e.target.value)} className={cn("bg-[var(--bg-tertiary)] border-[var(--border-color)] text-[var(--text-primary)]", profileErrors.timezone ? "border-rose-500/50" : "focus-visible:ring-[var(--brand-accent)]/30")} /></Field>
+                      <div className="md:col-span-2"><Field label="Avatar URL" helper="Optional direct image URL if you prefer linking to a hosted avatar."><Input value={profile.avatar_url} onChange={(e) => handleProfileField("avatar_url", e.target.value)} className="bg-[var(--bg-tertiary)] border-[var(--border-color)] text-[var(--text-primary)] focus-visible:ring-[var(--brand-accent)]/30" /></Field></div>
                     </div>
                   </div>
-                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)]"><div className="flex items-center gap-2 text-sm text-slate-600 dark:text-[var(--text-secondary)]">{Object.keys(profileErrors).length > 0 ? <AlertCircle className="size-4 text-rose-500" /> : <CheckCircle2 className="size-4 text-emerald-600 dark:text-[var(--brand-accent)]" />}<span>{Object.keys(profileErrors).length > 0 ? "Resolve the highlighted fields to keep your profile trustworthy." : "Profile details are valid and syncing to your account."}</span></div><Button onClick={() => handleProfileField("name", displayName, "Profile refreshed")}>Use account display name</Button></div>
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--border-color)] bg-[var(--bg-tertiary)] px-4 py-3">
+                    <div className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+                      {Object.keys(profileErrors).length > 0 ? <AlertCircle className="size-4 text-rose-500" /> : <CheckCircle2 className="size-4 text-[var(--brand-accent)]" />}
+                      <span>{Object.keys(profileErrors).length > 0 ? "Resolve the highlighted fields to keep your profile trustworthy." : "Profile details are valid and syncing to your account."}</span>
+                    </div>
+                    <Button onClick={() => handleProfileField("name", displayName, "Profile refreshed")} variant="outline" className="border-[var(--border-color)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)]">Use account display name</Button>
+                  </div>
                 </CardContent>
               </Card>
-              <Card className="border-slate-200/80 bg-white/95 shadow-[0_18px_60px_-46px_rgba(15,23,42,0.6)] dark:border-[var(--border-color)] dark:bg-[var(--card-bg)]">
+              <Card className="border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-xl">
                 <CardHeader><SectionIntro title="Account details" description="Keep your most important identity signals visible and easy to verify." /></CardHeader>
-                <CardContent className="grid gap-4 md:grid-cols-3">{[{ label: "Account role", value: user?.role ?? "Educator" }, { label: "Account status", value: user?.is_active === false ? "Restricted" : "Active" }, { label: "Team visibility", value: "Private workspace" }].map((item) => <div key={item.label} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)]"><p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-[var(--text-muted)]">{item.label}</p><p className="mt-2 text-lg font-semibold text-slate-900 dark:text-[var(--text-primary)]">{item.value}</p></div>)}</CardContent>
+                <CardContent className="grid gap-4 md:grid-cols-3">
+                  {[{ label: "Account role", value: user?.role ?? "Educator" }, { label: "Account status", value: user?.is_active === false ? "Restricted" : "Active" }, { label: "Team visibility", value: "Private workspace" }].map((item) => (
+                    <div key={item.label} className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-tertiary)] p-4 shadow-sm">
+                      <p className="text-xs font-bold uppercase tracking-[0.22em] text-[var(--text-muted)]">{item.label}</p>
+                      <p className="mt-2 text-lg font-bold text-[var(--text-primary)]">{item.value}</p>
+                    </div>
+                  ))}
+                </CardContent>
               </Card>
             </>
           ) : null}
 
           {activeTab === "preferences" ? (
-            <Card className="border-slate-200/80 bg-white/95 shadow-[0_18px_60px_-46px_rgba(15,23,42,0.6)] dark:border-[var(--border-color)] dark:bg-[var(--card-bg)]">
+            <Card className="border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-xl">
               <CardHeader><SectionIntro eyebrow="Preferences" title="Appearance and comfort" description="Tune the interface with clear toggle-style controls instead of generic dropdowns." /></CardHeader>
               <CardContent className="space-y-6">
-                <div className="space-y-3"><p className="text-sm font-medium text-slate-900 dark:text-[var(--text-primary)]">Theme</p><div className="flex flex-wrap gap-2">{["light", "dark", "system"].map((value) => <ChoicePill key={value} active={preferences.theme === value} label={value[0].toUpperCase() + value.slice(1)} onClick={() => commit(() => { patchPreferences({ theme: value as "light" | "dark" | "system" }); setTheme(value) }, "Theme preference updated")} />)}</div><p className="text-xs text-slate-500 dark:text-[var(--text-muted)]">Choose how the interface responds to light and dark environments.</p></div>
-                <Separator />
+                <div className="space-y-3">
+                  <p className="text-sm font-bold text-[var(--text-primary)]">Theme</p>
+                  <div className="flex flex-wrap gap-2">
+                    {["light", "dark", "system"].map((value) => (
+                      <ChoicePill 
+                        key={value} 
+                        active={preferences.theme === value} 
+                        label={value[0].toUpperCase() + value.slice(1)} 
+                        onClick={() => commit(() => { patchPreferences({ theme: value as "light" | "dark" | "system" }); setTheme(value) }, "Theme preference updated")} 
+                      />
+                    ))}
+                  </div>
+                  <p className="text-xs text-[var(--text-muted)]">Choose how the interface responds to light and dark environments.</p>
+                </div>
+                <Separator className="bg-[var(--border-color)]/50" />
                 <div className="grid gap-6 md:grid-cols-2">
-                  <div className="space-y-3"><p className="text-sm font-medium text-slate-900 dark:text-[var(--text-primary)]">Density</p><div className="flex flex-wrap gap-2">{[{ value: "comfortable", label: "Comfortable" }, { value: "compact", label: "Compact" }].map((option) => <ChoicePill key={option.value} active={preferences.density === option.value} label={option.label} onClick={() => commit(() => patchPreferences({ density: option.value as "comfortable" | "compact" }), "Density updated")} />)}</div></div>
-                  <div className="space-y-3"><p className="text-sm font-medium text-slate-900 dark:text-[var(--text-primary)]">Font scale</p><div className="flex flex-wrap gap-2">{[{ value: "small", label: "Small" }, { value: "normal", label: "Normal" }, { value: "large", label: "Large" }].map((option) => <ChoicePill key={option.value} active={preferences.font_scale === option.value} label={option.label} onClick={() => commit(() => patchPreferences({ font_scale: option.value as "small" | "normal" | "large" }), "Font scale updated")} />)}</div></div>
+                  <div className="space-y-3">
+                    <p className="text-sm font-bold text-[var(--text-primary)]">Density</p>
+                    <div className="flex flex-wrap gap-2">
+                      {[{ value: "comfortable", label: "Comfortable" }, { value: "compact", label: "Compact" }].map((option) => (
+                        <ChoicePill 
+                          key={option.value} 
+                          active={preferences.density === option.value} 
+                          label={option.label} 
+                          onClick={() => commit(() => patchPreferences({ density: option.value as "comfortable" | "compact" }), "Density updated")} 
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <p className="text-sm font-bold text-[var(--text-primary)]">Font scale</p>
+                    <div className="flex flex-wrap gap-2">
+                      {[{ value: "small", label: "Small" }, { value: "normal", label: "Normal" }, { value: "large", label: "Large" }].map((option) => (
+                        <ChoicePill 
+                          key={option.value} 
+                          active={preferences.font_scale === option.value} 
+                          label={option.label} 
+                          onClick={() => commit(() => patchPreferences({ font_scale: option.value as "small" | "normal" | "large" }), "Font scale updated")} 
+                        />
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -424,7 +487,7 @@ export function AccountSettingsWorkspace() {
 
           {activeTab === "workspace" ? (
             <div className="space-y-8">
-              <Card className="border-slate-200/80 bg-white/95 shadow-[0_18px_60px_-46px_rgba(15,23,42,0.6)] dark:border-[var(--border-color)] dark:bg-[var(--card-bg)]">
+              <Card className="border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-xl">
                 <CardHeader><SectionIntro eyebrow="Workspace" title="Publishing and review controls" description="Define safe defaults for quiz creation, warnings, and review behavior." /></CardHeader>
                 <CardContent className="space-y-4">
                   <ToggleRow title="Strict publishing checks" description="Require complete validation before any quiz can be published." checked={workspace.strict_publish_checks} onCheckedChange={(checked) => commit(() => patchWorkspace({ strict_publish_checks: checked }), "Publishing rules updated")} />
@@ -432,12 +495,12 @@ export function AccountSettingsWorkspace() {
                   <ToggleRow title="Auto-save review edits" description="Persist question edits automatically while reviewing content." checked={workspace.autosave_review} onCheckedChange={(checked) => commit(() => patchWorkspace({ autosave_review: checked }), "Review auto-save updated")} />
                 </CardContent>
               </Card>
-              <Card className="border-slate-200/80 bg-white/95 shadow-[0_18px_60px_-46px_rgba(15,23,42,0.6)] dark:border-[var(--border-color)] dark:bg-[var(--card-bg)]">
+              <Card className="border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-xl">
                 <CardHeader><SectionIntro title="Default values" description="Use sensible defaults to reduce repetitive setup during quiz creation." /></CardHeader>
                 <CardContent className="grid gap-5 md:grid-cols-3">
-                  <Field label="Default marks" helper="Applied as the starting mark value for new questions."><Input type="number" min={1} value={workspace.default_marks} onChange={(e) => commit(() => patchWorkspace({ default_marks: Math.max(1, Number(e.target.value || 1)) }))} className="bg-white dark:bg-[var(--bg-secondary)]" /></Field>
-                  <Field label="Default quiz duration" helper="Minutes used when starting a new quiz flow."><Input type="number" min={5} value={workspace.default_quiz_duration_minutes} onChange={(e) => commit(() => patchWorkspace({ default_quiz_duration_minutes: Math.max(5, Number(e.target.value || 60)) }))} className="bg-white dark:bg-[var(--bg-secondary)]" /></Field>
-                  <Field label="Warning threshold" helper="Minutes remaining before warning alerts should trigger."><Input type="number" min={1} value={workspace.default_warning_threshold_minutes} onChange={(e) => commit(() => patchWorkspace({ default_warning_threshold_minutes: Math.max(1, Number(e.target.value || 5)) }))} className="bg-white dark:bg-[var(--bg-secondary)]" /></Field>
+                  <Field label="Default marks" helper="Applied as the starting mark value for new questions."><Input type="number" min={1} value={workspace.default_marks} onChange={(e) => commit(() => patchWorkspace({ default_marks: Math.max(1, Number(e.target.value || 1)) }))} className="bg-[var(--bg-tertiary)] border-[var(--border-color)] text-[var(--text-primary)]" /></Field>
+                  <Field label="Default quiz duration" helper="Minutes used when starting a new quiz flow."><Input type="number" min={5} value={workspace.default_quiz_duration_minutes} onChange={(e) => commit(() => patchWorkspace({ default_quiz_duration_minutes: Math.max(5, Number(e.target.value || 60)) }))} className="bg-[var(--bg-tertiary)] border-[var(--border-color)] text-[var(--text-primary)]" /></Field>
+                  <Field label="Warning threshold" helper="Minutes remaining before warning alerts should trigger."><Input type="number" min={1} value={workspace.default_warning_threshold_minutes} onChange={(e) => commit(() => patchWorkspace({ default_warning_threshold_minutes: Math.max(1, Number(e.target.value || 5)) }))} className="bg-[var(--bg-tertiary)] border-[var(--border-color)] text-[var(--text-primary)]" /></Field>
                 </CardContent>
               </Card>
             </div>
@@ -445,7 +508,7 @@ export function AccountSettingsWorkspace() {
 
           {activeTab === "security" ? (
             <div className="space-y-8">
-              <Card className="border-slate-200/80 bg-white/95 shadow-[0_18px_60px_-46px_rgba(15,23,42,0.6)] dark:border-[var(--border-color)] dark:bg-[var(--card-bg)]">
+              <Card className="border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-xl">
                 <CardHeader><SectionIntro eyebrow="Security" title="Password and account protection" description="Reinforce access controls and make authentication changes with immediate feedback." /></CardHeader>
                 <CardContent className="space-y-6">
                   <div className="grid gap-5 md:grid-cols-3">
@@ -454,53 +517,68 @@ export function AccountSettingsWorkspace() {
                     <PasswordField label="Confirm password" helper={passwordError ?? "Repeat the new password exactly."} error={passwordError ?? undefined} value={passwordDraft.confirm} onChange={(value) => setPasswordDraft((current) => ({ ...current, confirm: value }))} visible={showPasswords.confirm} onToggle={() => setShowPasswords((current) => ({ ...current, confirm: !current.confirm }))} />
                   </div>
                   <div className="flex flex-wrap items-center gap-3">
-                    <Button onClick={() => void handlePasswordSave()} disabled={passwordState === "saving"}>{passwordState === "saving" ? <LoaderCircle className="size-4 animate-spin" /> : <KeyRound className="size-4" />}{passwordState === "saving" ? "Updating..." : passwordState === "saved" ? "Updated" : "Change password"}</Button>
-                    <p className="text-sm text-slate-500 dark:text-[var(--text-muted)]">A successful password change invalidates every active session and requires a new login.</p>
+                    <Button onClick={() => void handlePasswordSave()} disabled={passwordState === "saving"} className="bg-[var(--brand-accent)] text-[var(--bg-primary)] hover:bg-[var(--brand-accent-strong)]">
+                      {passwordState === "saving" ? <LoaderCircle className="size-4 animate-spin" /> : <KeyRound className="size-4" />}
+                      {passwordState === "saving" ? "Updating..." : passwordState === "saved" ? "Updated" : "Change password"}
+                    </Button>
+                    <p className="text-sm text-[var(--text-muted)]">A successful password change invalidates every active session and requires a new login.</p>
                   </div>
                   <ToggleRow title="Two-factor authentication" description="Enrollment is not active in the backend yet, so this control is intentionally read-only." checked={false} onCheckedChange={() => undefined} disabled />
                 </CardContent>
               </Card>
-              <Card className="border-slate-200/80 bg-white/95 shadow-[0_18px_60px_-46px_rgba(15,23,42,0.6)] dark:border-[var(--border-color)] dark:bg-[var(--card-bg)]">
+              <Card className="border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-xl">
                 <CardHeader><SectionIntro title="Login sessions" description="Keep session security simple by default and open details only when you need them." /></CardHeader>
                 <CardContent className="space-y-4">
-                  {sessionsLoading ? <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-sm text-slate-600 dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)] dark:text-[var(--text-secondary)]"><LoaderCircle className="size-4 animate-spin" />Checking active devices...</div> : null}
+                  {sessionsLoading ? (
+                    <div className="flex items-center gap-2 rounded-2xl border border-[var(--border-color)] bg-[var(--bg-tertiary)] p-4 text-sm text-[var(--text-secondary)]">
+                      <LoaderCircle className="size-4 animate-spin" />
+                      Checking active devices...
+                    </div>
+                  ) : null}
                   {!sessionsLoading ? (
                     <div className="grid gap-4 md:grid-cols-2">
-                      <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)]">
-                        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-[var(--text-muted)]">This device</p>
-                        <p className="mt-2 text-lg font-semibold text-slate-900 dark:text-[var(--text-primary)]">{currentSession ? "You are logged in on this device" : "Current device status unavailable"}</p>
-                        <p className="mt-2 text-sm text-slate-500 dark:text-[var(--text-secondary)]">{currentSession ? `${currentSession.device} active as of ${formatSessionTime(currentSession.last_seen_at)}` : "Refresh session details to verify the current device."}</p>
+                      <div className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-tertiary)] p-4 shadow-sm">
+                        <p className="text-xs font-bold uppercase tracking-[0.22em] text-[var(--text-muted)]">This device</p>
+                        <p className="mt-2 text-lg font-bold text-[var(--text-primary)]">{currentSession ? "You are logged in on this device" : "Current device status unavailable"}</p>
+                        <p className="mt-2 text-sm text-[var(--text-secondary)]">{currentSession ? `${currentSession.device} active as of ${formatSessionTime(currentSession.last_seen_at)}` : "Refresh session details to verify the current device."}</p>
                       </div>
-                      <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)]">
-                        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-[var(--text-muted)]">Other devices</p>
-                        <p className="mt-2 text-lg font-semibold text-slate-900 dark:text-[var(--text-primary)]">{otherActiveSessions.length === 0 ? "No other active devices" : `${otherActiveSessions.length} other device${otherActiveSessions.length === 1 ? "" : "s"} active`}</p>
-                        <p className="mt-2 text-sm text-slate-500 dark:text-[var(--text-secondary)]">{otherActiveSessions.length === 0 ? "Your account appears to be active only on this device." : "End those sessions if you no longer trust them."}</p>
+                      <div className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-tertiary)] p-4 shadow-sm">
+                        <p className="text-xs font-bold uppercase tracking-[0.22em] text-[var(--text-muted)]">Other devices</p>
+                        <p className="mt-2 text-lg font-bold text-[var(--text-primary)]">{otherActiveSessions.length === 0 ? "No other active devices" : `${otherActiveSessions.length} other device${otherActiveSessions.length === 1 ? "" : "s"} active`}</p>
+                        <p className="mt-2 text-sm text-[var(--text-secondary)]">{otherActiveSessions.length === 0 ? "Your account appears to be active only on this device." : "End those sessions if you no longer trust them."}</p>
                       </div>
                     </div>
                   ) : null}
-                  {!sessionsLoading && sessions.length === 0 ? <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-sm text-slate-600 dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)] dark:text-[var(--text-secondary)]">Session details are not available yet for this account.</div> : null}
+                  {!sessionsLoading && sessions.length === 0 ? <div className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-tertiary)] p-4 text-sm text-[var(--text-secondary)]">Session details are not available yet for this account.</div> : null}
                   {showSessionDetails && sessions.length > 0 ? (
                     <div className="grid gap-4 md:grid-cols-2">
                       {sessions.map((session) => (
-                        <div key={session.id} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)]">
+                        <div key={session.id} className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-tertiary)] p-4 shadow-sm">
                           <div className="flex items-center justify-between gap-3">
                             <div>
-                              <p className="text-sm font-medium text-slate-900 dark:text-[var(--text-primary)]">{session.is_current ? "Current session" : session.device}</p>
-                              <p className="mt-1 text-sm text-slate-500 dark:text-[var(--text-secondary)]">{session.device} • {session.ip_address}</p>
-                              <p className="mt-1 text-xs text-slate-500 dark:text-[var(--text-muted)]">Started {formatSessionTime(session.created_at)} • Last seen {formatSessionTime(session.last_seen_at)}</p>
+                              <p className="text-sm font-bold text-[var(--text-primary)]">{session.is_current ? "Current session" : session.device}</p>
+                              <p className="mt-1 text-sm text-[var(--text-secondary)]">{session.device} • {session.ip_address}</p>
+                              <p className="mt-1 text-xs text-[var(--text-muted)]">Started {formatSessionTime(session.created_at)} • Last seen {formatSessionTime(session.last_seen_at)}</p>
                             </div>
-                            <span className={cn("rounded-full px-2.5 py-1 text-xs font-medium", session.status === "active" ? "bg-emerald-50 text-emerald-700 dark:bg-[var(--brand-accent-soft)] dark:text-[var(--brand-accent)]" : "bg-slate-200 text-slate-700 dark:bg-[var(--bg-tertiary)] dark:text-[var(--text-secondary)]")}>{session.status === "active" ? (session.is_current ? "Active now" : "Active") : "Expired"}</span>
+                            <span className={cn(
+                              "rounded-full px-2.5 py-1 text-xs font-bold", 
+                              session.status === "active" 
+                                ? "bg-[var(--brand-accent)]/10 text-[var(--brand-accent)] border border-[var(--brand-accent)]/20" 
+                                : "bg-[var(--bg-secondary)] text-[var(--text-muted)] border border-[var(--border-color)]"
+                            )}>
+                              {session.status === "active" ? (session.is_current ? "Active now" : "Active") : "Expired"}
+                            </span>
                           </div>
                         </div>
                       ))}
                     </div>
                   ) : null}
-                  <div className="flex flex-wrap gap-3">
-                    <Button variant="outline" onClick={() => void loadSessions()} disabled={sessionsLoading}><RefreshCw className={cn("size-4", sessionsLoading ? "animate-spin" : "")} />Refresh sessions</Button>
-                    <Button variant="outline" onClick={() => void handleLogoutOtherSessions()} disabled={sessionsLoading || otherActiveSessions.length === 0}>Log out from all other devices</Button>
-                    <Button variant="outline" onClick={() => setShowSessionDetails((current) => !current)} disabled={sessionsLoading || sessions.length === 0}>{showSessionDetails ? "Hide details" : "View details"}</Button>
-                    <Button variant="outline" onClick={() => void handleLogoutAllSessions()}>Logout from all sessions</Button>
-                    <Button variant="outline" onClick={() => void logout().then(() => router.replace("/login"))}>Logout from this session</Button>
+                  <div className="flex flex-wrap gap-3 pt-2">
+                    <Button variant="outline" onClick={() => void loadSessions()} disabled={sessionsLoading} className="border-[var(--border-color)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)]"><RefreshCw className={cn("size-4", sessionsLoading ? "animate-spin" : "")} />Refresh sessions</Button>
+                    <Button variant="outline" onClick={() => void handleLogoutOtherSessions()} disabled={sessionsLoading || otherActiveSessions.length === 0} className="border-[var(--border-color)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)]">Log out from all other devices</Button>
+                    <Button variant="outline" onClick={() => setShowSessionDetails((current) => !current)} disabled={sessionsLoading || sessions.length === 0} className="border-[var(--border-color)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)]">{showSessionDetails ? "Hide details" : "View details"}</Button>
+                    <Button variant="outline" onClick={() => void handleLogoutAllSessions()} className="border-rose-500/30 bg-rose-500/5 text-rose-500 hover:bg-rose-500/10">Logout from all sessions</Button>
+                    <Button variant="outline" onClick={() => void logout().then(() => router.replace("/login"))} className="border-[var(--border-color)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)]">Logout from this session</Button>
                   </div>
                 </CardContent>
               </Card>
@@ -508,14 +586,35 @@ export function AccountSettingsWorkspace() {
           ) : null}
 
           {activeTab === "notifications" ? (
-            <Card className="border-slate-200/80 bg-white/95 shadow-[0_18px_60px_-46px_rgba(15,23,42,0.6)] dark:border-[var(--border-color)] dark:bg-[var(--card-bg)]">
+            <Card className="border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-xl">
               <CardHeader><SectionIntro eyebrow="Notifications" title="Alert routing" description="Decide which product events deserve attention and keep the signal-to-noise ratio under control." /></CardHeader>
-              <CardContent className="space-y-4">{[{ key: "attempts_email", title: "New attempt notifications", description: "Receive email alerts when students start a new attempt." }, { key: "integrity_alerts", title: "Integrity alerts", description: "Get notified when violations or suspicious activity increase." }, { key: "generation_complete", title: "Generation complete", description: "Be alerted when AI quiz generation finishes." }, { key: "export_complete", title: "Export completion", description: "Receive updates when result exports are ready to download." }].map((item) => <ToggleRow key={item.key} title={item.title} description={item.description} checked={Boolean(notifications[item.key as keyof typeof notifications])} onCheckedChange={(checked) => commit(() => patchNotifications({ [item.key]: checked } as Partial<typeof notifications>), "Notification preference updated")} />)}</CardContent>
+              <CardContent className="space-y-4">
+                {[{ key: "attempts_email", title: "New attempt notifications", description: "Receive email alerts when students start a new attempt." }, { key: "integrity_alerts", title: "Integrity alerts", description: "Get notified when violations or suspicious activity increase." }, { key: "generation_complete", title: "Generation complete", description: "Be alerted when AI quiz generation finishes." }, { key: "export_complete", title: "Export completion", description: "Receive updates when result exports are ready to download." }].map((item) => (
+                  <ToggleRow key={item.key} title={item.title} description={item.description} checked={Boolean(notifications[item.key as keyof typeof notifications])} onCheckedChange={(checked) => commit(() => patchNotifications({ [item.key]: checked } as Partial<typeof notifications>), "Notification preference updated")} />
+                ))}
+              </CardContent>
             </Card>
           ) : null}
 
           {activeTab === "integrations" ? (
-            <div className="grid gap-5 md:grid-cols-2">{[{ title: "Google Classroom", description: "Sync rosters and assignment context once the classroom bridge is enabled.", badge: "Planned" }, { title: "Slack notifications", description: "Route quiz alerts and publishing updates directly into your teaching channels.", badge: "Beta-ready" }, { title: "Webhook integrations", description: "Push attempt and result events into your own systems with signed payloads.", badge: "Coming soon" }, { title: "API keys", description: "Manage future programmatic access for exports, automation, and reporting pipelines.", badge: "Planned" }].map((item) => <Card key={item.title} className="border-slate-200/80 bg-white/95 shadow-[0_18px_60px_-46px_rgba(15,23,42,0.6)] dark:border-[var(--border-color)] dark:bg-[var(--card-bg)]"><CardHeader><div className="flex items-start justify-between gap-3"><div><CardTitle className="text-lg text-slate-950 dark:text-[var(--text-primary)]">{item.title}</CardTitle><CardDescription className="mt-2 leading-6 dark:text-[var(--text-secondary)]">{item.description}</CardDescription></div><span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600 dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)] dark:text-[var(--text-secondary)]">{item.badge}</span></div></CardHeader><CardContent><Button variant="outline" className="w-full">Request access</Button></CardContent></Card>)}</div>
+            <div className="grid gap-5 md:grid-cols-2">
+              {[{ title: "Google Classroom", description: "Sync rosters and assignment context once the classroom bridge is enabled.", badge: "Planned" }, { title: "Slack notifications", description: "Route quiz alerts and publishing updates directly into your teaching channels.", badge: "Beta-ready" }, { title: "Webhook integrations", description: "Push attempt and result events into your own systems with signed payloads.", badge: "Coming soon" }, { title: "API keys", description: "Manage future programmatic access for exports, automation, and reporting pipelines.", badge: "Planned" }].map((item) => (
+                <Card key={item.title} className="border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-xl hover:scale-[1.01] transition-transform">
+                  <CardHeader>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <CardTitle className="text-lg font-bold text-[var(--text-primary)]">{item.title}</CardTitle>
+                        <CardDescription className="mt-2 leading-6 text-[var(--text-secondary)]">{item.description}</CardDescription>
+                      </div>
+                      <span className="rounded-full border border-[var(--border-color)] bg-[var(--bg-tertiary)] px-2.5 py-1 text-xs font-bold text-[var(--text-secondary)] whitespace-nowrap">{item.badge}</span>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <Button variant="outline" className="w-full border-[var(--border-color)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)]">Request access</Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           ) : null}
         </motion.div>
       </AnimatePresence>
