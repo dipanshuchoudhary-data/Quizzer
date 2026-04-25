@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { Bell, ChevronRight, LifeBuoy, LogOut, Menu, Moon, Plus, Settings2, ShieldCheck, Sun, UserRound } from "lucide-react"
+import { Bell, BookOpen, ChevronRight, FolderPlus, LifeBuoy, LogOut, Menu, Moon, Plus, Settings2, ShieldCheck, Sun, UserRound } from "lucide-react"
 import { useTheme } from "next-themes"
 import { GlobalSearch } from "./global-search"
 import { NotificationInbox } from "./notification-inbox"
@@ -123,21 +123,31 @@ export function Topbar() {
         <div className="ml-auto flex items-center gap-2">
           {!isStudent ? (
             <>
-              <Button
-                className="hidden h-11 rounded-2xl bg-[var(--brand-accent)] px-5 font-semibold text-white shadow-[0_12px_28px_rgba(34,197,94,0.24)] transition hover:-translate-y-0.5 hover:bg-green-600 dark:text-black dark:hover:bg-green-300 sm:inline-flex"
-                onClick={() => router.push("/quizzes/create?new=1")}
-              >
-                <Plus className="size-4" />
-                Create Quiz
-              </Button>
-              <Button
-                size="icon"
-                className="h-11 w-11 rounded-2xl bg-[var(--brand-accent)] text-white shadow-[0_10px_22px_rgba(34,197,94,0.24)] transition hover:bg-green-600 dark:text-black dark:hover:bg-green-300 sm:hidden"
-                aria-label="Create quiz"
-                onClick={() => router.push("/quizzes/create?new=1")}
-              >
-                <Plus className="size-4" />
-              </Button>
+              <DropdownMenu modal={false}>
+                <DropdownMenuTrigger asChild>
+                  <Button className="h-11 rounded-2xl bg-[var(--brand-accent)] px-5 font-semibold text-white shadow-md transition hover:-translate-y-0.5 hover:brightness-95 dark:text-black dark:hover:brightness-110">
+                    <Plus className="size-4" />
+                    <span className="hidden sm:inline">Create</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" sideOffset={10} className="w-64 rounded-2xl border p-1.5 shadow-xl">
+                  <DropdownMenuLabel className="px-2 py-1 text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground">
+                    Create menu
+                  </DropdownMenuLabel>
+                  <DropdownMenuItem onSelect={() => navigateTo("/quizzes/create?new=1")}>
+                    <Plus className="size-4 text-muted-foreground" />
+                    Create Exam
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => navigateTo("/quizzes/create?source=import")}>
+                    <BookOpen className="size-4 text-muted-foreground" />
+                    Import Questions
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => navigateTo("/quizzes/courses")}>
+                    <FolderPlus className="size-4 text-muted-foreground" />
+                    Create Cluster
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               <NotificationInbox />
             </>
           ) : null}
