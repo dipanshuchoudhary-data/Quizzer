@@ -58,18 +58,18 @@ export function Sidebar() {
       />
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex h-screen min-h-0 max-w-[88vw] flex-col border-r border-sidebar-border/80 bg-sidebar/92 text-sidebar-foreground backdrop-blur-xl transition-all duration-200 lg:sticky lg:top-0 lg:max-w-none",
+          "fixed inset-y-0 left-0 z-40 flex h-screen min-h-0 max-w-[88vw] flex-col border-r border-[var(--border-color)] bg-[var(--sidebar)] text-[var(--sidebar-foreground)] transition-all duration-200 lg:sticky lg:top-0 lg:max-w-none",
           sidebarCollapsed ? "lg:w-[84px]" : "w-[272px]",
           mobileSidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}
       >
-        <div className="surface-gradient-soft flex h-16 items-center justify-between border-b border-sidebar-border/60 px-4 lg:px-3">
+        <div className="flex h-16 items-center justify-between border-b border-[var(--border-color)] bg-[var(--sidebar)] px-4 lg:px-3">
           <div className={cn("min-w-0", sidebarCollapsed && "hidden lg:block")}>
             <Brand
               compact
               subtitle={normalizedRole === "student" ? "Student Workspace" : "Professor Workspace"}
-              titleClassName="text-sidebar-foreground"
-              subtitleClassName="text-sidebar-foreground/65"
+              titleClassName="text-[var(--text-primary)]"
+              subtitleClassName="text-[var(--text-muted)]"
             />
           </div>
             <Button
@@ -77,7 +77,7 @@ export function Sidebar() {
               variant="ghost"
               onClick={toggleSidebar}
               aria-label="Toggle sidebar"
-              className="hidden text-sidebar-foreground/80 transition hover:scale-[1.03] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground lg:inline-flex"
+              className="hidden text-[var(--text-muted)] transition hover:text-[var(--brand-accent)] lg:inline-flex"
             >
               {sidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
             </Button>
@@ -86,7 +86,7 @@ export function Sidebar() {
             variant="ghost"
             onClick={() => setMobileSidebarOpen(false)}
             aria-label="Close navigation"
-            className="text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground lg:hidden"
+            className="text-[var(--text-muted)] hover:text-[var(--brand-accent)] lg:hidden"
           >
             <PanelLeftClose size={16} />
           </Button>
@@ -99,7 +99,7 @@ export function Sidebar() {
           {sections.map((section) => (
             <div key={section.id} className="ui-nav-enter space-y-2">
               {!sidebarCollapsed && (
-                <p className="px-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-sidebar-foreground/55">
+                <p className="px-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--text-muted)]">
                   {section.title}
                 </p>
               )}
@@ -117,13 +117,13 @@ export function Sidebar() {
           ))}
         </nav>
 
-        <div className="border-t border-sidebar-border/80 px-3 py-3">
+        <div className="border-t border-[var(--border-color)] px-3 py-3">
           <Button
             type="button"
             variant="ghost"
             onClick={openFeedback}
             className={cn(
-              "h-11 w-full justify-start gap-3 rounded-2xl px-3 text-sidebar-foreground/85 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+              "h-11 w-full justify-start gap-3 px-3 text-[var(--text-muted)] hover:bg-transparent hover:text-[var(--text-secondary)]",
               sidebarCollapsed && "lg:justify-center lg:px-0"
             )}
             aria-label="Open feedback"

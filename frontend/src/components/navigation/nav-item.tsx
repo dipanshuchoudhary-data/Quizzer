@@ -5,6 +5,13 @@ import { usePathname } from "next/navigation"
 import type { NavItem } from "./nav-config"
 import { cn } from "@/lib/utils"
 
+"use client"
+
+import Link from "next/link"
+import { usePathname } from "next/navigation"
+import type { NavItem } from "./nav-config"
+import { cn } from "@/lib/utils"
+
 interface NavItemProps {
   item: NavItem
   collapsed: boolean
@@ -18,33 +25,26 @@ export function NavItemRow({ item, collapsed, onNavigate }: NavItemProps) {
 
   return (
     <div className="group relative">
-      <span
-        aria-hidden
-        className={cn(
-          "pointer-events-none absolute bottom-1 top-1 left-0 w-[3px] rounded-full transition-all duration-200",
-          active ? "bg-[var(--brand-accent)] opacity-90" : "opacity-0 group-hover:opacity-50"
-        )}
-      />
       <Link
         href={item.href}
         onClick={onNavigate}
         aria-current={active ? "page" : undefined}
         className={cn(
-          "flex h-11 items-center gap-3 rounded-2xl px-3 text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70",
+          "flex h-10 items-center gap-3 rounded-lg px-2 text-sm font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70",
           active
-            ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-[0_8px_20px_rgba(15,23,42,0.12)] ring-1 ring-sidebar-border"
-            : "text-sidebar-foreground/80 hover:-translate-y-[1px] hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground"
+            ? "bg-[var(--sidebar-accent)] text-[var(--brand-accent)] border-l-[3px] border-l-[var(--brand-accent)] rounded-l-none"
+            : "text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]"
         )}
       >
         <span
           className={cn(
-            "inline-flex h-9 w-9 items-center justify-center rounded-xl border border-transparent transition-all duration-200",
+            "inline-flex size-5 items-center justify-center transition-colors duration-150",
             active
-              ? "bg-background/80 text-foreground"
-              : "bg-sidebar/80 text-sidebar-foreground/70 group-hover:scale-[1.04] group-hover:bg-background/70"
+              ? "text-[var(--brand-accent)]"
+              : "text-[var(--text-muted)] group-hover:text-[var(--text-secondary)]"
           )}
         >
-          <Icon className="size-4" />
+          <Icon className="size-[18px]" />
         </span>
         {!collapsed && <span className="truncate">{item.label}</span>}
       </Link>

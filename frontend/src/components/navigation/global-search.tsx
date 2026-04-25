@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowRight, Search, Sparkles } from "lucide-react"
+import { ArrowRight, Clock3, FileQuestion, FileText, Plus, Search, Sparkles } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ALL_NAV_ITEMS, NAV_ACTIONS } from "./nav-config"
 
@@ -59,7 +59,7 @@ function highlightMatch(text: string, query: string) {
   return (
     <>
       {text.slice(0, match)}
-      <span className="text-foreground underline decoration-primary/40">{text.slice(match, match + query.length)}</span>
+      <span className="text-[var(--text-primary)] underline decoration-[var(--brand-accent)]/40">{text.slice(match, match + query.length)}</span>
       {text.slice(match + query.length)}
     </>
   )
@@ -72,6 +72,7 @@ export function GlobalSearch({ className }: { className?: string }) {
   const [open, setOpen] = useState(false)
   const [activeIndex, setActiveIndex] = useState(0)
   const [isSearching, setIsSearching] = useState(false)
+  const [isFocused, setIsFocused] = useState(false)
   const [recent, setRecent] = useState<SearchItem[]>([])
   const containerRef = useRef<HTMLDivElement | null>(null)
   const listId = "global-search-list"
@@ -151,6 +152,17 @@ export function GlobalSearch({ className }: { className?: string }) {
   }, [debouncedQuery, ranked, recent])
 
   const flattened = useMemo(() => grouped.flatMap((group) => group.items), [grouped])
+  const createItem = useMemo(
+    () =>
+      NAV_ACTIONS.find((action) => /create/i.test(action.label) && action.href)?.href
+        ? {
+            href: NAV_ACTIONS.find((action) => /create/i.test(action.label) && action.href)!.href!,
+            label: "Create Quiz",
+            description: "Start a fresh exam workflow from the global create flow.",
+          }
+        : null,
+    []
+  )
 
   useEffect(() => {
     if (activeIndex >= flattened.length) {
@@ -189,23 +201,31 @@ export function GlobalSearch({ className }: { className?: string }) {
   return (
     <div ref={containerRef} className={cn("relative w-full max-w-xl", className)}>
       <div className="relative">
-        <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Search
+          className={cn(
+            "pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 transition-colors duration-200",
+            isFocused ? "text-[var(--brand-accent)]" : "text-[var(--text-muted)]"
+          )}
+        />
         <input
           value={query}
           onChange={(event) => {
             setQuery(event.target.value)
             setActiveIndex(0)
           }}
-          onFocus={() => setOpen(true)}
+          onFocus={() => {
+            setOpen(true)
+            setIsFocused(true)
+          }}
+          onBlur={() => setIsFocused(false)}
           onKeyDown={onKeyDown}
           placeholder="Search exams, questions, or topics..."
-          className="h-11 w-full rounded-full border border-border/80 bg-background/95 pl-11 pr-10 text-sm text-foreground shadow-sm transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-accent)] focus-visible:ring-offset-2"
-          aria-expanded={open}
+          className="h-11 w-full rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] pl-11 pr-24 text-sm text-[var(--text-primary)] transition-[border-color,box-shadow] duration-200 ease-in-out placeholder:text-[var(--text-muted)] focus-visible:border-[var(--brand-accent)] focus-visible:outline-none focus-visible:ring-0 focus-visible:shadow-[var(--brand-accent-glow)]"
           aria-haspopup="listbox"
           aria-controls={listId}
           aria-activedescendant={flattened[activeIndex]?.id}
         />
-        <div className="absolute right-3 top-2.5 flex items-center gap-1 rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[10px] text-muted-foreground">
+        <div className="absolute right-3 top-2.5 flex items-center gap-1 rounded-md border border-[var(--brand-accent-border)] bg-[var(--sidebar-accent)] px-2 py-0.5 text-[10px] font-semibold text-[var(--brand-accent)]">
           <Sparkles className="size-3" />
           Smart
         </div>
@@ -214,28 +234,48 @@ export function GlobalSearch({ className }: { className?: string }) {
       {open ? (
         <div
           id={listId}
-          className="absolute z-30 mt-3 w-full rounded-2xl border border-border/90 bg-popover p-3 shadow-lg motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-1 motion-safe:duration-200"
+          className="absolute z-30 mt-3 w-full rounded-2xl border border-[var(--border-color)] bg-[var(--bg-secondary)] p-2 shadow-[0_16px_48px_rgba(0,0,0,0.5)]"
+          style={{ animation: "dropdown-enter 150ms ease forwards" }}
           role="listbox"
         >
           {isSearching ? (
-            <div className="space-y-2">
+            <div className="space-y-2 p-2">
               {Array.from({ length: 4 }).map((_, index) => (
-                <div key={`search-loading-${index}`} className="h-12 animate-pulse rounded-xl bg-muted/60" />
+                <div key={`search-loading-${index}`} className="h-12 animate-pulse rounded-xl bg-[var(--bg-tertiary)]" />
               ))}
             </div>
           ) : flattened.length === 0 ? (
-            <div className="rounded-xl border border-dashed bg-background/70 p-4 text-center text-sm text-muted-foreground">
+            <div className="rounded-xl border border-dashed border-[var(--border-color)] bg-[var(--bg-primary)]/70 p-4 text-center text-sm text-[var(--text-muted)]">
               No results. Try a broader keyword.
             </div>
           ) : (
             <div className="space-y-3">
+              {createItem ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false)
+                    router.push(createItem.href)
+                  }}
+                  className="flex w-full items-start gap-3 rounded-lg border-l-[3px] border-[var(--brand-accent)] bg-[var(--brand-accent-soft)] px-3 py-3 text-left transition-colors hover:bg-[var(--bg-tertiary)]"
+                >
+                  <span className="mt-0.5 inline-flex size-8 items-center justify-center rounded-full bg-[var(--bg-secondary)] text-[var(--brand-accent)] shadow-sm">
+                    <Plus className="size-4" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-[var(--brand-accent)]">{createItem.label}</span>
+                    <span className="block text-xs text-[var(--text-secondary)]">{createItem.description}</span>
+                  </span>
+                </button>
+              ) : null}
               {grouped.map((group) => (
                 <div key={group.title} className="space-y-1">
-                  <p className="px-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">{group.title}</p>
-                  <div className="space-y-1">
+                  <p className="px-3 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">{group.title}</p>
+                  <div className="space-y-0.5">
                     {group.items.map((item) => {
                       const index = flattened.findIndex((entry) => entry.id === item.id)
                       const active = index === activeIndex
+                      const Icon = group.title === "Questions" ? FileQuestion : group.title === "Recent Searches" ? Clock3 : FileText
                       return (
                         <button
                           key={item.id}
@@ -243,34 +283,39 @@ export function GlobalSearch({ className }: { className?: string }) {
                           onClick={() => selectItem(item)}
                           onMouseEnter={() => setActiveIndex(index)}
                           className={cn(
-                            "flex w-full items-start justify-between rounded-xl border border-transparent px-3 py-2 text-left text-sm transition-all duration-150",
+                            "group flex w-full items-start justify-between rounded-lg px-3 py-2.5 text-left text-sm transition-all duration-150",
                             active
-                              ? "border-primary/30 bg-muted/60 text-foreground"
-                              : "text-muted-foreground hover:border-muted hover:bg-muted/40 hover:text-foreground"
+                              ? "bg-[var(--bg-tertiary)] text-[var(--text-primary)]"
+                              : "text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]"
                           )}
                           role="option"
                           aria-selected={active}
                           id={item.id}
                         >
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-foreground">{highlightMatch(item.label, debouncedQuery)}</p>
-                            {item.description ? <p className="truncate text-xs text-muted-foreground">{item.description}</p> : null}
+                          <div className="flex min-w-0 items-start gap-3">
+                            <span className="mt-0.5 inline-flex size-8 items-center justify-center rounded-full bg-[var(--bg-primary)] text-[var(--brand-accent)]">
+                              <Icon className="size-4" />
+                            </span>
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium text-[var(--text-primary)]">{highlightMatch(item.label, debouncedQuery)}</p>
+                              {item.description ? <p className="truncate text-xs text-[var(--text-muted)]">{item.description}</p> : null}
+                            </div>
                           </div>
-                          <ArrowRight className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                          <ArrowRight className="mt-1 size-4 shrink-0 text-[var(--text-muted)] opacity-0 transition-opacity duration-150 group-hover:opacity-100" />
                         </button>
                       )
                     })}
                   </div>
                 </div>
               ))}
-              <div className="border-t pt-2">
+              <div className="border-t border-[var(--border-color)] pt-2">
                 <button
                   type="button"
                   onClick={() => {
                     setOpen(false)
                     router.push("/exams")
                   }}
-                  className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--brand-accent)] hover:underline"
+                  className="flex w-full items-center justify-center gap-1 p-2 text-xs font-semibold text-[var(--brand-accent)] hover:underline"
                 >
                   View all results
                   <ArrowRight className="size-3.5" />
