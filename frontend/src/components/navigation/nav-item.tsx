@@ -18,6 +18,13 @@ export function NavItemRow({ item, collapsed, onNavigate }: NavItemProps) {
 
   return (
     <div className="group relative">
+      <span
+        aria-hidden
+        className={cn(
+          "pointer-events-none absolute bottom-1 top-1 left-0 w-[3px] rounded-full transition-all duration-200",
+          active ? "bg-[var(--brand-accent)] opacity-90" : "opacity-0 group-hover:opacity-50"
+        )}
+      />
       <Link
         href={item.href}
         onClick={onNavigate}
