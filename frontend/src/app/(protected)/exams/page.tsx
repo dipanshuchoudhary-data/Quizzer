@@ -161,11 +161,30 @@ function normalizeJobProgress(progress: number) {
 }
 
 function statusBadgeClasses(status: ExamFilter | "COMPLETED") {
-  if (status === "LIVE") return "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-200"
-  if (status === "PUBLISHED") return "border border-[var(--brand-accent-border)] bg-[var(--brand-accent-tint)] text-[var(--brand-accent-text)] dark:border-[var(--brand-accent-border)] dark:bg-[var(--brand-accent-soft)] dark:text-[var(--brand-accent)]"
-  if (status === "PROCESSING") return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-200"
-  if (status === "COMPLETED") return "border border-[var(--brand-accent-border)] bg-[var(--brand-accent-tint)] text-[var(--brand-accent-text)] dark:border-[var(--brand-accent-border)] dark:bg-[var(--brand-accent-soft)] dark:text-[var(--brand-accent)]"
-  return "bg-muted text-foreground"
+  if (status === "LIVE") return "bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-300 border-0 shadow-none font-medium"
+  if (status === "PUBLISHED") return "bg-blue-500/10 text-blue-600 dark:bg-blue-500/20 dark:text-blue-300 border-0 shadow-none font-medium"
+  if (status === "PROCESSING") return "bg-amber-500/10 text-amber-600 dark:bg-amber-500/20 dark:text-amber-300 border-0 shadow-none font-medium"
+  if (status === "COMPLETED") return "bg-blue-500/10 text-blue-600 dark:bg-blue-500/20 dark:text-blue-300 border-0 shadow-none font-medium"
+  if (status === "DRAFT") return "bg-orange-500/10 text-orange-600 dark:bg-orange-500/20 dark:text-orange-300 border-0 shadow-none font-medium"
+  return "bg-muted text-foreground border-0 shadow-none font-medium"
+}
+
+function getCardGradient(title: string) {
+  const t = title.toLowerCase()
+  if (t.includes("js") || t.includes("javascript") || t.includes("node")) return "linear-gradient(135deg, rgba(16, 185, 129, 0.06), rgba(16, 185, 129, 0.02))"
+  if (t.includes("web") || t.includes("react") || t.includes("html") || t.includes("css")) return "linear-gradient(135deg, rgba(245, 158, 11, 0.06), rgba(245, 158, 11, 0.02))"
+  if (t.includes("db") || t.includes("database") || t.includes("sql") || t.includes("mongo")) return "linear-gradient(135deg, rgba(59, 130, 246, 0.06), rgba(59, 130, 246, 0.02))"
+  if (t.includes("dsa") || t.includes("algorithm") || t.includes("data structure")) return "linear-gradient(135deg, rgba(139, 92, 246, 0.06), rgba(139, 92, 246, 0.02))"
+  return "linear-gradient(135deg, rgba(16, 185, 129, 0.06), rgba(59, 130, 246, 0.04))"
+}
+
+function getCardIconBg(title: string) {
+  const t = title.toLowerCase()
+  if (t.includes("js") || t.includes("javascript") || t.includes("node")) return "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+  if (t.includes("web") || t.includes("react") || t.includes("html") || t.includes("css")) return "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+  if (t.includes("db") || t.includes("database") || t.includes("sql") || t.includes("mongo")) return "bg-blue-500/10 text-blue-600 dark:text-blue-400"
+  if (t.includes("dsa") || t.includes("algorithm") || t.includes("data structure")) return "bg-purple-500/10 text-purple-600 dark:text-purple-400"
+  return "bg-primary/10 text-primary"
 }
 
 function getReadinessProgress(questionCount: number, hasDuration: boolean, isPublished: boolean) {
@@ -1392,22 +1411,24 @@ export default function ExamsPage() {
               const isSelected = selectedIds.has(quiz.id)
               const openExamHref = `/exam/${quiz.id}/start`
               const quizCluster = organizationMap[quiz.id]
-              const clusterLabel = quizCluster?.course_name
-                ? `${quizCluster.course_name}${quizCluster.unit_name ? ` • ${quizCluster.unit_name}` : ""}`
-                : "Unclustered"
+              const isUnclustered = !quizCluster?.course_name
+              const clusterLabel = isUnclustered
+                ? "Unclustered"
+                : `${quizCluster.course_name}${quizCluster.unit_name ? ` • ${quizCluster.unit_name}` : ""}`
 
               const progressBarColor = readiness >= 80 ? "bg-[var(--brand-accent)]" : readiness >= 40 ? "bg-amber-500" : "bg-rose-500"
+              const cardGradient = getCardGradient(quiz.title ?? "")
+              const iconBgClass = getCardIconBg(quiz.title ?? "")
 
               return (
                 <div
                   key={quiz.id}
                   className={cn(
-                    "dashboard-fade-up group relative",
-                    pageCardInteractiveClass,
-                    "hover:border-[var(--brand-accent)]/30 hover:shadow-lg",
+                    "dashboard-fade-up group relative flex flex-col justify-between rounded-[16px] border border-border/60 p-5 transition-all duration-200 ease-in-out",
+                    "hover:-translate-y-[2px] hover:shadow-[0_8px_30px_rgba(0,0,0,0.04)] dark:hover:shadow-[0_8px_30px_rgba(255,255,255,0.02)] hover:border-primary/20",
                     isSelected && "ring-2 ring-[var(--brand-accent)] ring-offset-2 border-[var(--brand-accent)]/50 bg-[var(--brand-accent)]/5"
                   )}
-                  style={{ animationDelay: `${120 + index * 60}ms` }}
+                  style={{ animationDelay: `${120 + index * 60}ms`, background: cardGradient }}
                 >
                   <button
                     type="button"
@@ -1427,7 +1448,7 @@ export default function ExamsPage() {
                     )}
                   </button>
 
-                  <div className="absolute right-3 top-3 z-10">
+                  <div className="absolute right-3 top-3 z-10 flex items-center gap-2">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg bg-[var(--bg-secondary)]/90 shadow-sm border border-[var(--border-color)]">
@@ -1463,7 +1484,7 @@ export default function ExamsPage() {
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           className="text-destructive focus:text-destructive"
-                          onClick={() => setExamPendingDelete({ id: quiz.id, title: quiz.title })}
+                          onClick={() => setExamPendingDelete({ id: quiz.id, title: quiz.title ?? "" })}
                         >
                           <Trash2 className="size-4" />
                           Delete exam
@@ -1473,39 +1494,41 @@ export default function ExamsPage() {
                   </div>
 
                   <div className="flex items-start justify-between gap-3 pl-8">
-                    <div className="space-y-1.5 flex-1 pr-2">
-                      <Tooltip content={`${questionCount} questions | ${durationLabel} | ${status}`}>
-                        <p className="text-[15px] font-bold text-foreground line-clamp-1 cursor-default">{quiz.title}</p>
-                      </Tooltip>
-                      <p className="text-[11px] font-medium text-muted-foreground">{formatUpdatedAt(quiz.updated_at)}</p>
+                    <div className="flex items-start gap-3 flex-1 pr-2">
+                      <div className={cn("flex size-10 shrink-0 items-center justify-center rounded-xl backdrop-blur-md shadow-sm border border-white/10", iconBgClass)}>
+                        <FileText className="size-5" />
+                      </div>
+                      <div className="space-y-1">
+                        <Tooltip content={`${questionCount} questions | ${durationLabel} | ${status}`}>
+                          <p className="text-[16px] font-bold text-foreground line-clamp-1 cursor-default opacity-90">{quiz.title}</p>
+                        </Tooltip>
+                        <p className="text-[12px] font-medium text-muted-foreground opacity-80">{formatUpdatedAt(quiz.updated_at)}</p>
+                      </div>
                     </div>
+                  </div>
 
-                    <div className="flex flex-col items-end gap-1.5 shrink-0">
-                      <Badge className={statusBadgeClasses(status)}>{status}</Badge>
-                      <Badge
-                        className={cn(
-                          "max-w-[120px] truncate text-[10px]",
-                          quizCluster?.course_name ? "bg-secondary text-secondary-foreground" : "border bg-transparent"
-                        )}
-                      >
-                        {clusterLabel}
-                      </Badge>
-                    </div>
+                  <div className="mt-4 flex flex-wrap items-center gap-2 pl-8">
+                    <Badge className={statusBadgeClasses(status)}>{status}</Badge>
+                    {isUnclustered ? (
+                      <Badge variant="secondary" className="bg-[#f3f4f6] text-[#374151] dark:bg-[rgba(255,255,255,0.08)] dark:text-[#e5e7eb] border-0 shadow-none font-medium">Unclustered</Badge>
+                    ) : (
+                      <Badge className="bg-secondary text-secondary-foreground border-transparent max-w-[120px] truncate shadow-none font-medium">{clusterLabel}</Badge>
+                    )}
                   </div>
 
                   <div className="mt-5 grid grid-cols-2 gap-3 text-sm font-medium text-muted-foreground">
                     <div className="flex items-center gap-2">
-                      <FileText className="size-4 text-foreground/70" />
+                      <FileText className="size-4 opacity-70" />
                       <span>{questionCount} q</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Clock3 className="size-4 text-foreground/70" />
+                      <Clock3 className="size-4 opacity-70" />
                       <span>{durationLabel}</span>
                     </div>
                   </div>
 
                   <div className="mt-4 space-y-1.5">
-                    <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+                    <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground opacity-80">
                       <span>Setup progress</span>
                       <span className={cn(readiness >= 80 ? "text-[var(--brand-accent-text)] dark:text-[var(--brand-accent)]" : "")}>{readiness}%</span>
                     </div>

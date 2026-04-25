@@ -182,6 +182,14 @@ a {
     background-color: var(--background);
   }
   
+  .section-container {
+    background: transparent;
+  }
+
+  .overlay {
+    z-index: -1;
+  }
+  
   /* Scrollbar Styles */
   ::-webkit-scrollbar {
     width: 6px;

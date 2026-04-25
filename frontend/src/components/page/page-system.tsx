@@ -49,16 +49,6 @@ export function PageHeader({ eyebrow, title, subtitle, actions, children, classN
         className
       )}
     >
-      <div
-        className="pointer-events-none absolute -left-20 -top-20 -z-10 size-72 animate-pulse rounded-full opacity-70 blur-[80px]"
-        style={{ backgroundColor: "color-mix(in srgb, var(--brand-accent) 18%, transparent)" }}
-      />
-      <div
-        className="pointer-events-none absolute -bottom-20 -right-20 -z-10 size-72 animate-pulse rounded-full opacity-70 blur-[80px]"
-        style={{ animationDelay: "1.5s", backgroundColor: "color-mix(in srgb, var(--brand-accent) 18%, transparent)" }}
-      />
-      <div className="pointer-events-none absolute left-1/2 top-1/2 -z-10 size-96 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/10 dark:bg-transparent blur-[100px]" />
-
       <div className="relative z-10 flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
         <div className="max-w-3xl space-y-3">
           {eyebrow ? (
