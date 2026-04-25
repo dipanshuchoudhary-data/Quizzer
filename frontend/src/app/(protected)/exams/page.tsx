@@ -1,19 +1,24 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react"
 import Link from "next/link"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
+  ArrowDown,
   ArrowUpDown,
+  ArrowUp,
+  BarChart3,
   CheckSquare,
+  ChevronDown,
   Clock3,
   FileText,
-  Filter,
   FolderOpen,
   FolderPlus,
   MoreHorizontal,
   PencilLine,
+  Plus,
+  Search,
   Sparkles,
   Square,
   Trash2,
@@ -26,7 +31,8 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Button, buttonVariants } from "@/components/ui/button"
-import { PageHeader, SectionHeader, pageCardClass, pageCardInteractiveClass, pageIcons } from "@/components/page/page-system"
+import { Checkbox } from "@/components/ui/checkbox"
+import { SectionHeader, pageCardClass, pageCardInteractiveClass, pageIcons } from "@/components/page/page-system"
 import { cn } from "@/lib/utils"
 import {
   Dialog,
@@ -65,7 +71,90 @@ function formatUpdatedAt(updatedAt?: string) {
 }
 
 type ExamFilter = "ALL" | "LIVE" | "PUBLISHED" | "DRAFT" | "PROCESSING"
-type SortOption = "updated" | "created" | "alphabetical"
+type ExamStatus = Exclude<ExamFilter, "ALL">
+type SortOption = "updated" | "created" | "name" | "questions" | "status"
+type ClusterExamOrderMap = Record<string, string[]>
+type RelativeUpdated = "any" | "today" | "week" | "month" | "custom"
+type DifficultyLevel = "ALL" | "LOW" | "MEDIUM" | "HIGH"
+
+type AdvancedFilters = {
+  query: string
+  questionMin: string
+  questionMax: string
+  createdFrom: string
+  createdTo: string
+  statuses: ExamStatus[]
+  clusterValue: string
+  difficulty: DifficultyLevel
+  updatedRelative: RelativeUpdated
+  updatedFrom: string
+  updatedTo: string
+}
+
+const CLUSTER_ORDER_STORAGE_KEY = "quizzer_cluster_exam_order_v1"
+const STATUS_OPTIONS: ExamStatus[] = ["LIVE", "DRAFT", "PROCESSING", "PUBLISHED"]
+
+const defaultAdvancedFilters: AdvancedFilters = {
+  query: "",
+  questionMin: "",
+  questionMax: "",
+  createdFrom: "",
+  createdTo: "",
+  statuses: [],
+  clusterValue: "__all__",
+  difficulty: "ALL",
+  updatedRelative: "any",
+  updatedFrom: "",
+  updatedTo: "",
+}
+
+function loadClusterExamOrderMap(): ClusterExamOrderMap {
+  if (typeof window === "undefined") return {}
+  try {
+    const raw = window.localStorage.getItem(CLUSTER_ORDER_STORAGE_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as ClusterExamOrderMap
+    return parsed && typeof parsed === "object" ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+function saveClusterExamOrderMap(value: ClusterExamOrderMap) {
+  if (typeof window === "undefined") return
+  window.localStorage.setItem(CLUSTER_ORDER_STORAGE_KEY, JSON.stringify(value))
+}
+
+function buildOrderedClusterExamIds(clusterValue: string, clusterExamIds: string[], orderMap: ClusterExamOrderMap) {
+  const existing = orderMap[clusterValue] ?? []
+  const available = new Set(clusterExamIds)
+  const preferred = existing.filter((id) => available.has(id))
+  const remaining = clusterExamIds.filter((id) => !preferred.includes(id))
+  return [...preferred, ...remaining]
+}
+
+function getDifficultyLevel(questionCount: number): DifficultyLevel {
+  if (questionCount >= 25) return "HIGH"
+  if (questionCount >= 10) return "MEDIUM"
+  return "LOW"
+}
+
+function resolveExamStatus(isLive: boolean, isPublished: boolean, hasProcessing: boolean): ExamStatus {
+  if (hasProcessing) return "PROCESSING"
+  if (isLive) return "LIVE"
+  if (isPublished) return "PUBLISHED"
+  return "DRAFT"
+}
+
+function normalizeDateOnly(dateValue: string) {
+  const parsed = new Date(dateValue)
+  if (Number.isNaN(parsed.getTime())) return null
+  return parsed
+}
+
+function isDefaultAdvancedFilters(filters: AdvancedFilters) {
+  return JSON.stringify(filters) === JSON.stringify(defaultAdvancedFilters)
+}
 
 function normalizeJobProgress(progress: number) {
   const normalized = progress <= 1 ? progress * 100 : progress
@@ -91,15 +180,16 @@ function getReadinessProgress(questionCount: number, hasDuration: boolean, isPub
 
 export default function ExamsPage() {
   const queryClient = useQueryClient()
-  const [searchQuery, setSearchQuery] = useState("")
-  const [filter, setFilter] = useState<ExamFilter>("ALL")
   const [sortBy, setSortBy] = useState<SortOption>("updated")
+  const [appliedFilters, setAppliedFilters] = useState<AdvancedFilters>(defaultAdvancedFilters)
+  const [draftFilters, setDraftFilters] = useState<AdvancedFilters>(defaultAdvancedFilters)
+  const [searchPanelOpen, setSearchPanelOpen] = useState(false)
+  const [clusterSearchQuery, setClusterSearchQuery] = useState("")
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false)
   const [examPendingDelete, setExamPendingDelete] = useState<{ id: string; title: string } | null>(null)
   const [courseLibrary, setCourseLibrary] = useState<CourseDefinition[]>([])
   const [organizationMap, setOrganizationMap] = useState<QuizOrganizationMap>({})
-  const [clusterFilter, setClusterFilter] = useState("__all__")
   const [bulkClusterValue, setBulkClusterValue] = useState("__none__")
   const [selectedClusterValues, setSelectedClusterValues] = useState<Set<string>>(new Set())
   const [clusterPendingDelete, setClusterPendingDelete] = useState<{ value: string; label: string } | null>(null)
@@ -107,14 +197,51 @@ export default function ExamsPage() {
   
   // Cluster UX new states
   const [activeClusterModal, setActiveClusterModal] = useState<string | null>(null)
+  const [showAddExamsDialog, setShowAddExamsDialog] = useState(false)
+  const [pendingClusterExamIds, setPendingClusterExamIds] = useState<Set<string>>(new Set())
+  const [clusterExamOrderMap, setClusterExamOrderMap] = useState<ClusterExamOrderMap>({})
   const [showCreateClusterDialog, setShowCreateClusterDialog] = useState(false)
   const [newCourseName, setNewCourseName] = useState("")
   const [newUnitName, setNewUnitName] = useState("")
+  const searchButtonRef = useRef<HTMLButtonElement | null>(null)
+  const searchPanelRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     setCourseLibrary(loadCourseLibrary())
     setOrganizationMap(loadQuizOrganizationMap())
+    setClusterExamOrderMap(loadClusterExamOrderMap())
   }, [])
+
+  useEffect(() => {
+    if (!searchPanelOpen) return
+
+    setDraftFilters(appliedFilters)
+    const focusTarget = searchPanelRef.current?.querySelector<HTMLElement>("input,button,[tabindex]:not([tabindex='-1'])")
+    focusTarget?.focus()
+
+    const onDocumentMouseDown = (event: MouseEvent) => {
+      const targetNode = event.target as Node
+      const clickedSearchButton = searchButtonRef.current?.contains(targetNode)
+      const clickedPanel = searchPanelRef.current?.contains(targetNode)
+      if (!clickedSearchButton && !clickedPanel) {
+        setSearchPanelOpen(false)
+      }
+    }
+
+    const onDocumentKeydown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSearchPanelOpen(false)
+        searchButtonRef.current?.focus()
+      }
+    }
+
+    document.addEventListener("mousedown", onDocumentMouseDown)
+    document.addEventListener("keydown", onDocumentKeydown)
+    return () => {
+      document.removeEventListener("mousedown", onDocumentMouseDown)
+      document.removeEventListener("keydown", onDocumentKeydown)
+    }
+  }, [appliedFilters, searchPanelOpen])
 
   const { data: quizzes = [], isLoading } = useQuery({
     queryKey: ["quizzes"],
@@ -151,33 +278,151 @@ export default function ExamsPage() {
     [organizationMap]
   )
 
+  const persistClusterOrderMap = useCallback((next: ClusterExamOrderMap) => {
+    setClusterExamOrderMap(next)
+    saveClusterExamOrderMap(next)
+  }, [])
+
+  const filteredClusterOptions = useMemo(() => {
+    const query = clusterSearchQuery.trim().toLowerCase()
+    if (!query) return clusterOptions
+    return clusterOptions.filter((option) => option.label.toLowerCase().includes(query))
+  }, [clusterOptions, clusterSearchQuery])
+
+  const activeFilterCount = useMemo(() => {
+    let count = 0
+    if (appliedFilters.query.trim()) count += 1
+    if (appliedFilters.questionMin || appliedFilters.questionMax) count += 1
+    if (appliedFilters.createdFrom || appliedFilters.createdTo) count += 1
+    if (appliedFilters.statuses.length > 0) count += 1
+    if (appliedFilters.clusterValue !== "__all__") count += 1
+    if (appliedFilters.difficulty !== "ALL") count += 1
+    if (appliedFilters.updatedRelative !== "any") count += 1
+    return count
+  }, [appliedFilters])
+
+  const clearAllFilters = useCallback(() => {
+    setAppliedFilters(defaultAdvancedFilters)
+    setDraftFilters(defaultAdvancedFilters)
+    setClusterSearchQuery("")
+  }, [])
+
+  const handleSearchPanelKeyDown = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Tab") return
+    const panel = searchPanelRef.current
+    if (!panel) return
+    const selectors = [
+      "button:not([disabled])",
+      "input:not([disabled])",
+      "select:not([disabled])",
+      "textarea:not([disabled])",
+      '[tabindex]:not([tabindex="-1"])',
+    ].join(",")
+    const focusables = Array.from(panel.querySelectorAll<HTMLElement>(selectors)).filter((node) => node.offsetParent !== null)
+    if (focusables.length === 0) return
+    const first = focusables[0]
+    const last = focusables[focusables.length - 1]
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault()
+      last.focus()
+      return
+    }
+    if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first.focus()
+    }
+  }, [])
+
   const visibleQuizzes = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase()
+    const query = appliedFilters.query.trim().toLowerCase()
     const filtered = quizzes.filter((quiz) => {
       const isLive = liveQuizIds.has(quiz.id)
       const isPublished = Boolean(quiz.is_published)
       const hasProcessing = runningJobsByQuizId.has(quiz.id)
-      const status: ExamFilter = hasProcessing
-        ? "PROCESSING"
-        : isLive
-        ? "LIVE"
-        : isPublished
-        ? "PUBLISHED"
-        : "DRAFT"
-
-      const matchesFilter = filter === "ALL" ? true : filter === status
+      const status = resolveExamStatus(isLive, isPublished, hasProcessing)
       const matchesQuery =
         query.length === 0 ||
-        (quiz.title ?? "").toLowerCase().includes(query)
+        (quiz.title ?? "").toLowerCase().includes(query) ||
+        (quiz.description ?? "").toLowerCase().includes(query)
       const quizClusterValue = getQuizClusterValue(quiz.id)
-      const matchesCluster = clusterFilter === "__all__" ? true : clusterFilter === quizClusterValue
+      const matchesCluster = appliedFilters.clusterValue === "__all__" ? true : appliedFilters.clusterValue === quizClusterValue
+      const questionCount = quiz.question_count ?? 0
 
-      return matchesFilter && matchesQuery && matchesCluster
+      const minQuestions = Number.parseInt(appliedFilters.questionMin, 10)
+      const maxQuestions = Number.parseInt(appliedFilters.questionMax, 10)
+      const matchesMinQuestion = Number.isNaN(minQuestions) ? true : questionCount >= minQuestions
+      const matchesMaxQuestion = Number.isNaN(maxQuestions) ? true : questionCount <= maxQuestions
+
+      const createdAt = quiz.created_at ? new Date(quiz.created_at) : null
+      const createdFrom = normalizeDateOnly(appliedFilters.createdFrom)
+      const createdTo = normalizeDateOnly(appliedFilters.createdTo)
+      const matchesCreatedFrom = createdFrom && createdAt ? createdAt >= createdFrom : true
+      const matchesCreatedTo =
+        createdTo && createdAt
+          ? createdAt <= new Date(createdTo.getFullYear(), createdTo.getMonth(), createdTo.getDate(), 23, 59, 59, 999)
+          : true
+
+      const matchesStatuses = appliedFilters.statuses.length === 0 ? true : appliedFilters.statuses.includes(status)
+      const matchesDifficulty = appliedFilters.difficulty === "ALL" ? true : getDifficultyLevel(questionCount) === appliedFilters.difficulty
+
+      const updatedAt = quiz.updated_at ? new Date(quiz.updated_at) : null
+      let matchesRelativeUpdated = true
+      if (appliedFilters.updatedRelative !== "any") {
+        if (!updatedAt) {
+          matchesRelativeUpdated = false
+        } else if (appliedFilters.updatedRelative === "today") {
+          const start = new Date()
+          start.setHours(0, 0, 0, 0)
+          matchesRelativeUpdated = updatedAt >= start
+        } else if (appliedFilters.updatedRelative === "week") {
+          const start = new Date()
+          start.setDate(start.getDate() - 7)
+          matchesRelativeUpdated = updatedAt >= start
+        } else if (appliedFilters.updatedRelative === "month") {
+          const start = new Date()
+          start.setMonth(start.getMonth() - 1)
+          matchesRelativeUpdated = updatedAt >= start
+        } else {
+          const updatedFrom = normalizeDateOnly(appliedFilters.updatedFrom)
+          const updatedTo = normalizeDateOnly(appliedFilters.updatedTo)
+          const matchesFrom = updatedFrom ? updatedAt >= updatedFrom : true
+          const matchesTo = updatedTo
+            ? updatedAt <= new Date(updatedTo.getFullYear(), updatedTo.getMonth(), updatedTo.getDate(), 23, 59, 59, 999)
+            : true
+          matchesRelativeUpdated = matchesFrom && matchesTo
+        }
+      }
+
+      return (
+        matchesQuery &&
+        matchesCluster &&
+        matchesMinQuestion &&
+        matchesMaxQuestion &&
+        matchesCreatedFrom &&
+        matchesCreatedTo &&
+        matchesStatuses &&
+        matchesDifficulty &&
+        matchesRelativeUpdated
+      )
     })
 
     return filtered.sort((a, b) => {
-      if (sortBy === "alphabetical") {
+      if (sortBy === "name") {
         return (a.title ?? "").localeCompare(b.title ?? "")
+      }
+      if (sortBy === "questions") {
+        return (b.question_count ?? 0) - (a.question_count ?? 0)
+      }
+      if (sortBy === "status") {
+        const aStatus = resolveExamStatus(liveQuizIds.has(a.id), Boolean(a.is_published), runningJobsByQuizId.has(a.id))
+        const bStatus = resolveExamStatus(liveQuizIds.has(b.id), Boolean(b.is_published), runningJobsByQuizId.has(b.id))
+        const priority: Record<ExamStatus, number> = {
+          LIVE: 4,
+          PROCESSING: 3,
+          PUBLISHED: 2,
+          DRAFT: 1,
+        }
+        return priority[bStatus] - priority[aStatus]
       }
       if (sortBy === "created") {
         const dateA = a.created_at ? new Date(a.created_at).getTime() : 0
@@ -188,7 +433,7 @@ export default function ExamsPage() {
       const dateB = b.updated_at ? new Date(b.updated_at).getTime() : 0
       return dateB - dateA
     })
-  }, [clusterFilter, filter, getQuizClusterValue, liveQuizIds, quizzes, runningJobsByQuizId, searchQuery, sortBy])
+  }, [appliedFilters, getQuizClusterValue, liveQuizIds, quizzes, runningJobsByQuizId, sortBy])
 
   const bulkDeleteMutation = useMutation({
     mutationFn: async (ids: string[]) => {
@@ -313,6 +558,11 @@ export default function ExamsPage() {
     saveCourseLibrary(nextLibrary)
     setOrganizationMap(nextMap)
     saveQuizOrganizationMap(nextMap)
+    const nextOrderMap = { ...clusterExamOrderMap }
+    clusterValues.forEach((value) => {
+      delete nextOrderMap[value]
+    })
+    persistClusterOrderMap(nextOrderMap)
     setSelectedClusterValues((prev) => {
       const next = new Set(prev)
       clusterValues.forEach((value) => next.delete(value))
@@ -320,9 +570,6 @@ export default function ExamsPage() {
     })
     if (activeClusterModal && valuesToDelete.has(activeClusterModal)) {
       setActiveClusterModal(null)
-    }
-    if (clusterFilter !== "__all__" && valuesToDelete.has(clusterFilter)) {
-      setClusterFilter("__all__")
     }
     toast.success(`${optionsToDelete.length} cluster${optionsToDelete.length === 1 ? "" : "s"} deleted`)
   }
@@ -365,6 +612,85 @@ export default function ExamsPage() {
     toast.success(`Selected ${ids.length} exams from cluster`)
   }
 
+  const unclusteredQuizzes = useMemo(
+    () =>
+      quizzes
+        .filter((quiz) => getQuizClusterValue(quiz.id) === "__none__")
+        .sort((a, b) => (b.updated_at ? new Date(b.updated_at).getTime() : 0) - (a.updated_at ? new Date(a.updated_at).getTime() : 0)),
+    [getQuizClusterValue, quizzes]
+  )
+
+  const openAddExamsDialog = (clusterValue: string) => {
+    setActiveClusterModal(clusterValue)
+    setPendingClusterExamIds(new Set())
+    setShowAddExamsDialog(true)
+  }
+
+  const togglePendingClusterExam = (examId: string, checked: boolean) => {
+    setPendingClusterExamIds((prev) => {
+      const next = new Set(prev)
+      if (checked) {
+        next.add(examId)
+      } else {
+        next.delete(examId)
+      }
+      return next
+    })
+  }
+
+  const savePendingExamsToCluster = () => {
+    if (!activeClusterModal || pendingClusterExamIds.size === 0) return
+    const selectedCluster = clusterOptions.find((option) => option.value === activeClusterModal)
+    if (!selectedCluster) return
+
+    const examIds = Array.from(pendingClusterExamIds)
+    assignQuizzesToCluster(examIds, {
+      course_name: selectedCluster.course_name,
+      unit_name: selectedCluster.unit_name,
+    })
+    setOrganizationMap(loadQuizOrganizationMap())
+    persistClusterOrderMap({
+      ...clusterExamOrderMap,
+      [activeClusterModal]: [...(clusterExamOrderMap[activeClusterModal] ?? []), ...examIds.filter((id) => !(clusterExamOrderMap[activeClusterModal] ?? []).includes(id))],
+    })
+    setPendingClusterExamIds(new Set())
+    setShowAddExamsDialog(false)
+    toast.success(`${examIds.length} exam${examIds.length === 1 ? "" : "s"} added to cluster`)
+  }
+
+  const removeExamFromCluster = (examId: string, clusterValue: string) => {
+    assignQuizToCluster(examId, null)
+    setOrganizationMap(loadQuizOrganizationMap())
+    if (clusterExamOrderMap[clusterValue]?.includes(examId)) {
+      persistClusterOrderMap({
+        ...clusterExamOrderMap,
+        [clusterValue]: clusterExamOrderMap[clusterValue].filter((id) => id !== examId),
+      })
+    }
+    toast.success("Exam removed from cluster")
+  }
+
+  const moveExamInCluster = (clusterValue: string, examId: string, direction: "up" | "down") => {
+    const clusterIds = quizzes
+      .filter((quiz) => getQuizClusterValue(quiz.id) === clusterValue)
+      .sort((a, b) => (b.updated_at ? new Date(b.updated_at).getTime() : 0) - (a.updated_at ? new Date(a.updated_at).getTime() : 0))
+      .map((quiz) => quiz.id)
+    const orderedIds = buildOrderedClusterExamIds(clusterValue, clusterIds, clusterExamOrderMap)
+    const index = orderedIds.indexOf(examId)
+    if (index === -1) return
+    if (direction === "up" && index === 0) return
+    if (direction === "down" && index === orderedIds.length - 1) return
+
+    const swapIndex = direction === "up" ? index - 1 : index + 1
+    const nextIds = [...orderedIds]
+    const [moved] = nextIds.splice(index, 1)
+    nextIds.splice(swapIndex, 0, moved)
+    persistClusterOrderMap({
+      ...clusterExamOrderMap,
+      [clusterValue]: nextIds,
+    })
+  }
+
   const clusterSnapshots = useMemo(
     () =>
       clusterOptions.map((option) => {
@@ -385,63 +711,426 @@ export default function ExamsPage() {
     [clusterOptions, getQuizClusterValue, quizzes]
   )
 
+  const activeFilterPills = useMemo(() => {
+    const pills: Array<{ key: string; label: string; onRemove: () => void }> = []
+    if (appliedFilters.query.trim()) {
+      pills.push({
+        key: "query",
+        label: `Search: ${appliedFilters.query.trim()}`,
+        onRemove: () =>
+          setAppliedFilters((prev) => ({
+            ...prev,
+            query: "",
+          })),
+      })
+    }
+    if (appliedFilters.questionMin || appliedFilters.questionMax) {
+      const minLabel = appliedFilters.questionMin || "0"
+      const maxLabel = appliedFilters.questionMax || "∞"
+      pills.push({
+        key: "questions",
+        label: `Questions: ${minLabel}-${maxLabel}`,
+        onRemove: () =>
+          setAppliedFilters((prev) => ({
+            ...prev,
+            questionMin: "",
+            questionMax: "",
+          })),
+      })
+    }
+    if (appliedFilters.createdFrom || appliedFilters.createdTo) {
+      pills.push({
+        key: "created",
+        label: `Created: ${appliedFilters.createdFrom || "Any"} to ${appliedFilters.createdTo || "Any"}`,
+        onRemove: () =>
+          setAppliedFilters((prev) => ({
+            ...prev,
+            createdFrom: "",
+            createdTo: "",
+          })),
+      })
+    }
+    if (appliedFilters.statuses.length > 0) {
+      pills.push({
+        key: "statuses",
+        label: `Status: ${appliedFilters.statuses.join(", ")}`,
+        onRemove: () =>
+          setAppliedFilters((prev) => ({
+            ...prev,
+            statuses: [],
+          })),
+      })
+    }
+    if (appliedFilters.clusterValue !== "__all__") {
+      const selectedCluster = clusterOptions.find((option) => option.value === appliedFilters.clusterValue)
+      pills.push({
+        key: "cluster",
+        label: `Cluster: ${selectedCluster?.label ?? "Selected"}`,
+        onRemove: () =>
+          setAppliedFilters((prev) => ({
+            ...prev,
+            clusterValue: "__all__",
+          })),
+      })
+    }
+    if (appliedFilters.difficulty !== "ALL") {
+      pills.push({
+        key: "difficulty",
+        label: `Difficulty: ${appliedFilters.difficulty}`,
+        onRemove: () =>
+          setAppliedFilters((prev) => ({
+            ...prev,
+            difficulty: "ALL",
+          })),
+      })
+    }
+    if (appliedFilters.updatedRelative !== "any") {
+      const updatedLabel =
+        appliedFilters.updatedRelative === "today"
+          ? "Today"
+          : appliedFilters.updatedRelative === "week"
+          ? "This week"
+          : appliedFilters.updatedRelative === "month"
+          ? "This month"
+          : `${appliedFilters.updatedFrom || "Any"} to ${appliedFilters.updatedTo || "Any"}`
+      pills.push({
+        key: "updated",
+        label: `Updated: ${updatedLabel}`,
+        onRemove: () =>
+          setAppliedFilters((prev) => ({
+            ...prev,
+            updatedRelative: "any",
+            updatedFrom: "",
+            updatedTo: "",
+          })),
+      })
+    }
+    return pills
+  }, [appliedFilters, clusterOptions])
+
   return (
     <section className="space-y-8 pb-32">
-      <PageHeader
-        eyebrow="Exams"
-        title="Manage and monitor exams"
-        subtitle="Track live, published, processing, and draft quizzes from one operational workspace."
-        actions={
-          <div className="flex w-full flex-wrap items-center justify-end gap-2 lg:w-auto">
-            <div className="flex w-full items-center gap-2 sm:w-auto">
-              <Input
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search exams"
-                className="w-full sm:w-56 bg-background"
-              />
-              <Select value={filter} onValueChange={(value) => setFilter(value as ExamFilter)}>
-                <SelectTrigger className="w-[156px] bg-background">
-                  <Filter className="mr-2 size-4 text-muted-foreground" />
-                  <SelectValue placeholder="Filter" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">All statuses</SelectItem>
-                  <SelectItem value="LIVE">Live</SelectItem>
-                  <SelectItem value="PUBLISHED">Published</SelectItem>
-                  <SelectItem value="DRAFT">Draft</SelectItem>
-                  <SelectItem value="PROCESSING">Processing</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
-                <SelectTrigger className="w-[140px] bg-background">
-                  <ArrowUpDown className="mr-2 size-4 text-muted-foreground" />
-                  <SelectValue placeholder="Sort" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="updated">Last Updated</SelectItem>
-                  <SelectItem value="created">Date Created</SelectItem>
-                  <SelectItem value="alphabetical">Alphabetical</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={clusterFilter} onValueChange={setClusterFilter}>
-                <SelectTrigger className="w-[190px] bg-background">
-                  <SelectValue placeholder="All clusters" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__">All clusters</SelectItem>
-                  <SelectItem value="__none__">Unclustered only</SelectItem>
-                  {clusterOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+      <header className="rounded-2xl border border-border/70 bg-background px-6 py-6 shadow-sm">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground">Exams</p>
+            <h1 className="text-[28px] font-medium leading-tight text-foreground">Manage and monitor exams</h1>
+            <p className="max-w-[480px] text-sm text-muted-foreground">
+              Track live, published, processing, and draft quizzes from one operational workspace.
+            </p>
           </div>
-        }
-      />
+          <Link
+            href="/quizzes/create"
+            className={cn(
+              buttonVariants({ size: "sm" }),
+              "h-9 rounded-[8px] border-[0.5px] border-primary bg-primary px-4 text-primary-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+            )}
+          >
+            Create exam
+          </Link>
+        </div>
+      </header>
+
+      <div className="rounded-xl border-y border-border/70 bg-background/80 px-3 py-2">
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div className="relative flex min-h-9 flex-1 items-center gap-2">
+            <Button
+              ref={searchButtonRef}
+              type="button"
+              variant="outline"
+              size="icon"
+              aria-label="Open advanced exam filters"
+              onClick={() => setSearchPanelOpen((current) => !current)}
+              className="relative h-9 w-9 rounded-full border-[0.5px] border-border bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+            >
+              <Search className="size-4" />
+              {activeFilterCount > 0 ? (
+                <span className="absolute -right-1 -top-1 inline-flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+                  {activeFilterCount}
+                </span>
+              ) : null}
+            </Button>
+
+            <div className="flex min-h-9 flex-1 items-center gap-2 overflow-x-auto whitespace-nowrap">
+              {activeFilterPills.map((pill) => (
+                <span key={pill.key} className="inline-flex h-9 items-center gap-2 rounded-full border border-border bg-muted/30 px-3 text-xs font-medium text-foreground">
+                  {pill.label}
+                  <button
+                    type="button"
+                    onClick={pill.onRemove}
+                    className="inline-flex size-4 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                    aria-label={`Remove ${pill.label} filter`}
+                  >
+                    <X className="size-3" />
+                  </button>
+                </span>
+              ))}
+              {activeFilterPills.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={clearAllFilters}
+                  className="h-9 px-1 text-xs font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                >
+                  Clear all filters
+                </button>
+              ) : null}
+            </div>
+
+            {searchPanelOpen ? (
+              <div
+                ref={searchPanelRef}
+                role="dialog"
+                aria-modal="false"
+                aria-label="Advanced exam filters"
+                onKeyDown={handleSearchPanelKeyDown}
+                className="absolute left-0 top-11 z-40 w-full max-w-[620px] rounded-xl border border-border bg-background p-4 shadow-xl motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-200 motion-safe:ease-out motion-reduce:transition-none"
+              >
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-1.5 md:col-span-2">
+                    <label className="text-xs font-medium text-muted-foreground">Search by name or keyword</label>
+                    <Input
+                      value={draftFilters.query}
+                      onChange={(event) => setDraftFilters((prev) => ({ ...prev, query: event.target.value }))}
+                      placeholder="Search by name or keyword"
+                      className="h-9 rounded-[8px] border-[0.5px] border-border focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">Number of questions</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        type="number"
+                        inputMode="numeric"
+                        value={draftFilters.questionMin}
+                        onChange={(event) => setDraftFilters((prev) => ({ ...prev, questionMin: event.target.value }))}
+                        placeholder="Min"
+                        className="h-9 rounded-[8px] border-[0.5px] border-border focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                      />
+                      <Input
+                        type="number"
+                        inputMode="numeric"
+                        value={draftFilters.questionMax}
+                        onChange={(event) => setDraftFilters((prev) => ({ ...prev, questionMax: event.target.value }))}
+                        placeholder="Max"
+                        className="h-9 rounded-[8px] border-[0.5px] border-border focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">Date created</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        type="date"
+                        value={draftFilters.createdFrom}
+                        onChange={(event) => setDraftFilters((prev) => ({ ...prev, createdFrom: event.target.value }))}
+                        className="h-9 rounded-[8px] border-[0.5px] border-border focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                      />
+                      <Input
+                        type="date"
+                        value={draftFilters.createdTo}
+                        onChange={(event) => setDraftFilters((prev) => ({ ...prev, createdTo: event.target.value }))}
+                        className="h-9 rounded-[8px] border-[0.5px] border-border focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">Status</label>
+                    <div className="flex flex-wrap gap-2 rounded-[8px] border-[0.5px] border-border p-2">
+                      {STATUS_OPTIONS.map((status) => {
+                        const checked = draftFilters.statuses.includes(status)
+                        return (
+                          <label key={status} className="inline-flex items-center gap-2 text-xs text-foreground">
+                            <Checkbox
+                              checked={checked}
+                              onCheckedChange={(value) => {
+                                const shouldCheck = value === true
+                                setDraftFilters((prev) => ({
+                                  ...prev,
+                                  statuses: shouldCheck
+                                    ? [...prev.statuses, status]
+                                    : prev.statuses.filter((item) => item !== status),
+                                }))
+                              }}
+                            />
+                            {status}
+                          </label>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">Cluster</label>
+                    <div className="space-y-2 rounded-[8px] border-[0.5px] border-border p-2">
+                      <Input
+                        value={clusterSearchQuery}
+                        onChange={(event) => setClusterSearchQuery(event.target.value)}
+                        placeholder="Search clusters..."
+                        className="h-9 rounded-[8px] border-[0.5px] border-border focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                      />
+                      <div className="max-h-28 space-y-1 overflow-y-auto">
+                        <button
+                          type="button"
+                          onClick={() => setDraftFilters((prev) => ({ ...prev, clusterValue: "__all__" }))}
+                          className={cn(
+                            "flex h-8 w-full items-center rounded-[8px] px-2 text-left text-xs",
+                            draftFilters.clusterValue === "__all__" ? "bg-primary/10 text-primary" : "text-foreground hover:bg-muted"
+                          )}
+                        >
+                          All clusters
+                        </button>
+                        {filteredClusterOptions.map((option) => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => setDraftFilters((prev) => ({ ...prev, clusterValue: option.value }))}
+                            className={cn(
+                              "flex h-8 w-full items-center rounded-[8px] px-2 text-left text-xs",
+                              draftFilters.clusterValue === option.value ? "bg-primary/10 text-primary" : "text-foreground hover:bg-muted"
+                            )}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">Difficulty level</label>
+                    <div className="grid h-9 grid-cols-4 rounded-[8px] border-[0.5px] border-border p-0.5">
+                      {(["ALL", "LOW", "MEDIUM", "HIGH"] as DifficultyLevel[]).map((level) => (
+                        <button
+                          key={level}
+                          type="button"
+                          onClick={() => setDraftFilters((prev) => ({ ...prev, difficulty: level }))}
+                          className={cn(
+                            "rounded-[6px] text-xs font-medium",
+                            draftFilters.difficulty === level ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-muted"
+                          )}
+                        >
+                          {level}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5 md:col-span-2">
+                    <label className="text-xs font-medium text-muted-foreground">Last updated</label>
+                    <div className="flex flex-wrap gap-2">
+                      {([
+                        { value: "today", label: "Today" },
+                        { value: "week", label: "This week" },
+                        { value: "month", label: "This month" },
+                        { value: "custom", label: "Custom" },
+                      ] as Array<{ value: Exclude<RelativeUpdated, "any">; label: string }>).map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => setDraftFilters((prev) => ({ ...prev, updatedRelative: option.value }))}
+                          className={cn(
+                            "h-8 rounded-full border border-border px-3 text-xs",
+                            draftFilters.updatedRelative === option.value ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-muted"
+                          )}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDraftFilters((prev) => ({
+                            ...prev,
+                            updatedRelative: "any",
+                            updatedFrom: "",
+                            updatedTo: "",
+                          }))
+                        }
+                        className={cn(
+                          "h-8 rounded-full border border-border px-3 text-xs",
+                          draftFilters.updatedRelative === "any" ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-muted"
+                        )}
+                      >
+                        Any
+                      </button>
+                    </div>
+                    {draftFilters.updatedRelative === "custom" ? (
+                      <div className="mt-2 grid grid-cols-2 gap-2">
+                        <Input
+                          type="date"
+                          value={draftFilters.updatedFrom}
+                          onChange={(event) => setDraftFilters((prev) => ({ ...prev, updatedFrom: event.target.value }))}
+                          className="h-9 rounded-[8px] border-[0.5px] border-border focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                        />
+                        <Input
+                          type="date"
+                          value={draftFilters.updatedTo}
+                          onChange={(event) => setDraftFilters((prev) => ({ ...prev, updatedTo: event.target.value }))}
+                          className="h-9 rounded-[8px] border-[0.5px] border-border focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="mt-4 flex items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDraftFilters(defaultAdvancedFilters)
+                      setClusterSearchQuery("")
+                    }}
+                    className="text-xs font-medium text-muted-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                  >
+                    Clear all
+                  </button>
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      setAppliedFilters(draftFilters)
+                      setSearchPanelOpen(false)
+                    }}
+                    className="h-9 rounded-[8px] border-[0.5px] border-primary bg-primary px-4 text-primary-foreground focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                  >
+                    Apply filters
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="flex w-full flex-wrap items-center justify-end gap-2 md:w-auto">
+            <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
+              <SelectTrigger className="h-9 w-[190px] rounded-[8px] border-[0.5px] border-border bg-background text-sm focus:ring-2 focus:ring-primary focus:ring-offset-2 [&>svg]:hidden">
+                <span className="inline-flex min-w-0 items-center gap-2">
+                  <ArrowUpDown className="size-4 shrink-0 text-muted-foreground" />
+                  <SelectValue placeholder="Last updated" />
+                </span>
+                <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="updated">Last updated</SelectItem>
+                <SelectItem value="created">Date created</SelectItem>
+                <SelectItem value="name">Name A-Z</SelectItem>
+                <SelectItem value="questions">Number of questions</SelectItem>
+                <SelectItem value="status">Status</SelectItem>
+              </SelectContent>
+            </Select>
+            <Link
+              href="/quizzes/create"
+              className={cn(
+                buttonVariants({ size: "sm" }),
+                "h-9 rounded-[8px] border-[0.5px] border-primary bg-primary px-4 text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+              )}
+            >
+              Create exam
+            </Link>
+          </div>
+        </div>
+      </div>
 
       {runningJobs.length > 0 ? (
         <div id="ai-jobs" className={cn(pageCardClass, "dashboard-fade-up")} style={{ animationDelay: "60ms" }}>
@@ -579,7 +1268,12 @@ export default function ExamsPage() {
                   </div>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        type="button"
+                        className="relative z-20 h-8 w-8 rounded-lg transition-all duration-200 hover:scale-105 hover:bg-primary/10 group-hover:shadow-sm"
+                      >
                         <MoreHorizontal className="size-4" />
                         <span className="sr-only">Cluster actions</span>
                       </Button>
@@ -588,6 +1282,10 @@ export default function ExamsPage() {
                       <DropdownMenuItem onClick={() => setActiveClusterModal(cluster.value)}>
                         <FolderOpen className="size-4" />
                         Open cluster
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => openAddExamsDialog(cluster.value)}>
+                        <Plus className="size-4" />
+                        Add unclustered exams
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => selectClusterExams(cluster.value)}>
                         <CheckSquare className="size-4" />
@@ -627,9 +1325,24 @@ export default function ExamsPage() {
                   <Button size="sm" variant="default" className="flex-1 rounded-lg shadow-sm" onClick={() => setActiveClusterModal(cluster.value)}>
                     Open Cluster
                   </Button>
+                  <Tooltip content="Add unclustered exams">
+                    <Button size="sm" variant="outline" className="px-3 rounded-lg" onClick={() => openAddExamsDialog(cluster.value)}>
+                      <Plus className="size-4" />
+                    </Button>
+                  </Tooltip>
                   <Tooltip content="Select all exams inside">
                     <Button size="sm" variant="outline" className="px-3 rounded-lg" onClick={() => selectClusterExams(cluster.value)}>
                       Select
+                    </Button>
+                  </Tooltip>
+                  <Tooltip content="Delete this cluster">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="px-3 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                      onClick={() => setClusterPendingDelete({ value: cluster.value, label: cluster.label })}
+                    >
+                      <Trash2 className="size-4" />
                     </Button>
                   </Tooltip>
                 </div>
@@ -656,29 +1369,52 @@ export default function ExamsPage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <SectionHeader title="Operational Snapshot" description="Exams organized by readiness, status, and targeted properties." icon={pageIcons.exams} />
           
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={selectAll}
-            className="rounded-full shadow-sm"
-            disabled={visibleQuizzes.length === 0}
-          >
-            <CheckSquare className="mr-2 size-4 text-primary" />
-            Select All Exams
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={selectAll}
+              className="rounded-full shadow-sm"
+              disabled={visibleQuizzes.length === 0}
+            >
+              <CheckSquare className="mr-2 size-4 text-primary" />
+              Select All Exams
+            </Button>
+            {selectedIds.size > 0 ? (
+              <Button
+                variant="destructive"
+                size="sm"
+                className="rounded-full shadow-sm"
+                onClick={() => setShowBulkDeleteDialog(true)}
+              >
+                <Trash2 className="mr-2 size-4" />
+                Delete {selectedIds.size}
+              </Button>
+            ) : null}
+          </div>
         </div>
         
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
         {isLoading
-          ? Array.from({ length: 6 }).map((_, index) => (
+          ? Array.from({ length: 4 }).map((_, index) => (
               <div
                 key={`exam-skeleton-${index}`}
-                className={cn("dashboard-fade-up", pageCardClass)}
+                className={cn("dashboard-fade-up md:col-span-2 xl:col-span-3", pageCardClass, "animate-pulse")}
                 style={{ animationDelay: `${120 + index * 50}ms` }}
               >
-                <div className="skeleton h-4 w-32" />
-                <div className="mt-4 skeleton h-6 w-16" />
-                <div className="mt-3 skeleton h-3 w-24" />
+                <div className="flex items-center justify-between gap-4">
+                  <div className="h-4 w-52 rounded bg-muted" />
+                  <div className="h-6 w-24 rounded-full bg-muted" />
+                </div>
+                <div className="mt-4 grid gap-3 md:grid-cols-3">
+                  <div className="h-3 w-full rounded bg-muted" />
+                  <div className="h-3 w-full rounded bg-muted" />
+                  <div className="h-3 w-5/6 rounded bg-muted" />
+                </div>
+                <div className="mt-5 flex items-center justify-between">
+                  <div className="h-8 w-32 rounded-[8px] bg-muted" />
+                  <div className="h-8 w-24 rounded-[8px] bg-muted" />
+                </div>
               </div>
             ))
           : visibleQuizzes.map((quiz, index) => {
@@ -690,7 +1426,7 @@ export default function ExamsPage() {
               const durationLabel = quiz.duration_minutes ? `${quiz.duration_minutes} min` : "No limit"
               const readiness = getReadinessProgress(questionCount, Boolean(quiz.duration_minutes), isPublished)
               const isSelected = selectedIds.has(quiz.id)
-              const openExamHref = `/quiz/${quiz.id}`
+              const openExamHref = `/exam/${quiz.id}/start`
               const quizCluster = organizationMap[quiz.id]
               const clusterLabel = quizCluster?.course_name
                 ? `${quizCluster.course_name}${quizCluster.unit_name ? ` • ${quizCluster.unit_name}` : ""}`
@@ -727,21 +1463,49 @@ export default function ExamsPage() {
                     )}
                   </button>
 
-                  <div className="pointer-events-none absolute right-4 top-4 flex translate-y-1 gap-2 opacity-0 transition-all duration-200 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100">
-                    <Link href={`/quiz/${quiz.id}?tab=questions`} className={cn(buttonVariants({ size: "icon", variant: "outline" }), "h-8 w-8 shadow-sm bg-background")}>
-                      <PencilLine className="size-4" />
-                    </Link>
-                    <Tooltip content="Delete exam">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8 bg-background text-muted-foreground shadow-sm hover:bg-destructive/10 hover:text-destructive"
-                        onClick={() => setExamPendingDelete({ id: quiz.id, title: quiz.title })}
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </Tooltip>
+                  <div className="absolute right-3 top-3 z-10">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg bg-background/90 shadow-sm">
+                          <MoreHorizontal className="size-4" />
+                          <span className="sr-only">Exam actions</span>
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem asChild>
+                          <Link href={openExamHref}>
+                            <FileText className="size-4" />
+                            Open student exam
+                          </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                          <Link href={`/quiz/${quiz.id}`}>
+                            <FolderOpen className="size-4" />
+                            Open workspace
+                          </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                          <Link href={`/quiz/${quiz.id}?tab=questions`}>
+                            <PencilLine className="size-4" />
+                            Edit questions
+                          </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                          <Link href={`/quiz/${quiz.id}?tab=results`}>
+                            <BarChart3 className="size-4" />
+                            View results
+                          </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onClick={() => setExamPendingDelete({ id: quiz.id, title: quiz.title })}
+                        >
+                          <Trash2 className="size-4" />
+                          Delete exam
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
 
                   <div className="flex items-start justify-between gap-3 pl-8">
@@ -808,8 +1572,8 @@ export default function ExamsPage() {
 
       {!isLoading && visibleQuizzes.length === 0 ? (
         <div className="rounded-3xl border bg-background p-10 text-center shadow-sm">
-          <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-muted">
-            <FolderOpen className="size-10 text-muted-foreground" />
+          <div className="mx-auto mb-6 flex size-24 items-center justify-center rounded-full border border-border bg-muted/20">
+            <FileText className="size-10 text-muted-foreground" />
           </div>
           <p className="text-lg font-semibold text-foreground">
             {quizzes.length === 0 ? "No exams yet" : "No exams found"}
@@ -817,15 +1581,21 @@ export default function ExamsPage() {
           <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">
             {quizzes.length === 0
               ? "Create your first exam to start assessing your students with AI-powered quizzes."
-              : "Try adjusting your search or filter to find what you're looking for."}
+              : !isDefaultAdvancedFilters(appliedFilters)
+              ? "Try adjusting your filters to find what you're looking for."
+              : "No exam data is available for the selected view."}
           </p>
-          {quizzes.length === 0 && (
-            <div className="mt-6">
-               <Link href="/quizzes/create" className={cn(buttonVariants({ size: "lg" }), "rounded-full shadow-md")}>
+          <div className="mt-6 flex items-center justify-center gap-2">
+            {quizzes.length === 0 ? (
+              <Link href="/quizzes/create" className={cn(buttonVariants({ size: "lg" }), "rounded-[8px] shadow-md")}>
                 Create Exam
               </Link>
-            </div>
-          )}
+            ) : !isDefaultAdvancedFilters(appliedFilters) ? (
+              <Button variant="outline" className="h-9 rounded-[8px]" onClick={clearAllFilters}>
+                Clear filters
+              </Button>
+            ) : null}
+          </div>
         </div>
       ) : null}
 
@@ -876,11 +1646,21 @@ export default function ExamsPage() {
       <Dialog open={!!activeClusterModal} onOpenChange={(open) => !open && setActiveClusterModal(null)}>
         <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col gap-0 p-0 overflow-hidden bg-background border-border/60 shadow-2xl">
           {(() => {
-            const activeOption = clusterOptions.find(o => o.value === activeClusterModal);
-            if (!activeOption) return <div className="p-10 text-center">Cluster not found</div>;
-            
-            const clusterExams = quizzes.filter(q => getQuizClusterValue(q.id) === activeOption.value)
-              .sort((a,b) => (b.updated_at ? new Date(b.updated_at).getTime() : 0) - (a.updated_at ? new Date(a.updated_at).getTime() : 0));
+            const activeOption = clusterOptions.find((option) => option.value === activeClusterModal)
+            if (!activeOption) return <div className="p-10 text-center">Cluster not found</div>
+
+            const sortedClusterExams = quizzes
+              .filter((quiz) => getQuizClusterValue(quiz.id) === activeOption.value)
+              .sort((a, b) => (b.updated_at ? new Date(b.updated_at).getTime() : 0) - (a.updated_at ? new Date(a.updated_at).getTime() : 0))
+            const orderedClusterExamIds = buildOrderedClusterExamIds(
+              activeOption.value,
+              sortedClusterExams.map((quiz) => quiz.id),
+              clusterExamOrderMap
+            )
+            const clusterExams = orderedClusterExamIds
+              .map((quizId) => sortedClusterExams.find((quiz) => quiz.id === quizId))
+              .filter((quiz): quiz is (typeof sortedClusterExams)[number] => Boolean(quiz))
+            const recentPreview = sortedClusterExams.slice(0, 3)
 
             return (
               <>
@@ -893,14 +1673,45 @@ export default function ExamsPage() {
                       <div className="text-left">
                         <DialogTitle className="text-xl font-bold">{activeOption.label}</DialogTitle>
                         <DialogDescription className="mt-1 font-semibold text-muted-foreground">
-                          {clusterExams.length} {clusterExams.length === 1 ? 'exam' : 'exams'} assigned inside this cluster.
+                          {clusterExams.length} {clusterExams.length === 1 ? "exam" : "exams"} assigned inside this cluster.
                         </DialogDescription>
                       </div>
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <Button size="sm" className="rounded-lg" onClick={() => openAddExamsDialog(activeOption.value)}>
+                        <Plus className="mr-2 size-4" />
+                        Add Exams
+                      </Button>
+                      {clusterExams.length > 0 ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="rounded-lg"
+                          onClick={() => setSelectedIds(new Set(clusterExams.map((exam) => exam.id)))}
+                        >
+                          <CheckSquare className="mr-2 size-4" />
+                          Select All in Cluster
+                        </Button>
+                      ) : null}
                     </div>
                   </DialogHeader>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-6 bg-background space-y-4">
+                  <div className="rounded-xl border bg-muted/20 p-3">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Recent (Top 3)</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {recentPreview.length > 0 ? (
+                        recentPreview.map((quiz) => (
+                          <Badge key={`recent-${quiz.id}`} variant="outline" className="max-w-[260px] truncate">
+                            {quiz.title}
+                          </Badge>
+                        ))
+                      ) : (
+                        <span className="text-xs text-muted-foreground">No recent exams yet.</span>
+                      )}
+                    </div>
+                  </div>
                   {clusterExams.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-16 px-4 text-center border-2 border-dashed rounded-2xl bg-muted/20">
                       <div className="size-16 rounded-full bg-muted flex items-center justify-center mb-4">
@@ -908,8 +1719,12 @@ export default function ExamsPage() {
                       </div>
                       <p className="text-base font-bold text-foreground">This cluster is completely empty.</p>
                       <p className="text-sm text-muted-foreground mt-2 max-w-sm">
-                        Select exams from your dashboard dashboard, then use the bottom action bar to move them here.
+                        Add exams from unclustered list to start building this teaching batch.
                       </p>
+                      <Button className="mt-4 rounded-lg" onClick={() => openAddExamsDialog(activeOption.value)}>
+                        <Plus className="mr-2 size-4" />
+                        Add Exams
+                      </Button>
                     </div>
                   ) : (
                     <div className="space-y-3">
@@ -938,18 +1753,40 @@ export default function ExamsPage() {
                             
                             <div className="flex items-center gap-2 shrink-0 ml-14 sm:ml-0">
                               <Link
-                                href={`/quiz/${exam.id}`}
+                                href={`/exam/${exam.id}/start`}
                                 className={cn(buttonVariants({ size: "sm" }), "h-9 rounded-lg px-4 shadow-sm")}
                               >
                                 Open Exam
                               </Link>
+                              <Tooltip content="Move up">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-9 w-9 p-0 rounded-lg"
+                                  disabled={index === 0}
+                                  onClick={() => moveExamInCluster(activeOption.value, exam.id, "up")}
+                                >
+                                  <ArrowUp className="size-4" />
+                                </Button>
+                              </Tooltip>
+                              <Tooltip content="Move down">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-9 w-9 p-0 rounded-lg"
+                                  disabled={index === clusterExams.length - 1}
+                                  onClick={() => moveExamInCluster(activeOption.value, exam.id, "down")}
+                                >
+                                  <ArrowDown className="size-4" />
+                                </Button>
+                              </Tooltip>
                               <Tooltip content="Remove exam from this cluster">
-                                <Button size="sm" variant="ghost" className="h-9 w-9 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg"
-                                  onClick={() => {
-                                    assignQuizToCluster(exam.id, null);
-                                    setOrganizationMap(loadQuizOrganizationMap());
-                                    toast.success("Exam removed from cluster");
-                                  }}>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-9 w-9 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg"
+                                  onClick={() => removeExamFromCluster(exam.id, activeOption.value)}
+                                >
                                   <Trash2 className="size-4" />
                                 </Button>
                               </Tooltip>
@@ -960,6 +1797,86 @@ export default function ExamsPage() {
                     </div>
                   )}
                 </div>
+              </>
+            )
+          })()}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showAddExamsDialog} onOpenChange={setShowAddExamsDialog}>
+        <DialogContent className="sm:max-w-2xl">
+          {(() => {
+            const activeOption = clusterOptions.find((option) => option.value === activeClusterModal)
+            if (!activeOption) {
+              return (
+                <>
+                  <DialogHeader>
+                    <DialogTitle>Cluster not found</DialogTitle>
+                    <DialogDescription>Select a cluster and try again.</DialogDescription>
+                  </DialogHeader>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setShowAddExamsDialog(false)}>
+                      Close
+                    </Button>
+                  </DialogFooter>
+                </>
+              )
+            }
+
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle>Add Exams to {activeOption.label}</DialogTitle>
+                  <DialogDescription>
+                    Pick from unclustered exams. Save stays disabled until at least one exam is selected.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="max-h-[52vh] overflow-y-auto rounded-xl border bg-muted/10 p-3">
+                  {unclusteredQuizzes.length === 0 ? (
+                    <div className="rounded-lg border border-dashed bg-background p-6 text-center text-sm text-muted-foreground">
+                      All exams are already assigned to clusters.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {unclusteredQuizzes.map((quiz) => {
+                        const checked = pendingClusterExamIds.has(quiz.id)
+                        return (
+                          <label
+                            key={`add-exam-${quiz.id}`}
+                            className={cn(
+                              "flex items-start gap-3 rounded-lg border bg-background p-3 transition-colors",
+                              checked ? "border-primary/60 bg-primary/5" : "hover:bg-muted/40"
+                            )}
+                          >
+                            <Checkbox
+                              checked={checked}
+                              onCheckedChange={(value) => togglePendingClusterExam(quiz.id, value === true)}
+                              className="mt-0.5"
+                            />
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-semibold">{quiz.title}</p>
+                              <p className="text-xs text-muted-foreground">Updated {formatUpdatedAt(quiz.updated_at)}</p>
+                            </div>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setPendingClusterExamIds(new Set())
+                      setShowAddExamsDialog(false)
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button onClick={savePendingExamsToCluster} disabled={pendingClusterExamIds.size === 0}>
+                    Save
+                  </Button>
+                </DialogFooter>
               </>
             )
           })()}
