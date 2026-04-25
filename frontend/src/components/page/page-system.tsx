@@ -6,7 +6,7 @@ import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 export const pageCardClass =
-  "rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-all duration-200 ease-in-out hover:shadow-md dark:border-[var(--border-color)] dark:bg-[var(--card-bg)]"
+  "rounded-2xl border border-border bg-card p-5 shadow-sm transition-all duration-200 ease-in-out hover:shadow-md"
 
 export const pageCardInteractiveClass = cn(
   pageCardClass,
@@ -14,7 +14,7 @@ export const pageCardInteractiveClass = cn(
 )
 
 export const pageMutedCardClass =
-  "rounded-2xl border border-gray-200 bg-gray-50/70 p-5 shadow-sm transition-all duration-200 ease-in-out dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)]"
+  "surface-gradient-muted rounded-2xl border border-border p-5 shadow-sm transition-all duration-200 ease-in-out"
 
 export const statusToneStyles = {
   success: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-500/10 dark:text-emerald-400",
@@ -45,23 +45,28 @@ export function PageHeader({ eyebrow, title, subtitle, actions, children, classN
   return (
     <section
       className={cn(
-        "relative overflow-hidden animate-fade-in ui-gentle-float rounded-[32px] border border-white/60 bg-gradient-to-br from-emerald-50/90 via-slate-50/95 to-amber-50/90 px-6 py-8 shadow-[0_20px_60px_-20px_rgba(15,23,42,0.1)] backdrop-blur-xl transition-all duration-300 ease-in-out dark:border-slate-800/80 dark:bg-gradient-to-br dark:from-emerald-900/10 dark:via-slate-900/95 dark:to-amber-900/10 dark:shadow-[0_0_40px_rgba(74,222,128,0.03)] sm:px-8 sm:py-10",
+        "surface-gradient-soft relative overflow-hidden animate-fade-in ui-gentle-float rounded-[32px] border border-border/80 px-6 py-8 shadow-[0_20px_60px_-20px_rgba(15,23,42,0.1)] backdrop-blur-xl transition-all duration-300 ease-in-out sm:px-8 sm:py-10",
         className
       )}
     >
-      {/* Animated glowing orbs for production-grade premium feel */}
-      <div className="pointer-events-none absolute -left-20 -top-20 -z-10 size-72 animate-pulse rounded-full bg-emerald-400/20 opacity-70 blur-[80px] dark:bg-emerald-500/10"></div>
-      <div className="pointer-events-none absolute -bottom-20 -right-20 -z-10 size-72 animate-pulse rounded-full bg-amber-400/20 opacity-70 blur-[80px] dark:bg-amber-500/10" style={{ animationDelay: "1.5s" }}></div>
-      <div className="pointer-events-none absolute left-1/2 top-1/2 -z-10 size-96 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/40 blur-[100px] dark:bg-transparent"></div>
+      <div
+        className="pointer-events-none absolute -left-20 -top-20 -z-10 size-72 animate-pulse rounded-full opacity-70 blur-[80px]"
+        style={{ backgroundColor: "color-mix(in srgb, var(--brand-accent) 18%, transparent)" }}
+      />
+      <div
+        className="pointer-events-none absolute -bottom-20 -right-20 -z-10 size-72 animate-pulse rounded-full opacity-70 blur-[80px]"
+        style={{ animationDelay: "1.5s", backgroundColor: "color-mix(in srgb, var(--brand-warm) 24%, transparent)" }}
+      />
+      <div className="pointer-events-none absolute left-1/2 top-1/2 -z-10 size-96 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/30 blur-[100px]" />
 
       <div className="relative z-10 flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
         <div className="max-w-3xl space-y-3">
           {eyebrow ? (
-            <p className="text-xs font-bold uppercase tracking-[0.3em] text-emerald-700 dark:text-[var(--brand-accent)]">
+            <p className="text-xs font-bold uppercase tracking-[0.3em] text-[var(--brand-accent)]">
               {eyebrow}
             </p>
           ) : null}
-          <h1 className="bg-gradient-to-br from-slate-950 to-slate-700 bg-clip-text text-3xl font-bold tracking-tight text-transparent sm:text-4xl dark:from-white dark:to-slate-300">
+          <h1 className="bg-gradient-to-br from-slate-950 via-slate-900 to-slate-700 bg-clip-text text-3xl font-bold tracking-tight text-transparent sm:text-4xl dark:from-white dark:to-slate-300">
             {title}
           </h1>
           <p className="max-w-3xl text-[15px] leading-relaxed text-slate-600 dark:text-[var(--text-secondary)]">
@@ -87,11 +92,11 @@ export function SectionHeader({
   icon?: LucideIcon
 }) {
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div className="accent-divider-bar flex flex-col gap-3 pt-3 sm:flex-row sm:items-end sm:justify-between">
       <div className="space-y-1">
         <div className="flex items-center gap-2">
           {Icon ? (
-            <span className="inline-flex size-9 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-700 dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)] dark:text-[var(--text-secondary)]">
+            <span className="surface-gradient-muted inline-flex size-9 items-center justify-center rounded-full border border-border text-slate-700 dark:text-[var(--text-secondary)]">
               <Icon className="size-4" />
             </span>
           ) : null}
