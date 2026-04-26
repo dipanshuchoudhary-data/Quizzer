@@ -210,8 +210,6 @@ export default function ExamsPage() {
   const [organizationMap, setOrganizationMap] = useState<QuizOrganizationMap>({})
   const [bulkClusterValue, setBulkClusterValue] = useState("__none__")
   const [selectedClusterValues, setSelectedClusterValues] = useState<Set<string>>(new Set())
-  const [clusterPendingDelete, setClusterPendingDelete] = useState<{ value: string; label: string } | null>(null)
-  const [showBulkClusterDeleteDialog, setShowBulkClusterDeleteDialog] = useState(false)
   
   // Cluster UX new states
   const [activeClusterModal, setActiveClusterModal] = useState<string | null>(null)
@@ -223,6 +221,10 @@ export default function ExamsPage() {
   const [newUnitName, setNewUnitName] = useState("")
   const searchButtonRef = useRef<HTMLButtonElement | null>(null)
   const searchPanelRef = useRef<HTMLDivElement | null>(null)
+
+  // Undo states
+  const [pendingDeleteExamIds, setPendingDeleteExamIds] = useState<Set<string>>(new Set())
+  const [pendingDeleteClusterValues, setPendingDeleteClusterValues] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     setCourseLibrary(loadCourseLibrary())
@@ -286,6 +288,11 @@ export default function ExamsPage() {
   )
   const clusterOptions = useMemo(() => buildCourseClusterOptions(courseLibrary), [courseLibrary])
 
+  const displayClusterOptions = useMemo(
+    () => clusterOptions.filter((option) => !pendingDeleteClusterValues.has(option.value)),
+    [clusterOptions, pendingDeleteClusterValues]
+  )
+
   const getQuizClusterValue = useCallback(
     (quizId: string) => {
       const quizOrg = organizationMap[quizId]
@@ -303,9 +310,9 @@ export default function ExamsPage() {
 
   const filteredClusterOptions = useMemo(() => {
     const query = clusterSearchQuery.trim().toLowerCase()
-    if (!query) return clusterOptions
-    return clusterOptions.filter((option) => option.label.toLowerCase().includes(query))
-  }, [clusterOptions, clusterSearchQuery])
+    if (!query) return displayClusterOptions
+    return displayClusterOptions.filter((option) => option.label.toLowerCase().includes(query))
+  }, [displayClusterOptions, clusterSearchQuery])
 
   const activeFilterCount = useMemo(() => {
     let count = 0
@@ -354,6 +361,7 @@ export default function ExamsPage() {
   const visibleQuizzes = useMemo(() => {
     const query = appliedFilters.query.trim().toLowerCase()
     const filtered = quizzes.filter((quiz) => {
+      if (pendingDeleteExamIds.has(quiz.id)) return false
       const isLive = liveQuizIds.has(quiz.id)
       const isPublished = Boolean(quiz.is_published)
       const hasProcessing = runningJobsByQuizId.has(quiz.id)
@@ -451,57 +459,157 @@ export default function ExamsPage() {
       const dateB = b.updated_at ? new Date(b.updated_at).getTime() : 0
       return dateB - dateA
     })
-  }, [appliedFilters, getQuizClusterValue, liveQuizIds, quizzes, runningJobsByQuizId, sortBy])
+  }, [appliedFilters, getQuizClusterValue, liveQuizIds, quizzes, pendingDeleteExamIds, runningJobsByQuizId, sortBy])
 
   const bulkDeleteMutation = useMutation({
     mutationFn: async (ids: string[]) => {
       await Promise.all(ids.map((id) => quizApi.deleteById(id)))
+      return ids
     },
-    onSuccess: () => {
-      const deletedIds = new Set(selectedIds)
+    onSuccess: (deletedIdsArray) => {
+      const deletedIds = new Set(deletedIdsArray)
       const nextMap = { ...loadQuizOrganizationMap() }
       deletedIds.forEach((id) => {
         delete nextMap[id]
       })
       saveQuizOrganizationMap(nextMap)
       setOrganizationMap(nextMap)
-      toast.success(`${selectedIds.size} exam(s) deleted successfully`)
+      
+      setPendingDeleteExamIds(prev => {
+        const next = new Set(prev)
+        deletedIdsArray.forEach(id => next.delete(id))
+        return next
+      })
+
+      toast.success(`${deletedIdsArray.length} exam(s) deleted successfully`)
       queryClient.invalidateQueries({ queryKey: ["quizzes"] })
       queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] })
-      setSelectedIds(new Set())
-      setShowBulkDeleteDialog(false)
     },
-    onError: () => {
+    onError: (_, ids) => {
       toast.error("Failed to delete some exams")
-      setShowBulkDeleteDialog(false)
+      setPendingDeleteExamIds(prev => {
+        const next = new Set(prev)
+        ids.forEach(id => next.delete(id))
+        return next
+      })
     },
   })
 
   const singleDeleteMutation = useMutation({
-    mutationFn: async (id: string) => quizApi.deleteById(id),
-    onSuccess: () => {
-      const deletedId = examPendingDelete?.id
-      if (deletedId) {
-        setSelectedIds((prev) => {
-          const next = new Set(prev)
-          next.delete(deletedId)
-          return next
-        })
-        const nextMap = { ...loadQuizOrganizationMap() }
-        delete nextMap[deletedId]
-        saveQuizOrganizationMap(nextMap)
-        setOrganizationMap(nextMap)
-      }
+    mutationFn: async (id: string) => {
+      await quizApi.deleteById(id)
+      return id
+    },
+    onSuccess: (deletedId) => {
+      const nextMap = { ...loadQuizOrganizationMap() }
+      delete nextMap[deletedId]
+      saveQuizOrganizationMap(nextMap)
+      setOrganizationMap(nextMap)
+
+      setPendingDeleteExamIds(prev => {
+        const next = new Set(prev)
+        next.delete(deletedId)
+        return next
+      })
+
       toast.success("Exam deleted successfully")
       queryClient.invalidateQueries({ queryKey: ["quizzes"] })
       queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] })
-      setExamPendingDelete(null)
     },
-    onError: () => {
+    onError: (_, id) => {
       toast.error("Failed to delete exam")
-      setExamPendingDelete(null)
+      setPendingDeleteExamIds(prev => {
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
     },
   })
+
+  const executeExamDeleteWithUndo = (idsToProcess: string[]) => {
+    if (idsToProcess.length === 0) return
+
+    setPendingDeleteExamIds((prev) => {
+      const next = new Set(prev)
+      idsToProcess.forEach((id) => next.add(id))
+      return next
+    })
+
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      idsToProcess.forEach((id) => next.delete(id))
+      return next
+    })
+
+    const timeoutId = setTimeout(() => {
+      if (idsToProcess.length === 1) {
+        singleDeleteMutation.mutate(idsToProcess[0])
+      } else {
+        bulkDeleteMutation.mutate(idsToProcess)
+      }
+    }, 3000)
+
+    toast(`Deleting ${idsToProcess.length} exam${idsToProcess.length > 1 ? "s" : ""}...`, {
+      duration: 3000,
+      action: {
+        label: "Undo",
+        onClick: () => {
+          clearTimeout(timeoutId)
+          setPendingDeleteExamIds((prev) => {
+            const next = new Set(prev)
+            idsToProcess.forEach((id) => next.delete(id))
+            return next
+          })
+          toast.success("Deletion undone")
+        },
+      },
+    })
+  }
+
+  const executeClusterDeleteWithUndo = (clusterValues: string[]) => {
+    if (clusterValues.length === 0) return
+
+    setPendingDeleteClusterValues((prev) => {
+      const next = new Set(prev)
+      clusterValues.forEach((val) => next.add(val))
+      return next
+    })
+
+    setSelectedClusterValues((prev) => {
+      const next = new Set(prev)
+      clusterValues.forEach((val) => next.delete(val))
+      return next
+    })
+
+    if (activeClusterModal && clusterValues.includes(activeClusterModal)) {
+      setActiveClusterModal(null)
+    }
+
+    const timeoutId = setTimeout(() => {
+      deleteClusters(clusterValues)
+      setPendingDeleteClusterValues((prev) => {
+        const next = new Set(prev)
+        clusterValues.forEach((val) => next.delete(val))
+        return next
+      })
+    }, 3000)
+
+    toast(`Deleting ${clusterValues.length} cluster${clusterValues.length > 1 ? "s" : ""}...`, {
+      duration: 3000,
+      action: {
+        label: "Undo",
+        onClick: () => {
+          clearTimeout(timeoutId)
+          setPendingDeleteClusterValues((prev) => {
+            const next = new Set(prev)
+            clusterValues.forEach((val) => next.delete(val))
+            return next
+          })
+          toast.success("Deletion undone")
+        },
+      },
+    })
+  }
 
   const toggleSelection = (id: string) => {
     setSelectedIds((prev) => {
@@ -610,7 +718,7 @@ export default function ExamsPage() {
 
   const handleAssignSelectedToCluster = () => {
     if (selectedIds.size === 0) return
-    const selectedCluster = clusterOptions.find((option) => option.value === bulkClusterValue)
+    const selectedCluster = displayClusterOptions.find((option) => option.value === bulkClusterValue)
     assignQuizzesToCluster(
       Array.from(selectedIds),
       selectedCluster
@@ -658,7 +766,7 @@ export default function ExamsPage() {
 
   const savePendingExamsToCluster = () => {
     if (!activeClusterModal || pendingClusterExamIds.size === 0) return
-    const selectedCluster = clusterOptions.find((option) => option.value === activeClusterModal)
+    const selectedCluster = displayClusterOptions.find((option) => option.value === activeClusterModal)
     if (!selectedCluster) return
 
     const examIds = Array.from(pendingClusterExamIds)
@@ -711,9 +819,9 @@ export default function ExamsPage() {
 
   const clusterSnapshots = useMemo(
     () =>
-      clusterOptions.map((option) => {
+      displayClusterOptions.map((option) => {
         const clusterQuizzes = quizzes
-          .filter((quiz) => getQuizClusterValue(quiz.id) === option.value)
+          .filter((quiz) => getQuizClusterValue(quiz.id) === option.value && !pendingDeleteExamIds.has(quiz.id))
           .sort((a, b) => {
             const dateA = a.updated_at ? new Date(a.updated_at).getTime() : 0
             const dateB = b.updated_at ? new Date(b.updated_at).getTime() : 0
@@ -726,7 +834,7 @@ export default function ExamsPage() {
           recent: clusterQuizzes.slice(0, 5),
         }
       }),
-    [clusterOptions, getQuizClusterValue, quizzes]
+    [displayClusterOptions, getQuizClusterValue, quizzes, pendingDeleteExamIds]
   )
 
   const activeFilterPills = useMemo(() => {
@@ -780,7 +888,7 @@ export default function ExamsPage() {
       })
     }
     if (appliedFilters.clusterValue !== "__all__") {
-      const selectedCluster = clusterOptions.find((option) => option.value === appliedFilters.clusterValue)
+      const selectedCluster = displayClusterOptions.find((option) => option.value === appliedFilters.clusterValue)
       pills.push({
         key: "cluster",
         label: `Cluster: ${selectedCluster?.label ?? "Selected"}`,
@@ -824,7 +932,7 @@ export default function ExamsPage() {
       })
     }
     return pills
-  }, [appliedFilters, clusterOptions])
+  }, [appliedFilters, displayClusterOptions])
 
   return (
     <section className="space-y-8 pb-32">
@@ -1186,13 +1294,22 @@ export default function ExamsPage() {
               icon={FolderOpen}
             />
             <div className="flex flex-wrap items-center gap-2">
-              {clusterOptions.length > 0 ? (
+              <Button
+                variant="default"
+                size="sm"
+                className="rounded-full shadow-sm"
+                onClick={() => setShowCreateClusterDialog(true)}
+              >
+                <Plus className="mr-2 size-4" />
+                Create Cluster
+              </Button>
+              {displayClusterOptions.length > 0 ? (
                 <>
                 <Button
                   variant="outline"
                   size="sm"
                   className="rounded-full shadow-sm"
-                  onClick={() => setSelectedClusterValues(new Set(clusterOptions.map((cluster) => cluster.value)))}
+                  onClick={() => setSelectedClusterValues(new Set(displayClusterOptions.map((cluster) => cluster.value)))}
                 >
                   <CheckSquare className="mr-2 size-4" />
                   Select All Clusters
@@ -1202,7 +1319,7 @@ export default function ExamsPage() {
                     variant="destructive"
                     size="sm"
                     className="rounded-full shadow-sm"
-                    onClick={() => setShowBulkClusterDeleteDialog(true)}
+                    onClick={() => executeClusterDeleteWithUndo(Array.from(selectedClusterValues))}
                   >
                     <Trash2 className="mr-2 size-4" />
                     Delete {selectedClusterValues.size}
@@ -1213,7 +1330,7 @@ export default function ExamsPage() {
             </div>
         </div>
         
-        {clusterOptions.length > 0 ? (
+        {displayClusterOptions.length > 0 ? (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {clusterSnapshots.map((cluster) => {
               const isClusterSelected = selectedClusterValues.has(cluster.value)
@@ -1280,7 +1397,7 @@ export default function ExamsPage() {
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
                         className="text-destructive focus:text-destructive"
-                        onClick={() => setClusterPendingDelete({ value: cluster.value, label: cluster.label })}
+                        onClick={() => executeClusterDeleteWithUndo([cluster.value])}
                       >
                         <Trash2 className="size-4" />
                         Delete cluster
@@ -1326,7 +1443,7 @@ export default function ExamsPage() {
                       size="sm"
                       variant="outline"
                       className="px-3 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                      onClick={() => setClusterPendingDelete({ value: cluster.value, label: cluster.label })}
+                      onClick={() => executeClusterDeleteWithUndo([cluster.value])}
                     >
                       <Trash2 className="size-4" />
                     </Button>
@@ -1343,6 +1460,14 @@ export default function ExamsPage() {
               </div>
               <p className="font-semibold">No clusters yet</p>
             <p className="text-sm text-muted-foreground max-w-[300px] mt-1">Use the Create menu in the top navigation when you need a new cluster.</p>
+            <Button
+              variant="default"
+              className="mt-4 rounded-full shadow-sm"
+              onClick={() => setShowCreateClusterDialog(true)}
+            >
+              <Plus className="mr-2 size-4" />
+              Create Cluster
+            </Button>
             </div>
           )}
       </section>
@@ -1368,7 +1493,7 @@ export default function ExamsPage() {
                 variant="destructive"
                 size="sm"
                 className="rounded-full shadow-sm"
-                onClick={() => setShowBulkDeleteDialog(true)}
+                onClick={() => executeExamDeleteWithUndo(Array.from(selectedIds))}
               >
                 <Trash2 className="mr-2 size-4" />
                 Delete {selectedIds.size}
@@ -1484,7 +1609,7 @@ export default function ExamsPage() {
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           className="text-destructive focus:text-destructive"
-                          onClick={() => setExamPendingDelete({ id: quiz.id, title: quiz.title ?? "" })}
+                          onClick={() => executeExamDeleteWithUndo([quiz.id])}
                         >
                           <Trash2 className="size-4" />
                           Delete exam
@@ -1586,7 +1711,7 @@ export default function ExamsPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="__none__" className="text-muted-foreground font-semibold">Remove from cluster</SelectItem>
-                {clusterOptions.map((option) => (
+                {displayClusterOptions.map((option) => (
                   <SelectItem key={option.value} value={option.value}>
                     <div className="flex items-center gap-2">
                        <FolderOpen className="size-3.5 text-muted-foreground" />
@@ -1602,7 +1727,7 @@ export default function ExamsPage() {
             
             <div className="hidden sm:block h-5 w-px bg-border/80" />
             <Tooltip content="Delete selected">
-              <Button variant="ghost" size="sm" className="rounded-full h-9 w-9 p-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" onClick={() => setShowBulkDeleteDialog(true)}>
+              <Button variant="ghost" size="sm" className="rounded-full h-9 w-9 p-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" onClick={() => executeExamDeleteWithUndo(Array.from(selectedIds))}>
                 <Trash2 className="size-4" />
               </Button>
             </Tooltip>
@@ -1618,7 +1743,7 @@ export default function ExamsPage() {
       <Dialog open={!!activeClusterModal} onOpenChange={(open) => !open && setActiveClusterModal(null)}>
         <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col gap-0 p-0 overflow-hidden bg-background border-border/60 shadow-2xl">
           {(() => {
-            const activeOption = clusterOptions.find((option) => option.value === activeClusterModal)
+            const activeOption = displayClusterOptions.find((option) => option.value === activeClusterModal)
             if (!activeOption) return <div className="p-10 text-center">Cluster not found</div>
 
             const sortedClusterExams = quizzes
@@ -1778,7 +1903,7 @@ export default function ExamsPage() {
       <Dialog open={showAddExamsDialog} onOpenChange={setShowAddExamsDialog}>
         <DialogContent className="sm:max-w-2xl">
           {(() => {
-            const activeOption = clusterOptions.find((option) => option.value === activeClusterModal)
+            const activeOption = displayClusterOptions.find((option) => option.value === activeClusterModal)
             if (!activeOption) {
               return (
                 <>
@@ -1889,104 +2014,6 @@ export default function ExamsPage() {
           <DialogFooter className="border-t pt-4">
             <Button variant="ghost" className="font-semibold" onClick={() => setShowCreateClusterDialog(false)}>Cancel</Button>
             <Button className="px-6 shadow-sm" onClick={handleCreateCluster}>Create Cluster</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Bulk Delete Dialog */}
-      <Dialog open={showBulkDeleteDialog} onOpenChange={setShowBulkDeleteDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete {selectedIds.size} Exam{selectedIds.size > 1 ? "s" : ""}?</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete {selectedIds.size} selected exam{selectedIds.size > 1 ? "s" : ""}?
-              This action cannot be undone and all associated questions and results will be permanently removed.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowBulkDeleteDialog(false)} disabled={bulkDeleteMutation.isPending}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={() => bulkDeleteMutation.mutate(Array.from(selectedIds))} disabled={bulkDeleteMutation.isPending}>
-              {bulkDeleteMutation.isPending ? "Deleting..." : `Delete ${selectedIds.size} Exam${selectedIds.size > 1 ? "s" : ""}`}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Single Exam Delete Dialog */}
-      <Dialog open={!!examPendingDelete} onOpenChange={(open) => !open && setExamPendingDelete(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Exam?</DialogTitle>
-            <DialogDescription>
-              Delete &quot;{examPendingDelete?.title}&quot; permanently? This removes its questions, results, and student attempts.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setExamPendingDelete(null)} disabled={singleDeleteMutation.isPending}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => examPendingDelete && singleDeleteMutation.mutate(examPendingDelete.id)}
-              disabled={singleDeleteMutation.isPending}
-            >
-              {singleDeleteMutation.isPending ? "Deleting..." : "Delete Exam"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Cluster Delete Dialogs */}
-      <Dialog open={!!clusterPendingDelete} onOpenChange={(open) => !open && setClusterPendingDelete(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Cluster?</DialogTitle>
-            <DialogDescription>
-              Delete &quot;{clusterPendingDelete?.label}&quot; and remove this cluster from assigned exams? The exams themselves will stay.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setClusterPendingDelete(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                if (!clusterPendingDelete) return
-                deleteClusters([clusterPendingDelete.value])
-                setClusterPendingDelete(null)
-              }}
-            >
-              Delete Cluster
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={showBulkClusterDeleteDialog} onOpenChange={setShowBulkClusterDeleteDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete {selectedClusterValues.size} Cluster{selectedClusterValues.size > 1 ? "s" : ""}?</DialogTitle>
-            <DialogDescription>
-              This removes the selected clusters from your workspace and clears those cluster labels from assigned exams. Exams will not be deleted.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowBulkClusterDeleteDialog(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                deleteClusters(Array.from(selectedClusterValues))
-                clearClusterSelection()
-                setShowBulkClusterDeleteDialog(false)
-              }}
-            >
-              Delete Clusters
-            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
