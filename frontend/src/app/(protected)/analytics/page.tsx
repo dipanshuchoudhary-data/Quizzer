@@ -81,8 +81,18 @@ function getDistributionFill(mode: DistributionMode, entry: Record<string, strin
   return "rgba(244,63,94,0.82)"
 }
 
-const chartGridStroke = "rgba(148,163,184,0.22)"
-const chartCursorFill = "rgba(148,163,184,0.08)"
+function getChartColors() {
+  const isDark = typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches
+  return {
+    gridStroke: isDark ? "rgba(148,163,184,0.35)" : "rgba(148,163,184,0.22)",
+    cursorFill: isDark ? "rgba(100,116,139,0.15)" : "rgba(148,163,184,0.08)",
+    tick: { fill: isDark ? "rgb(156,163,175)" : "rgb(100,116,139)", fontSize: 12 },
+  }
+}
+
+const chartColors = getChartColors()
+const chartGridStroke = chartColors.gridStroke
+const chartCursorFill = chartColors.cursorFill
 const chartTooltipStyle = {
   borderRadius: 18,
   border: "1px solid var(--border-color)",
@@ -90,7 +100,7 @@ const chartTooltipStyle = {
   color: "var(--text-primary)",
   boxShadow: "0 20px 60px -35px rgba(15,23,42,0.45)",
 }
-const chartTick = { fill: "var(--text-secondary)", fontSize: 12 }
+const chartTick = chartColors.tick
 
 export default function AnalyticsPage() {
   const defaultRange = useMemo(() => getDefaultDateRange(), [])
@@ -221,56 +231,66 @@ export default function AnalyticsPage() {
         eyebrow="Analytics"
         title="Insight-driven performance"
         subtitle="Explore scoring patterns, completion behavior, and integrity issues from a single analytics surface built for fast decision-making."
-        actions={
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <label className="space-y-2 text-sm">
-              <span className="font-medium text-slate-700 dark:text-[var(--text-primary)]">From</span>
-              <Input type="date" value={filters.date_from} onChange={(event) => setFilters((current) => ({ ...current, date_from: event.target.value }))} />
-            </label>
-            <label className="space-y-2 text-sm">
-              <span className="font-medium text-slate-700 dark:text-[var(--text-primary)]">To</span>
-              <Input type="date" value={filters.date_to} onChange={(event) => setFilters((current) => ({ ...current, date_to: event.target.value }))} />
-            </label>
-            <label className="space-y-2 text-sm">
-              <span className="font-medium text-slate-700 dark:text-[var(--text-primary)]">Quiz Group</span>
-              <select
-                value={filters.quiz}
-                onChange={(event) => setFilters((current) => ({ ...current, quiz: event.target.value }))}
-                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none transition-all duration-200 focus-visible:ring-2 focus-visible:ring-ring dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)] dark:text-[var(--text-primary)] dark:focus-visible:ring-[var(--brand-accent)]"
-              >
-                <option value="all">All quizzes</option>
-                {data?.filters.quizzes.map((quiz) => (
-                  <option key={quiz.value} value={quiz.value}>
-                    {quiz.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="space-y-2 text-sm">
-              <span className="font-medium text-slate-700 dark:text-[var(--text-primary)]">Status</span>
-              <select
-                value={filters.status}
-                onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}
-                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none transition-all duration-200 focus-visible:ring-2 focus-visible:ring-ring dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)] dark:text-[var(--text-primary)] dark:focus-visible:ring-[var(--brand-accent)]"
-              >
-                <option value="all">All attempts</option>
-                {data?.filters.statuses
-                  .filter((item) => item.value !== "all")
-                  .map((item) => (
-                    <option key={item.value} value={item.value}>
-                      {item.label}
-                    </option>
-                ))}
-              </select>
-            </label>
+      />
+
+      {/* Filter Section */}
+      <section className="rounded-2xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6 space-y-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="font-semibold text-[var(--text-primary)]">Filters</h3>
+            <p className="text-sm text-[var(--text-secondary)]">Refine your analytics view</p>
           </div>
-        }
-      >
-        <div className="flex flex-wrap items-center gap-3">
-          <Button variant="outline" onClick={resetFilters}>
+          <Button variant="outline" onClick={resetFilters} size="sm">
             <SlidersHorizontal className="size-4" />
             Reset filters
           </Button>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <label className="space-y-2 text-sm">
+            <span className="font-medium text-[var(--text-primary)]">From</span>
+            <Input type="date" value={filters.date_from} onChange={(event) => setFilters((current) => ({ ...current, date_from: event.target.value }))} />
+          </label>
+          <label className="space-y-2 text-sm">
+            <span className="font-medium text-[var(--text-primary)]">To</span>
+            <Input type="date" value={filters.date_to} onChange={(event) => setFilters((current) => ({ ...current, date_to: event.target.value }))} />
+          </label>
+          <label className="space-y-2 text-sm">
+            <span className="font-medium text-[var(--text-primary)]">Quiz Group</span>
+            <select
+              value={filters.quiz}
+              onChange={(event) => setFilters((current) => ({ ...current, quiz: event.target.value }))}
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none transition-all duration-200 focus-visible:ring-2 focus-visible:ring-ring dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)] dark:text-[var(--text-primary)] dark:focus-visible:ring-[var(--brand-accent)]"
+            >
+              <option value="all">All quizzes</option>
+              {data?.filters.quizzes.map((quiz) => (
+                <option key={quiz.value} value={quiz.value}>
+                  {quiz.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="space-y-2 text-sm">
+            <span className="font-medium text-[var(--text-primary)]">Status</span>
+            <select
+              value={filters.status}
+              onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none transition-all duration-200 focus-visible:ring-2 focus-visible:ring-ring dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)] dark:text-[var(--text-primary)] dark:focus-visible:ring-[var(--brand-accent)]"
+            >
+              <option value="all">All attempts</option>
+              {data?.filters.statuses
+                .filter((item) => item.value !== "all")
+                .map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+            </select>
+          </label>
+        </div>
+
+        {/* Active Filter Pills */}
+        <div className="flex flex-wrap items-center gap-2 pt-2">
           <div className="rounded-full bg-slate-950 px-3 py-1 text-xs font-medium text-white dark:border dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)] dark:text-[var(--text-primary)]">
             {filters.date_from} to {filters.date_to}
           </div>
@@ -281,7 +301,7 @@ export default function AnalyticsPage() {
             <div className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700 dark:bg-[rgba(250,204,21,0.12)] dark:text-[var(--warning)]">Status: {filters.status.replace("_", " ")}</div>
           ) : null}
         </div>
-      </PageHeader>
+      </section>
 
       <section className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-5">
         {isLoading
@@ -368,7 +388,7 @@ export default function AnalyticsPage() {
           <CardHeader className="flex flex-col gap-4 space-y-0 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <CardTitle className="text-lg dark:text-[var(--text-primary)]">Score Distribution</CardTitle>
-              <p className="mt-1 text-sm text-slate-500 dark:text-[var(--text-secondary)]">Switch between overall score buckets and quiz-group performance.</p>
+              <p className="mt-1 text-sm text-slate-600 dark:text-[var(--text-secondary)]">Switch between overall score buckets and quiz-group performance.</p>
             </div>
             <div className="inline-flex w-full flex-wrap rounded-full border border-slate-200 bg-slate-50 p-1 sm:w-auto dark:border-[var(--border-color)] dark:bg-[var(--bg-secondary)]">
               {(["overall", "quiz"] as DistributionMode[]).map((mode) => (
@@ -426,7 +446,7 @@ export default function AnalyticsPage() {
         <Card className={pageCardClass}>
           <CardHeader>
             <CardTitle className="text-lg dark:text-[var(--text-primary)]">Completion Trend</CardTitle>
-            <p className="mt-1 text-sm text-slate-500 dark:text-[var(--text-secondary)]">Track completion movement across the selected date range.</p>
+            <p className="mt-1 text-sm text-slate-600 dark:text-[var(--text-secondary)]">Track completion movement across the selected date range.</p>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -463,7 +483,7 @@ export default function AnalyticsPage() {
         <Card className={pageCardClass}>
           <CardHeader>
             <CardTitle className="text-lg dark:text-[var(--text-primary)]">Violations by Quiz</CardTitle>
-            <p className="mt-1 text-sm text-slate-500 dark:text-[var(--text-secondary)]">Spot integrity hotspots before they become operational problems.</p>
+            <p className="mt-1 text-sm text-slate-600 dark:text-[var(--text-secondary)]">Spot integrity hotspots before they become operational problems.</p>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -493,7 +513,7 @@ export default function AnalyticsPage() {
         <Card className={pageCardClass}>
           <CardHeader>
             <CardTitle className="text-lg dark:text-[var(--text-primary)]">Performance Table</CardTitle>
-            <p className="mt-1 text-sm text-slate-500 dark:text-[var(--text-secondary)]">Sortable, deduped quiz-group view for deeper inspection.</p>
+            <p className="mt-1 text-sm text-slate-600 dark:text-[var(--text-secondary)]">Sortable, deduped quiz-group view for deeper inspection.</p>
           </CardHeader>
           <CardContent className="overflow-x-auto">
             {isLoading ? (
@@ -501,7 +521,7 @@ export default function AnalyticsPage() {
             ) : (
               <table className="min-w-[720px] border-separate border-spacing-y-2 text-sm sm:min-w-full">
                 <thead>
-                  <tr className="text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-[var(--text-muted)]">
+                  <tr className="text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-600 dark:text-[var(--text-muted)]">
                     {[
                       { key: "quiz_name", label: "Quiz Name" },
                       { key: "attempts", label: "Attempts" },
@@ -533,11 +553,11 @@ export default function AnalyticsPage() {
                       )}
                     >
                       <td className="rounded-l-2xl px-3 py-3">
-                        <Link href={`/quiz/${row.quiz_id}?tab=results`} className="line-clamp-2 min-w-0 font-medium text-slate-900 transition hover:text-emerald-700 dark:text-[var(--text-primary)] dark:hover:text-[var(--brand-accent)]">
+                        <Link href={`/quiz/${row.quiz_id}?tab=results`} className="line-clamp-2 min-w-0 font-medium text-slate-900 transition hover:text-emerald-600 dark:text-[var(--text-primary)] dark:hover:text-[var(--brand-accent)]">
                           {row.quiz_name}
                         </Link>
                       </td>
-                      <td className="px-3 py-3 text-slate-700 dark:text-[var(--text-secondary)]">{row.attempts}</td>
+                      <td className="px-3 py-3 text-slate-800 dark:text-[var(--text-secondary)]">{row.attempts}</td>
                       <td className={cn("px-3 py-3 font-medium", getScoreTone(row.average_score))}>{row.average_score.toFixed(1)}</td>
                       <td className={cn("px-3 py-3 font-medium", getCompletionTone(row.completion_rate))}>{row.completion_rate}%</td>
                       <td className={cn("rounded-r-2xl px-3 py-3 font-medium", getViolationTone(row.violations))}>{row.violations}</td>
