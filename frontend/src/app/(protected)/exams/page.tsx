@@ -221,10 +221,14 @@ export default function ExamsPage() {
   const [newUnitName, setNewUnitName] = useState("")
   const searchButtonRef = useRef<HTMLButtonElement | null>(null)
   const searchPanelRef = useRef<HTMLDivElement | null>(null)
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
 
   // Undo states
   const [pendingDeleteExamIds, setPendingDeleteExamIds] = useState<Set<string>>(new Set())
   const [pendingDeleteClusterValues, setPendingDeleteClusterValues] = useState<Set<string>>(new Set())
+  const [showClusterDeleteDialog, setShowClusterDeleteDialog] = useState(false)
+  const [clustersPendingDelete, setClustersPendingDelete] = useState<string[]>([])
+  const [clusterDeleteOption, setClusterDeleteOption] = useState<'cluster-only' | 'with-exams' | null>(null)
 
   useEffect(() => {
     setCourseLibrary(loadCourseLibrary())
@@ -236,8 +240,8 @@ export default function ExamsPage() {
     if (!searchPanelOpen) return
 
     setDraftFilters(appliedFilters)
-    const focusTarget = searchPanelRef.current?.querySelector<HTMLElement>("input,button,[tabindex]:not([tabindex='-1'])")
-    focusTarget?.focus()
+    // Keep focus on top search bar when filter panel opens (not on first filter input)
+    searchInputRef.current?.focus()
 
     const onDocumentMouseDown = (event: MouseEvent) => {
       const targetNode = event.target as Node
@@ -355,6 +359,18 @@ export default function ExamsPage() {
     if (!event.shiftKey && document.activeElement === last) {
       event.preventDefault()
       first.focus()
+    }
+  }, [])
+
+  const handleSearchInputKeyDown = useCallback((event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") {
+      event.preventDefault()
+      const inputValue = (event.target as HTMLInputElement).value.trim()
+      setAppliedFilters((prev) => ({
+        ...prev,
+        query: inputValue
+      }))
+      setSearchPanelOpen(false)
     }
   }, [])
 
@@ -568,6 +584,14 @@ export default function ExamsPage() {
 
   const executeClusterDeleteWithUndo = (clusterValues: string[]) => {
     if (clusterValues.length === 0) return
+    setClustersPendingDelete(clusterValues)
+    setClusterDeleteOption(null)
+    setShowClusterDeleteDialog(true)
+  }
+
+  const performClusterDelete = (deleteWithExams: boolean) => {
+    const clusterValues = clustersPendingDelete
+    if (clusterValues.length === 0) return
 
     setPendingDeleteClusterValues((prev) => {
       const next = new Set(prev)
@@ -586,7 +610,11 @@ export default function ExamsPage() {
     }
 
     const timeoutId = setTimeout(() => {
-      deleteClusters(clusterValues)
+      if (deleteWithExams) {
+        deleteClusters(clusterValues)
+      } else {
+        deleteClusterOnly(clusterValues)
+      }
       setPendingDeleteClusterValues((prev) => {
         const next = new Set(prev)
         clusterValues.forEach((val) => next.delete(val))
@@ -609,6 +637,62 @@ export default function ExamsPage() {
         },
       },
     })
+
+    setShowClusterDeleteDialog(false)
+    setClustersPendingDelete([])
+    setClusterDeleteOption(null)
+  }
+
+  const deleteClusterOnly = (clusterValues: string[]) => {
+    const valuesToDelete = new Set(clusterValues)
+    const optionsToDelete = clusterOptions.filter((option) => valuesToDelete.has(option.value))
+    if (optionsToDelete.length === 0) return
+
+    const courseNamesToDelete = new Set(
+      optionsToDelete.filter((option) => !option.unit_name).map((option) => option.course_name.toLowerCase())
+    )
+    const unitsByCourse = new Map<string, Set<string>>()
+
+    optionsToDelete.forEach((option) => {
+      if (!option.unit_name) return
+      const key = option.course_name.toLowerCase()
+      const units = unitsByCourse.get(key) ?? new Set<string>()
+      units.add(option.unit_name.toLowerCase())
+      unitsByCourse.set(key, units)
+    })
+
+    const nextLibrary = courseLibrary
+      .filter((course) => !courseNamesToDelete.has(course.name.toLowerCase()))
+      .map((course) => {
+        const unitsToDelete = unitsByCourse.get(course.name.toLowerCase())
+        if (!unitsToDelete) return course
+        return {
+          ...course,
+          units: course.units.filter((unit) => !unitsToDelete.has(unit.toLowerCase())),
+        }
+      })
+      .filter((course) => {
+        if (!unitsByCourse.has(course.name.toLowerCase())) return true
+        return course.units.length > 0
+      })
+
+    setCourseLibrary(nextLibrary)
+    saveCourseLibrary(nextLibrary)
+
+    const nextOrderMap = { ...clusterExamOrderMap }
+    clusterValues.forEach((value) => {
+      delete nextOrderMap[value]
+    })
+    persistClusterOrderMap(nextOrderMap)
+    setSelectedClusterValues((prev) => {
+      const next = new Set(prev)
+      clusterValues.forEach((value) => next.delete(value))
+      return next
+    })
+    if (activeClusterModal && valuesToDelete.has(activeClusterModal)) {
+      setActiveClusterModal(null)
+    }
+    toast.success(`${optionsToDelete.length} cluster${optionsToDelete.length === 1 ? "" : "s"} deleted (exams kept unclustered)`)
   }
 
   const toggleSelection = (id: string) => {
@@ -623,6 +707,16 @@ export default function ExamsPage() {
     })
   }
 
+  const toggleSelectAll = () => {
+    const allIds = new Set(visibleQuizzes.map((q) => q.id))
+    if (selectedIds.size === visibleQuizzes.length && visibleQuizzes.length > 0) {
+      // All are selected, so unselect all
+      setSelectedIds(new Set())
+    } else {
+      // Not all selected or no selection, so select all
+      setSelectedIds(allIds)
+    }
+  }
   const selectAll = () => setSelectedIds(new Set(visibleQuizzes.map((q) => q.id)))
   const clearSelection = () => setSelectedIds(new Set())
 
@@ -945,6 +1039,19 @@ export default function ExamsPage() {
       <div className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-secondary)] px-3 py-2 shadow-sm">
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div className="relative flex min-h-9 flex-1 items-center gap-2">
+              <Input
+                ref={searchInputRef}
+                type="text"
+                value={appliedFilters.query}
+                onChange={(event) => {
+                  const newQuery = event.target.value
+                  setAppliedFilters((prev) => ({ ...prev, query: newQuery }))
+                }}
+                onKeyDown={handleSearchInputKeyDown}
+                placeholder="Search exams by name or keyword..."
+                className="h-9 flex-1 rounded-[8px] border-[0.5px] border-border bg-[var(--bg-tertiary)] text-sm focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                aria-label="Search exams by name or keyword"
+              />
               <Button
                 ref={searchButtonRef}
                 type="button"
@@ -997,16 +1104,6 @@ export default function ExamsPage() {
                 className="absolute left-0 top-11 z-40 w-full max-w-[620px] rounded-2xl border border-[var(--border-color)] bg-[var(--bg-secondary)] p-4 shadow-[0_24px_64px_rgba(0,0,0,0.6)] motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-200 motion-safe:ease-out motion-reduce:transition-none"
               >
                 <div className="grid gap-3 md:grid-cols-2">
-                  <div className="space-y-1.5 md:col-span-2">
-                    <label className="text-xs font-medium text-muted-foreground">Search by name or keyword</label>
-                    <Input
-                      value={draftFilters.query}
-                      onChange={(event) => setDraftFilters((prev) => ({ ...prev, query: event.target.value }))}
-                      placeholder="Search by name or keyword"
-                      className="h-9 rounded-[8px] border-[0.5px] border-border focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                    />
-                  </div>
-
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-muted-foreground">Number of questions</label>
                     <div className="grid grid-cols-2 gap-2">
@@ -1193,6 +1290,9 @@ export default function ExamsPage() {
                     onClick={() => {
                       setDraftFilters(defaultAdvancedFilters)
                       setClusterSearchQuery("")
+                      // Also clear the top search bar
+                      setAppliedFilters(defaultAdvancedFilters)
+                      setSearchPanelOpen(false)
                     }}
                     className="text-xs font-medium text-muted-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                   >
@@ -1201,7 +1301,11 @@ export default function ExamsPage() {
                   <Button
                     type="button"
                     onClick={() => {
-                      setAppliedFilters(draftFilters)
+                      // Merge draftFilters with the keyword from top search bar
+                      setAppliedFilters((prev) => ({
+                        ...draftFilters,
+                        query: prev.query // Keep the keyword from top search bar
+                      }))
                       setSearchPanelOpen(false)
                     }}
                     className="h-9 rounded-xl border border-primary bg-primary px-4 text-primary-foreground focus-visible:ring-2 focus-visible:ring-[var(--brand-accent)]/40 focus-visible:ring-offset-2"
@@ -1459,7 +1563,7 @@ export default function ExamsPage() {
                 <FolderOpen className="size-6" />
               </div>
               <p className="font-semibold">No clusters yet</p>
-            <p className="text-sm text-muted-foreground max-w-[300px] mt-1">Use the Create menu in the top navigation when you need a new cluster.</p>
+            <p className="text-sm text-muted-foreground max-w-[300px] mt-1">Make your first cluster of exams to organize and batch them by courses, subjects, or batches.</p>
             <Button
               variant="default"
               className="mt-4 rounded-full shadow-sm"
@@ -1481,12 +1585,21 @@ export default function ExamsPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={selectAll}
+              onClick={toggleSelectAll}
               className="rounded-full shadow-sm"
               disabled={visibleQuizzes.length === 0}
             >
-              <CheckSquare className="mr-2 size-4 text-primary" />
-              Select All Exams
+              {selectedIds.size === visibleQuizzes.length && visibleQuizzes.length > 0 ? (
+                <>
+                  <CheckSquare className="mr-2 size-4 text-primary" />
+                  Unselect All Exams
+                </>
+              ) : (
+                <>
+                  <CheckSquare className="mr-2 size-4 text-primary" />
+                  Select All Exams
+                </>
+              )}
             </Button>
             {selectedIds.size > 0 ? (
               <Button
@@ -1534,7 +1647,8 @@ export default function ExamsPage() {
               const durationLabel = quiz.duration_minutes ? `${quiz.duration_minutes} min` : "No limit"
               const readiness = getReadinessProgress(questionCount, Boolean(quiz.duration_minutes), isPublished)
               const isSelected = selectedIds.has(quiz.id)
-              const openExamHref = `/exam/${quiz.id}/start`
+              const openExamHref = `/quiz/${quiz.id}`
+              const studentExamHref = `/exam/${quiz.id}/start`
               const quizCluster = organizationMap[quiz.id]
               const isUnclustered = !quizCluster?.course_name
               const clusterLabel = isUnclustered
@@ -1583,7 +1697,7 @@ export default function ExamsPage() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem asChild>
-                          <Link href={openExamHref}>
+                          <Link href={studentExamHref}>
                             <FileText className="size-4" />
                             Open student exam
                           </Link>
@@ -1850,7 +1964,7 @@ export default function ExamsPage() {
                             
                             <div className="flex items-center gap-2 shrink-0 ml-14 sm:ml-0">
                               <Link
-                                href={`/exam/${exam.id}/start`}
+                                href={`/quiz/${exam.id}`}
                                 className={cn(buttonVariants({ size: "sm" }), "h-9 rounded-lg px-4 shadow-sm")}
                               >
                                 Open Exam
@@ -2014,6 +2128,73 @@ export default function ExamsPage() {
           <DialogFooter className="border-t pt-4">
             <Button variant="ghost" className="font-semibold" onClick={() => setShowCreateClusterDialog(false)}>Cancel</Button>
             <Button className="px-6 shadow-sm" onClick={handleCreateCluster}>Create Cluster</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Cluster Options Dialog */}
+      <Dialog open={showClusterDeleteDialog} onOpenChange={setShowClusterDeleteDialog}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Delete Cluster</DialogTitle>
+            <DialogDescription>
+              Choose what to do with the exams in this cluster.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-6">
+            <div className="space-y-3">
+              <label 
+                className="flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
+                style={{
+                  borderColor: clusterDeleteOption === 'cluster-only' ? 'var(--brand-accent)' : 'var(--border-color)',
+                  backgroundColor: clusterDeleteOption === 'cluster-only' ? 'var(--brand-accent-tint)' : 'transparent'
+                }}
+              >
+                <input 
+                  type="radio" 
+                  name="delete-option" 
+                  value="cluster-only"
+                  checked={clusterDeleteOption === 'cluster-only'}
+                  onChange={() => setClusterDeleteOption('cluster-only')}
+                  className="mt-1"
+                />
+                <div>
+                  <p className="font-semibold text-sm">Delete only cluster</p>
+                  <p className="text-xs text-muted-foreground mt-1">Exams will remain as unclustered and you can organize them later.</p>
+                </div>
+              </label>
+              <label 
+                className="flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
+                style={{
+                  borderColor: clusterDeleteOption === 'with-exams' ? 'var(--brand-accent)' : 'var(--border-color)',
+                  backgroundColor: clusterDeleteOption === 'with-exams' ? 'var(--brand-accent-tint)' : 'transparent'
+                }}
+              >
+                <input 
+                  type="radio" 
+                  name="delete-option" 
+                  value="with-exams"
+                  checked={clusterDeleteOption === 'with-exams'}
+                  onChange={() => setClusterDeleteOption('with-exams')}
+                  className="mt-1"
+                />
+                <div>
+                  <p className="font-semibold text-sm">Delete cluster and all exams</p>
+                  <p className="text-xs text-muted-foreground mt-1">Both the cluster and all exams inside will be permanently deleted.</p>
+                </div>
+              </label>
+            </div>
+          </div>
+          <DialogFooter className="border-t pt-4">
+            <Button variant="ghost" className="font-semibold" onClick={() => setShowClusterDeleteDialog(false)}>Cancel</Button>
+            <Button 
+              variant="destructive"
+              className="px-6"
+              disabled={!clusterDeleteOption}
+              onClick={() => performClusterDelete(clusterDeleteOption === 'with-exams')}
+            >
+              Delete
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
