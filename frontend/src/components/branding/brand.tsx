@@ -23,7 +23,7 @@ export function Brand({
   return (
     <div className={cn("brand-wrap flex min-w-0 items-center gap-2.5", className)}>
       <Image
-        src="/logo.svg"
+        src="/logo.png"
         alt="Quizzer logo"
         width={compact ? 26 : 34}
         height={compact ? 26 : 34}
