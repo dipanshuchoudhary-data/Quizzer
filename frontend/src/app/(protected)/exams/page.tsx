@@ -1697,7 +1697,7 @@ export default function ExamsPage() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem asChild>
-                          <Link href={studentExamHref}>
+                          <Link href={openExamHref}>
                             <FileText className="size-4" />
                             Open student exam
                           </Link>

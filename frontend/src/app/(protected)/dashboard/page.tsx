@@ -244,23 +244,29 @@ export default function DashboardPage() {
                 <div key={i} className="h-10 rounded-lg bg-muted animate-pulse" />
               ))}
             </div>
-          ) : (summary?.recent_quizzes.length ?? 0) === 0 ? (
-            <div className="rounded-lg border border-dashed p-4 text-center">
-              <p className="text-xs text-muted-foreground">No students yet</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {(summary?.recent_activity ?? []).slice(0, 4).map((activity, index) => (
-                <div key={index} className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-tertiary)] p-2">
-                  <p className="truncate text-sm font-medium text-foreground">{activity.title}</p>
-                  <div className="mt-1 flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground capitalize">{activity.event}</span>
-                    <span className="text-xs text-muted-foreground">{formatDateLabel(activity.updated_at)}</span>
+          ) : (() => {
+            const studentActivities = (summary?.recent_activity ?? []).filter(
+              (activity) => /attempt|submission|started|progress|completed/i.test(activity.event)
+            )
+            return studentActivities.length === 0 ? (
+              <div className="rounded-lg border border-dashed p-4 text-center">
+                <p className="text-sm font-medium text-foreground">No student attempts yet</p>
+                <p className="mt-1 text-xs text-muted-foreground">Share exams to see students taking them</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {studentActivities.slice(0, 4).map((activity, index) => (
+                  <div key={index} className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-tertiary)] p-2">
+                    <p className="truncate text-sm font-medium text-foreground">{activity.title}</p>
+                    <div className="mt-1 flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground capitalize">{activity.event}</span>
+                      <span className="text-xs text-muted-foreground">{formatDateLabel(activity.updated_at)}</span>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )
+          })()}
         </div>
 
         {/* Quick Analysis */}
