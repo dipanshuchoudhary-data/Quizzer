@@ -12,25 +12,50 @@ router = APIRouter(prefix="/feedback", tags=["Feedback"])
 logger = logging.getLogger(__name__)
 
 
+def resolve_feedback_contact_email(*, contact_email: str | None, user_email: str | None) -> str | None:
+    normalized_contact_email = (contact_email or "").strip().lower()
+    if normalized_contact_email:
+        return normalized_contact_email
+
+    normalized_user_email = (user_email or "").strip().lower()
+    if normalized_user_email:
+        return normalized_user_email
+
+    return None
+
+
 @router.post("")
 async def submit_feedback(
     payload: FeedbackCreateRequest,
     current_user: User | None = Depends(get_optional_current_user),
 ):
+    resolved_contact_email = resolve_feedback_contact_email(
+        contact_email=payload.contact_email,
+        user_email=current_user.email if current_user else None,
+    )
+    if not resolved_contact_email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Please provide your email address before sending feedback.",
+        )
+
     if not is_smtp_configured():
-        logger.warning(
-            "feedback_submission_logged_without_email user_id=%s user_email=%s message=%r",
+        logger.error(
+            "feedback_email_service_not_configured user_id=%s user_email=%s message=%r",
             getattr(current_user, "id", None),
             getattr(current_user, "email", None),
             payload.message,
         )
-        return {"message": "Feedback received successfully"}
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Feedback email service is not configured yet. Please try again later.",
+        )
 
     try:
         await send_feedback_email(
             feedback_message=payload.message,
             feedback_subject=payload.subject,
-            contact_email=payload.contact_email,
+            contact_email=resolved_contact_email,
             user_id=str(current_user.id) if current_user else None,
             user_email=current_user.email if current_user else None,
             user_name=current_user.full_name if current_user else None,
