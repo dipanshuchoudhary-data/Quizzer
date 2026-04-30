@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { feedbackApi } from "@/lib/api/feedback"
+import { useAuthStore } from "@/stores/useAuthStore"
 
 const generalQuestions = [
   {
@@ -64,6 +65,8 @@ const generalQuestions = [
 ]
 
 export default function HelpPage() {
+  const accountEmail = useAuthStore((state) => state.user?.email?.trim().toLowerCase() ?? "")
+  const needsContactEmail = !accountEmail
   const [contactEmail, setContactEmail] = useState("")
   const [subject, setSubject] = useState("")
   const [message, setMessage] = useState("")
@@ -88,9 +91,14 @@ export default function HelpPage() {
     const normalizedEmail = contactEmail.trim().toLowerCase()
     const normalizedSubject = subject.trim()
     const normalizedMessage = message.trim()
+    const contactAddress = normalizedEmail || accountEmail
 
-    if (!normalizedEmail || !normalizedEmail.includes("@")) {
+    if (!contactAddress || !contactAddress.includes("@")) {
       setContactError("Please enter a valid email.")
+      return
+    }
+    if (needsContactEmail && !normalizedEmail) {
+      setContactError("Please enter your email before sending.")
       return
     }
     if (!normalizedSubject) {
@@ -109,10 +117,13 @@ export default function HelpPage() {
     setContactError("")
     setIsSending(true)
     try {
-      await feedbackApi.submit({
-        contact_email: normalizedEmail,
+      const payload = {
         subject: normalizedSubject,
         message: normalizedMessage,
+        ...(normalizedEmail ? { contact_email: normalizedEmail } : {}),
+      }
+      await feedbackApi.submit({
+        ...payload,
       })
       toast.success("Your message was sent successfully. You will receive a response in very short time.")
       setContactEmail("")
@@ -169,6 +180,11 @@ export default function HelpPage() {
           <p className="text-sm text-muted-foreground">
             Send your query directly to support. Messages are routed to <span className="font-medium text-foreground">dipanshuchoudhary109@gmail.com</span>.
           </p>
+          {needsContactEmail ? (
+            <p className="text-xs text-muted-foreground">Your account has no saved email, so email is required before sending.</p>
+          ) : (
+            <p className="text-xs text-muted-foreground">We will use your account email: <span className="font-medium text-foreground">{accountEmail}</span></p>
+          )}
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-background/70 px-3 py-2">
             <p className="text-xs text-muted-foreground">Prefer your own email app?</p>
             <a
@@ -179,12 +195,14 @@ export default function HelpPage() {
             </a>
           </div>
           <div className="grid gap-3 md:grid-cols-2">
-            <Input
-              value={contactEmail}
-              onChange={(event) => setContactEmail(event.target.value)}
-              placeholder="Your email"
-              type="email"
-            />
+            {needsContactEmail ? (
+              <Input
+                value={contactEmail}
+                onChange={(event) => setContactEmail(event.target.value)}
+                placeholder="Your email"
+                type="email"
+              />
+            ) : null}
             <Input value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="Subject" />
           </div>
           <Textarea
@@ -195,7 +213,7 @@ export default function HelpPage() {
           />
           <div className="flex items-center justify-between gap-3 text-xs">
             <span className={contactError ? "text-destructive" : "text-muted-foreground"}>
-              {contactError || "Required fields: email, subject, message (max 500 words)."}
+              {contactError || `Required fields: ${needsContactEmail ? "email, " : ""}subject, message (max 500 words).`}
             </span>
             <span className={contactWords > 500 ? "font-medium text-destructive" : "text-muted-foreground"}>{contactWords}/500 words</span>
           </div>

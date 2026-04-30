@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import axios from "axios"
 import { toast } from "sonner"
 import { feedbackApi } from "@/lib/api/feedback"
+import { useAuthStore } from "@/stores/useAuthStore"
 import {
   Dialog,
   DialogContent,
@@ -12,10 +13,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
 
 const MAX_WORDS = 500
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const SUCCESS_MESSAGE =
   "Thank you for giving feedback. We respect your time and will focus on improving your experience."
 
@@ -27,7 +30,10 @@ function countWords(value: string) {
 }
 
 export function FeedbackWidget() {
+  const accountEmail = useAuthStore((state) => state.user?.email?.trim().toLowerCase() ?? "")
+  const needsContactEmail = !accountEmail
   const [open, setOpen] = useState(false)
+  const [contactEmail, setContactEmail] = useState("")
   const [message, setMessage] = useState("")
   const [error, setError] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -35,12 +41,22 @@ export function FeedbackWidget() {
   const wordCount = useMemo(() => countWords(message), [message])
 
   const resetForm = () => {
+    setContactEmail("")
     setMessage("")
     setError("")
   }
 
   const validate = () => {
+    const normalizedContactEmail = contactEmail.trim().toLowerCase()
     const trimmed = message.trim()
+
+    if (needsContactEmail) {
+      if (!normalizedContactEmail || !EMAIL_PATTERN.test(normalizedContactEmail)) {
+        setError("Please provide a valid email address.")
+        return false
+      }
+    }
+
     if (!trimmed) {
       setError("Feedback is required.")
       return false
@@ -56,9 +72,15 @@ export function FeedbackWidget() {
   const handleSubmit = async () => {
     if (!validate()) return
 
+    const normalizedContactEmail = contactEmail.trim().toLowerCase()
+    const payload = {
+      message: message.trim(),
+      ...(needsContactEmail && normalizedContactEmail ? { contact_email: normalizedContactEmail } : {}),
+    }
+
     setIsSubmitting(true)
     try {
-      await feedbackApi.submit({ message: message.trim() })
+      await feedbackApi.submit(payload)
       toast.success(SUCCESS_MESSAGE)
       resetForm()
       setOpen(false)
@@ -103,6 +125,28 @@ export function FeedbackWidget() {
           </DialogHeader>
 
           <div className="space-y-2">
+            {needsContactEmail ? (
+              <>
+                <label htmlFor="feedback-email" className="block text-sm font-semibold text-foreground">
+                  Your email
+                </label>
+                <Input
+                  id="feedback-email"
+                  type="email"
+                  value={contactEmail}
+                  onChange={(event) => {
+                    setContactEmail(event.target.value)
+                    if (error) {
+                      setError("")
+                    }
+                  }}
+                  placeholder="name@example.com"
+                  aria-invalid={Boolean(error)}
+                />
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground">We will use your account email: {accountEmail}</p>
+            )}
             <label htmlFor="feedback-message" className="block text-sm font-semibold text-foreground">
               Write your feedback
             </label>
