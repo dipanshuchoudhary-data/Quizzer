@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from backend.api.deps import get_optional_current_user
 from backend.models.user import User
 from backend.schemas.feedback import FeedbackCreateRequest
-from backend.services.email_service import is_smtp_configured, send_feedback_email
+from backend.services.email_service import is_email_configured, send_feedback_email
 
 
 router = APIRouter(prefix="/feedback", tags=["Feedback"])
@@ -39,7 +39,7 @@ async def submit_feedback(
             detail="Please provide your email address before sending feedback.",
         )
 
-    if not is_smtp_configured():
+    if not is_email_configured():
         logger.error(
             "feedback_email_service_not_configured user_id=%s user_email=%s message=%r",
             getattr(current_user, "id", None),
@@ -48,7 +48,7 @@ async def submit_feedback(
         )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Feedback email service is not configured yet. Please try again later.",
+            detail="Feedback email provider is not configured yet. Please try again later.",
         )
 
     try:

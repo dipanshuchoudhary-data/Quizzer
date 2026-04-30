@@ -3,6 +3,8 @@ import logging
 import smtplib
 from email.message import EmailMessage
 
+import httpx
+
 from backend.core.config import settings
 
 
@@ -13,9 +15,28 @@ def is_smtp_configured() -> bool:
     return bool(settings.SMTP_HOST and settings.SMTP_USERNAME and settings.SMTP_PASSWORD)
 
 
+def is_email_configured() -> bool:
+    return bool(settings.EMAIL_API_KEY or is_smtp_configured())
+
+
 async def _send_email(message: EmailMessage) -> None:
+    if settings.EMAIL_API_KEY:
+        payload = {
+            "from": message.get("From"),
+            "to": [message.get("To")],
+            "subject": message.get("Subject"),
+            "text": message.get_content(),
+            "reply_to": message.get("Reply-To"),
+        }
+        headers = {"Authorization": f"Bearer {settings.EMAIL_API_KEY}"}
+        async with httpx.AsyncClient(timeout=15) as client:
+            response = await client.post("https://api.resend.com/emails", json=payload, headers=headers)
+            if response.status_code >= 400:
+                raise RuntimeError(f"Resend email send failed: {response.status_code} {response.text}")
+        return
+
     if not is_smtp_configured():
-        raise RuntimeError("SMTP is not configured")
+        raise RuntimeError("Email provider is not configured")
 
     def _send() -> None:
         if settings.SMTP_USE_TLS:
