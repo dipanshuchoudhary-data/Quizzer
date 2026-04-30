@@ -23,6 +23,7 @@ langchain-core
 langchain-openai
 langgraph
 langgraph-cli[inmem]
+langsmith
 tiktoken
 tenacity
 

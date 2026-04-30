@@ -49,6 +49,7 @@ dependencies = [
     "cloudinary>=1.44.1",
     "supadata",
     "authlib>=1.6.9",
+    "langsmith>=0.7.3",
 ]
 
 [tool.uv]
