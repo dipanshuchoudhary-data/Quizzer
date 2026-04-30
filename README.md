@@ -1,325 +1,275 @@
 <div align="center">
+  
+  <img src="https://raw.githubusercontent.com/dipanshuchoudhary-data/Quizzer/main/frontend/public/logo.png" alt="Quizzer Logo" width="100" />
 
-# 🧠 Quizzer
+  <h1 style="font-size: 3rem; font-weight: 800; margin-bottom: 0;">Quizzer</h1>
 
-### **AI-native assessment infrastructure for educators who need speed, control, and exam integrity**
+  <p><em>AI-native assessment infrastructure for educators who need speed, control, and exam integrity</em></p>
 
-<p>
-  <a href="https://quizzer-two-sandy.vercel.app"><img src="https://img.shields.io/badge/🌐_Live_App-quizzer--two--sandy.vercel.app-0ea5e9?style=for-the-badge" alt="Live App"/></a>
-</p>
+  <p>
+    <a href="https://quizzer-two-sandy.vercel.app"><img src="https://img.shields.io/badge/🌐_Live_App-quizzer--two--sandy.vercel.app-0ea5e9?style=for-the-badge&logo=vercel" alt="Live App"/></a>
+  </p>
 
-<p>
-  <img src="https://img.shields.io/badge/Frontend-Next.js_14-black?style=flat-square&logo=next.js" />
-  <img src="https://img.shields.io/badge/Backend-FastAPI-009688?style=flat-square&logo=fastapi" />
-  <img src="https://img.shields.io/badge/Database-PostgreSQL-336791?style=flat-square&logo=postgresql" />
-  <img src="https://img.shields.io/badge/Queue-Celery_+_Redis-dc2626?style=flat-square&logo=redis" />
-  <img src="https://img.shields.io/badge/AI-LangGraph_+_LLM-f59e0b?style=flat-square" />
-  <img src="https://img.shields.io/badge/Auth-JWT_+_Google_OAuth-2563eb?style=flat-square" />
-  <img src="https://img.shields.io/badge/License-MIT-22c55e?style=flat-square" />
-</p>
+  <p>
+    <img src="https://img.shields.io/badge/Frontend-Next.js_14-black?style=flat-square&logo=next.js" />
+    <img src="https://img.shields.io/badge/Backend-FastAPI-009688?style=flat-square&logo=fastapi" />
+    <img src="https://img.shields.io/badge/Database-PostgreSQL-336791?style=flat-square&logo=postgresql" />
+    <img src="https://img.shields.io/badge/Queue-Celery_+_Redis-dc2626?style=flat-square&logo=redis" />
+    <img src="https://img.shields.io/badge/AI-LangGraph_+_LLM-f59e0b?style=flat-square&logo=openai" />
+    <img src="https://img.shields.io/badge/Auth-JWT_+_Google_OAuth-2563eb?style=flat-square&logo=google" />
+  </p>
 
 </div>
 
 ---
 
-## ✨ Product Overview
+## 🌟 The Quizzer Vision
 
-**Quizzer** is a **backend-authoritative, AI-powered quiz and exam platform** built for real-world academic and training environments.  
-It turns raw source material (text, URLs, documents, scanned files) into publishable assessments, then enforces secure exam workflows with integrity monitoring, autosave, and analytics.
+**Quizzer** is a **backend-authoritative, AI-powered quiz and exam platform** designed for real-world academic and training environments.  
+It bridges the gap between raw educational material—whether it's text, URLs, documents, or scanned files—and high-integrity, publishable assessments. 
 
-### Why Quizzer stands out
+With a recent massive upgrade to the user interface and core capabilities, Quizzer now offers **fluid animations, a dynamic profile section, comprehensive help desk features, course clusters, and highly granular assessment options.**
 
-- **Source-to-assessment in one workflow** (ingest → generate → review → publish → monitor → evaluate)
-- **Human-in-the-loop quality control** with sectioned review and approval gates
-- **Security-first exam runtime** with Redis-backed authoritative timers + violation tracking
-- **Production-oriented architecture** (FastAPI + async DB + Redis + Celery + LangGraph)
-- **Built for scale and operator control**, not toy demo generation
-
----
-
-## 🚀 Feature Showcase
-
-### Core Features
-
-- **AI Quiz Generation** from:
-  - Direct text
-  - Website URLs
-  - Files: PDF, DOCX, PPTX, TXT, PNG/JPG (OCR supported)
-- **Blueprint-driven generation** with per-section structure (count, type, marks)
-- **Question lifecycle control**: draft → review → approved → publish
-- **Exam publishing with public links** and student attempt flow
-- **Result processing** for objective and free-text answers
-
-### Advanced Features
-
-- **Streaming AI generation path (SSE)** for lower perceived latency and live progress
-- **Multiple authoring modes** (Source-first Auto, Guided, Custom structure)
-- **Per-question regeneration** + bulk review actions (approve, move, marks, regenerate)
-- **Review Focus Mode** + virtualized question list for high-volume moderation
-- **Dashboard intelligence**:
-  - Summary metrics
-  - Live exam board
-  - Analytics with deltas, trends, distribution, and insights
-- **Notification inbox + staff broadcast updates**
-- **Course/cluster organization support**
-- **Account control center** (profile, avatar upload, sessions, workspace defaults)
-
-### Security Features
-
-- **JWT auth in HTTPOnly cookies**
-- **Argon2 password hashing**
-- **Google OAuth 2.0 / OIDC login**
-- **Role-aware access controls**
-- **Exam integrity guards**:
-  - Fullscreen exit detection
-  - Tab switch detection
-  - Paste blocking + large text insert detection
-  - Violation counting and integrity flagging
-- **Session lock + heartbeat + server-authoritative Redis timer**
+### 🎯 Why educators choose Quizzer:
+- ⚡ **Source-to-Assessment in Seconds:** Ingest → Generate → Review → Publish → Monitor.
+- 🛡️ **Uncompromised Security:** Server-authoritative Redis timers, anti-cheat tab detection, and paste-blocking.
+- 🧑‍🏫 **Human-in-the-Loop:** Streamlined review workspace with Focus Mode and bulk moderation.
+- 📈 **Enterprise-Grade Architecture:** Built to scale with Next.js, FastAPI, Celery, Redis, and LangGraph.
 
 ---
 
-## 🆕 Newly Added / Highlighted Updates
+## ✨ What's New? (Latest Major Updates)
 
-- ✅ **Google OAuth sign-in flow** with secure callback handling  
-- ✅ **AI streaming generation endpoints** (`generate-stream/init` + SSE stream)  
-- ✅ **Source-first + Guided generation controls** with richer blueprint normalization  
-- ✅ **Upgraded review workspace** (focus mode, filters, virtual list, bulk tools)  
-- ✅ **Notification inbox + broadcast system**  
-- ✅ **Account settings workspace** with session management and avatar pipeline  
-- ✅ **Cache-backed dashboard endpoints** for faster analytics and live views  
-- ✅ **Hybrid task execution mode** (`USE_CELERY`) for worker and non-worker deployments
+We've completely revamped the platform to deliver an unparalleled user experience. Here's what was just added:
+
+<details open>
+<summary><b>🎨 Stunning New UI & Fluid Animations</b></summary>
+A complete overhaul of the frontend with Framer Motion animations, refined typography, and enhanced accessibility. The interface is now more intuitive, responsive, and visually engaging.
+</details>
+
+<details open>
+<summary><b>🗂️ Course & Cluster Organization</b></summary>
+Group and manage your quizzes efficiently with the new **Cluster feature**. Organize assessments by course, department, or module for seamless navigation and analytics rollups.
+</details>
+
+<details open>
+<summary><b>👤 Advanced Profile Section</b></summary>
+A centralized **Account Control Center** where users can manage active sessions, upload custom avatars (powered by Cloudinary), and configure workspace defaults.
+</details>
+
+<details open>
+<summary><b>🛟 Help Desk & Feedback System</b></summary>
+A built-in **User Feedback System**. Users can submit feedback or support requests seamlessly. Messages are routed instantly to the admin's inbox via secure SMTP integration.
+</details>
+
+<details open>
+<summary><b>🛠️ More Granular Options</b></summary>
+- **Streaming Generation (SSE):** Watch AI construct assessments in real time.
+- **Guided Generation:** Take fine-grained control over blueprint design.
+- **Enhanced Settings:** Detailed limits, advanced generation models, deeper account customization.
+</details>
 
 ---
 
-## 🎬 Visual Walkthrough (Placeholders)
+## 🚀 Core Features Matrix
 
-### 1) Dashboard Experience
-<p align="center">
-  <img src="https://via.placeholder.com/1280x720?text=Dashboard+Walkthrough+GIF" alt="Dashboard Walkthrough Placeholder" width="92%"/>
-</p>
-
-### 2) AI Quiz Creation + Review Flow
-<p align="center">
-  <img src="https://via.placeholder.com/1280x720?text=Quiz+Flow+Animation+Placeholder" alt="Quiz Flow Placeholder" width="92%"/>
-</p>
-
-### 3) Results + Analytics Journey
-<p align="center">
-  <img src="https://via.placeholder.com/1280x720?text=Results+and+Analytics+GIF+Placeholder" alt="Results Placeholder" width="92%"/>
-</p>
+| 📚 **Creation & Ingestion** | 🔐 **Security & Integrity** | 📊 **Analytics & Scale** |
+| :--- | :--- | :--- |
+| **Multi-modal AI Ingestion:** Text, URLs, PDF, DOCX, PPTX, Images (OCR) | **JWT & OAuth 2.0:** Secure HTTPOnly cookies & Google Sign-in | **Dashboard Intelligence:** Live exam boards & metric deltas |
+| **Blueprint Generation:** Define section structures, marks, and question types | **Anti-Cheat Engine:** Tab-switching, fullscreen exit & paste detection | **Performance Tracking:** Trend distribution and cohort insights |
+| **Hybrid Authoring Modes:** Source-first, Guided, or Custom | **Server-Side Timers:** Un-hackable Redis-backed countdowns | **Cache-Backed Endpoints:** Blazing fast dashboard loads |
+| **Advanced Review Tools:** Focus mode, virtualized lists, bulk approval | **Session Management:** Heartbeats & concurrent session lockouts | **Asynchronous Workers:** Celery + Redis for heavy AI tasks |
 
 ---
 
-## 🏗️ Architecture
+## 🏗️ System Architecture
 
-```text
-┌──────────────────────────────────────────────────────────────────────┐
-│                           Next.js Frontend                           │
-│  Auth • Quiz Creation • Review • Monitoring • Results • Analytics    │
-└───────────────────────────────┬───────────────────────────────────────┘
-                                │ HTTPS (cookie auth)
-┌───────────────────────────────▼───────────────────────────────────────┐
-│                            FastAPI Backend                            │
-│  Auth, Quizzes, AI Source Ingestion, Attempts, Answers, Results,     │
-│  Dashboard, Notifications, Monitoring                                 │
-└───────────────┬───────────────────────────────┬───────────────────────┘
-                │                               │
-        ┌───────▼────────┐               ┌──────▼────────┐
-        │   PostgreSQL   │               │     Redis     │
-        │  core records  │               │ timer/cache/  │
-        │ + audit state  │               │ locks/queues  │
-        └───────┬────────┘               └──────┬────────┘
-                │                               │
-                └──────────────┬────────────────┘
-                               ▼
-                     ┌─────────────────────┐
-                     │ Celery / Inline Task│
-                     │ Execution Dispatcher │
-                     └──────────┬──────────┘
-                                ▼
-                   ┌───────────────────────────┐
-                   │ LangGraph + LLM Providers │
-                   │ generation + evaluation   │
-                   └───────────────────────────┘
+*A high-level view of how Quizzer's microservices and AI agents interact efficiently.*
+
+```mermaid
+graph TD
+    %% Define Styles
+    classDef frontend fill:#0ea5e9,stroke:#0284c7,stroke-width:2px,color:#fff,rx:8px,ry:8px;
+    classDef backend fill:#10b981,stroke:#059669,stroke-width:2px,color:#fff,rx:8px,ry:8px;
+    classDef database fill:#6366f1,stroke:#4f46e5,stroke-width:2px,color:#fff,rx:8px,ry:8px;
+    classDef ai fill:#f59e0b,stroke:#d97706,stroke-width:2px,color:#fff,rx:8px,ry:8px;
+    classDef external fill:#64748b,stroke:#475569,stroke-width:2px,color:#fff,rx:8px,ry:8px;
+
+    %% Nodes
+    Client["💻 Next.js Frontend<br/>(UI, Animations, Auth)"]:::frontend
+    API["⚙️ FastAPI Backend<br/>(Core API, Logic, Sync)"]:::backend
+    
+    DB[(🐘 PostgreSQL<br/>Core Data & State)]:::database
+    Redis[(🔴 Redis<br/>Cache, Locks, Timers)]:::database
+    Celery["⚡ Celery Workers<br/>Async Task Dispatcher"]:::backend
+    
+    LangGraph["🧠 LangGraph + LLM<br/>Question Generation & Eval"]:::ai
+    Auth["🔐 Authenticator & SMTP<br/>Google OAuth & Help Desk"]:::external
+
+    %% Edges
+    Client <==>|HTTPS / SSE Stream| API
+    API <-->|SQLAlchemy Async| DB
+    API <-->|Caching & Security| Redis
+    API -->|Dispatch AI Jobs| Celery
+    Celery -->|Fetch State| DB
+    Celery -->|Queue/Lock| Redis
+    Celery == Invoke ==> LangGraph
+    API == Stream ==> LangGraph
+    API --> Auth
 ```
 
 ---
 
-## 🧰 Tech Stack
+## 🛤️ The User Journey
 
-| Layer | Technology | Purpose |
-|---|---|---|
-| Frontend | Next.js 14, React 18, TypeScript 5 | App Router UI and typed client logic |
-| UI/UX | Tailwind CSS 4, shadcn/ui, Radix, Framer Motion | Modern, accessible, animated interface |
-| State/Data | TanStack Query, Zustand, Axios | Server-state + client-state orchestration |
-| Backend API | FastAPI, Pydantic v2, SQLAlchemy 2 (async) | High-performance typed API layer |
-| Database | PostgreSQL + Alembic | Relational storage + migrations |
-| Queue/Cache | Redis + Celery | Task brokering, caching, timers, locks |
-| AI | LangChain Core, LangGraph, OpenAI/OpenRouter | Generation and evaluation pipelines |
-| Parsing/OCR | pdfplumber, PyMuPDF, python-docx, python-pptx, pytesseract, Pillow | Multi-format content extraction |
-| Auth/Security | python-jose, passlib(argon2), Authlib | JWT + OAuth + secure password handling |
-| Observability | structlog, response timing headers, Vercel Analytics/Speed Insights | Runtime visibility and performance tracking |
-| Media | Cloudinary | Avatar storage and transformation |
+```mermaid
+journey
+    title End-to-End Quizzer Workflow
+    section 1. Setup & Ingest
+      Create Quiz Shell & Cluster: 5: Educator
+      Upload Source (PDF/URL): 5: Educator
+    section 2. AI Generation
+      Configure Blueprint: 4: Educator
+      Watch Stream/Async Gen: 5: LangGraph AI
+    section 3. Review & Refine
+      Focus Mode QA: 4: Educator
+      Bulk Approve/Edit: 5: Educator
+    section 4. Execution
+      Publish & Distribute URL: 5: Educator
+      Secure Exam Attempt: 5: Student
+      Auto-Save & Cheat Guard: 5: System
+    section 5. Results
+      Auto-grade (Objective + AI): 5: System
+      Dashboard Analytics: 5: Educator
+```
 
 ---
 
-## ⚙️ Installation & Setup
+## 🧰 Tech Stack In-Depth
 
-### Prerequisites
+<div align="center">
 
-- Python **3.11+**
-- Node.js **20+**
-- PostgreSQL **15+**
-- Redis **7+**
-- (Optional) Tesseract OCR binary for scanned documents/images
+| Layer | Technologies & Tools |
+| :--- | :--- |
+| **Frontend** | Next.js 14, React 18, TypeScript, Tailwind CSS 4, Framer Motion, shadcn/ui |
+| **Backend** | FastAPI, Pydantic v2, async SQLAlchemy 2, python-jose, passlib(argon2) |
+| **Databases** | PostgreSQL (Relational), Redis (Task Queue & Caching) |
+| **AI & NLP** | LangChain, LangGraph, OpenAI/OpenRouter |
+| **Document OCR**| pdfplumber, PyMuPDF, python-docx, pytesseract, Pillow |
+| **Infra/Media** | Celery (Workers), Vercel Analytics, Cloudinary (Avatar Gen) |
 
-### 1) Clone
+</div>
+
+---
+
+## ⚙️ Quickstart Installation
+
+We've made getting started locally as smooth as possible.
+
+<details>
+<summary><b>1️⃣ Clone & Backend Setup</b></summary>
 
 ```bash
 git clone https://github.com/dipanshuchoudhary-data/Quizzer.git
 cd Quizzer
-```
 
-### 2) Backend setup
-
-```bash
+# Create and activate virtual environment
 python -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
+
+# Install dependencies
 pip install -r requirements.txt
 
+# Setup environment variables
 cp backend/.env.example .env
-# edit .env
 
+# Run database migrations
 alembic upgrade head
 ```
+</details>
 
-### 3) Frontend setup
+<details>
+<summary><b>2️⃣ Frontend Setup</b></summary>
 
 ```bash
 cd frontend
 npm install
 cp .env.example .env.local
-# edit .env.local
 cd ..
 ```
+</details>
 
-### 4) Run services
+<details>
+<summary><b>3️⃣ Run Services</b></summary>
 
+Open three different terminal tabs:
+
+**Terminal 1 (Backend):**
 ```bash
-# Backend API (from repo root)
 python -m backend.run_api
-# or: uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
+# Runs on http://127.0.0.1:8000
 ```
 
+**Terminal 2 (Frontend):**
 ```bash
-# Frontend (from repo root)
 npm --prefix frontend run dev
+# Runs on http://localhost:3000
 ```
 
+**Terminal 3 (Background Worker - Optional but recommended):**
 ```bash
-# Worker (optional when USE_CELERY=true)
+# Ensure USE_CELERY=true in .env
 celery -A backend.workers.celery_app worker --loglevel=info
 ```
+</details>
 
-### 5) Environment configuration
+<details>
+<summary><b>🔑 Essential Environment Variables</b></summary>
 
-#### Root `.env` (backend)
+Update your `.env` to include your OpenRouter/LLM keys and SMTP data:
 
-```bash
-APP_ENV=local
-APP_URL=http://localhost:8000
-FRONTEND_URL=http://localhost:3000
-CORS_ALLOW_ORIGINS=http://localhost:3000
-
-POSTGRES_DSN=******localhost:5432/quizzer
-REDIS_URL=redis://localhost:6379
-
-JWT_SECRET_KEY=change-me
-JWT_ALGORITHM=HS256
-JWT_EXPIRE_MINUTES=60
-
+```env
+# AI Models
 LLM_PROVIDER=openrouter
 LLM_MODEL=openai/gpt-4o-mini
-LLM_API_KEY=your-api-key
-OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+LLM_API_KEY=your_api_key
 
-USE_CELERY=false
+# Help Desk & Support
+EMAIL_FROM=Quizzer <no-reply@quizzer.app>
+FEEDBACK_EMAIL_TO=your-email@example.com
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=your-smtp-username
+SMTP_PASSWORD=your_google_app_password
 ```
-
-#### `frontend/.env.local`
-
-```bash
-NEXT_PUBLIC_API_URL=http://localhost:8000
-NEXT_PUBLIC_GOOGLE_AUTH_URL=http://localhost:8000/login/google
-```
+*(Need help with Gmail SMTP? [Create an App Password](https://myaccount.google.com/apppasswords) and you're good to go!)*
+</details>
 
 ---
 
-## 🔄 End-to-End Usage Flow
+## 📈 Performance Benchmarks
 
-1. **Create quiz shell** (title/description, optional cluster assignment)  
-2. **Ingest source content** (paste, links, or files)  
-3. **Configure generation strategy** (auto/guided/custom blueprint)  
-4. **Run AI generation** (async job or stream mode)  
-5. **Review + approve** questions (filters, bulk actions, focus mode)  
-6. **Publish** and distribute the public exam link  
-7. **Students attempt exam** with guarded runtime + autosave + heartbeat  
-8. **Submit + grade** (objective scoring + AI short-answer evaluation)  
-9. **Analyze** outcomes in dashboard/results and export reports
+Quizzer is engineered for **scale and reliability**:
+
+- 🚦 **Zero-Client-Trust Logic:** Timers live in Redis. Changing local clocks won't hack the exam.
+- ⚡ **Cache-Backed Dashboard:** Analytics load instantly reusing Redis caches.
+- 🎞️ **Infinite Scroll Review:** `@tanstack/react-virtual` ensures smooth 60fps scrolling even with 500+ questions in review mode.
+- 🛡️ **Disaster Recovery:** Debounced autosaving and periodic flushes ensure student progress is never lost during network drops.
 
 ---
 
-## ⚡ Performance & Optimization Highlights
+## 🤝 Join the Development
 
-| Optimization Lever | Implementation | Operational Benefit |
-|---|---|---|
-| Async-first API | FastAPI + async SQLAlchemy | Better concurrent request handling |
-| Background processing | Celery task pipeline | Keeps API responsive under heavy generation/evaluation load |
-| Redis timer authority | TTL-based countdown | Prevents client-side timer tampering |
-| Redis cache on dashboard | Summary/live/analytics endpoint caching | Faster repeated dashboard loads |
-| Virtualized review list | `@tanstack/react-virtual` | Smooth moderation at large question counts |
-| Progressive ingestion/generation status | job metadata + polling/streaming | Higher UX confidence during long-running tasks |
-| Debounced autosave + periodic flush | client hooks + answer endpoints | Reduced data-loss risk during exam attempts |
+We are building the open-source standard for AI education infrastructure. Contributions are welcome!
 
----
-
-## 🛣️ Roadmap
-
-- [x] Google OAuth onboarding/login
-- [x] Streaming AI generation pathway
-- [x] Notification inbox + broadcast system
-- [x] Advanced review UX (focus mode + virtualization + bulk actions)
-- [ ] Real-time push transport for monitoring/events (beyond polling)
-- [ ] LMS integrations (Canvas, Moodle, Classroom)
-- [ ] Scheduled exam windows and richer proctoring integrations
-- [ ] Expanded analytics benchmarking across cohorts
-- [ ] Mobile-first exam UI optimization
-
----
-
-## 🤝 Contribution Guidelines
-
-1. Fork the repository
-2. Create a feature branch: `feature/<name>`
-3. Keep changes scoped and production-quality
-4. Run relevant checks before PR:
-   - `npm --prefix frontend run lint`
-   - backend tests (`pytest`) where applicable
-5. Open a clear PR with:
-   - problem addressed
-   - implementation summary
-   - screenshots/GIFs for UI changes
-   - migration/env notes if needed
-
----
-
-## 📄 License
-
-This project is licensed under the [MIT License](LICENSE).
+1. Fork the repo and create a `feature/<your-feature>` branch.
+2. Maintain our high standard of UX (use semantic HTML, Framer Motion for UX state changes).
+3. Ensure backend is typed (Pydantic) and endpoints are properly documented.
+4. Open a PR!
 
 ---
 
 <div align="center">
-  <strong>Quizzer</strong> — built for high-trust, AI-accelerated assessments at scale.
+  <h3>Built with ❤️ for Educators & Developers</h3>
+  <p>Available under the <a href="LICENSE"><b>MIT License</b></a></p>
 </div>
