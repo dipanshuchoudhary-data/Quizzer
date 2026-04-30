@@ -1,4 +1,4 @@
-{
+﻿{
   "compilerOptions": {
     "target": "ES2017",
     "lib": ["dom", "dom.iterable", "esnext"],
@@ -15,10 +15,11 @@
     "isolatedModules": true,
     "jsx": "preserve",
     "incremental": true,
+    "ignoreDeprecations": "6.0",
 
-    "baseUrl": ".",                     // ✅ REQUIRED
+    "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]                // ✅ Alias
+      "@/*": ["./src/*"]
     },
 
     "plugins": [
