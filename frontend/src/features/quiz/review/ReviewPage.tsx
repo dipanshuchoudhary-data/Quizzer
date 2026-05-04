@@ -233,18 +233,11 @@ export function ReviewPage({ quizId }: { quizId: string }) {
     saveQuestion.mutate({ questionId, payload: nextPayload })
   }
 
-  const publishQuiz = useMutation({
-    mutationFn: () => quizApi.publish(quizId),
-    onSuccess: () => toast.success("Quiz published"),
-    onError: () => toast.error("Failed to publish quiz"),
-  })
-
   const hasSearch = debouncedSearchQuery.length > 0
   const allVisibleSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedIds.includes(id))
   const isPublished = Boolean(quiz?.is_published)
   const hasPendingApprovals = unapprovedIds.length > 0
   const canApproveAll = questions.length > 0 && hasPendingApprovals
-  const canPublish = !isPublished && questions.length > 0 && !hasPendingApprovals
 
   return (
     <div
@@ -270,11 +263,6 @@ export function ReviewPage({ quizId }: { quizId: string }) {
             <Button size="sm" onClick={() => approveAll.mutate()} disabled={!canApproveAll || approveAll.isPending} className="h-11 w-full lg:w-auto">
               {approveAll.isPending ? "Approving..." : `Approve all (${unapprovedIds.length})`}
             </Button>
-            {!isPublished && (
-              <Button size="sm" onClick={() => publishQuiz.mutate()} disabled={publishQuiz.isPending || !canPublish} className="h-11 w-full sm:col-span-2 lg:w-auto">
-                {publishQuiz.isPending ? "Publishing..." : "Publish"}
-              </Button>
-            )}
           </div>
         </div>
 
