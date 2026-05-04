@@ -14,9 +14,9 @@ interface AuthShellProps {
 }
 
 const proofPoints = [
-  "Build quizzes from notes in minutes",
+  "Build exams from notes, PDFs, or URLs in minutes",
   "Monitor live attempts with confidence",
-  "Review results in one calm workspace",
+  "Create multi-format questions — MCQ, Short/Long Answer, True\/False",
 ]
 
 export function AuthShell({
@@ -49,10 +49,10 @@ export function AuthShell({
               Smart assessments for focused classrooms
             </div>
             <h1 className="text-balance text-6xl font-black leading-[0.92] tracking-[-0.06em] text-foreground xl:text-7xl">
-              Turn every lesson into a sharper quiz.
+              <span style={{ letterSpacing: "-0.03em" }}>Tu</span><span style={{ letterSpacing: "0.02em" }}>r</span>n every lesson into a sharper exam.
             </h1>
             <p className="mt-7 max-w-xl text-lg leading-8 text-muted-foreground">
-              A polished workspace for educators to create, publish, monitor, and grade assessments without the usual admin drag.
+              A polished workspace for educators to create, publish, monitor, and grade assessments — MCQs, short & long answers, and more.
             </p>
           </div>
 

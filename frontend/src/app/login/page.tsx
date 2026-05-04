@@ -129,7 +129,7 @@ function LoginPageContent() {
     <AuthShell
       eyebrow="Welcome back"
       title="Sign in and pick up where you left off."
-      description="Open your quiz workspace, manage live exams, and keep every assessment moving."
+      description="Open your exam workspace, manage live assessments, and keep every session moving."
       footer={
         <>
           New to Quizzer?{" "}
