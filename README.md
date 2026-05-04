@@ -30,6 +30,10 @@ It bridges the gap between raw educational material—whether it's text, URLs, d
 
 With a recent massive upgrade to the user interface and core capabilities, Quizzer now offers **fluid animations, a dynamic profile section, comprehensive help desk features, course clusters, and highly granular assessment options.**
 
+> [!IMPORTANT]
+> **🚀 Beyond Multiple Choice: Multi-Format Assessments**  
+> Quizzer goes far beyond simple MCQs. Our AI engine natively supports generating diverse question formats including **True/False**, **Short Answer (SYQ)**, and **Long Essay (LYQ)**. Mix and match formats to build comprehensive, rigorous exams that truly test student comprehension.
+
 ### 🎯 Why educators choose Quizzer:
 - ⚡ **Source-to-Assessment in Seconds:** Ingest → Generate → Review → Publish → Monitor.
 - 🛡️ **Uncompromised Security:** Server-authoritative Redis timers, anti-cheat tab detection, and paste-blocking.
