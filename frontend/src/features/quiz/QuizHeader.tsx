@@ -64,33 +64,6 @@ export function QuizHeader({ quiz }: { quiz: Quiz }) {
     return () => window.clearInterval(timer)
   }, [activeJobId, queryClient, quiz.id])
 
-  const aiMutation = useMutation({
-    mutationFn: () =>
-      quizApi.generate(quiz.id, {
-        extracted_text: "Teacher-triggered generation",
-        blueprint: {
-          mode: "manual-trigger",
-          auto_detect_structure: true,
-          sections: [
-            {
-              title: "Section 1",
-              numberOfQuestions: 5,
-              questionType: "MCQ",
-              marksPerQuestion: 1,
-            },
-          ],
-        },
-      }),
-    onSuccess: (response) => {
-      if (response.job_id) setActiveJobId(response.job_id)
-      setJobMessage("Generating questions... Estimated time: ~20 seconds.")
-      toast.success("Generation triggered")
-      queryClient.invalidateQueries({ queryKey: ["quiz", quiz.id] })
-      queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] })
-    },
-    onError: () => toast.error("Generation failed"),
-  })
-
   const publishMutation = useMutation({
     mutationFn: () => quizApi.publish(quiz.id),
     onSuccess: (data) => {
@@ -122,9 +95,6 @@ export function QuizHeader({ quiz }: { quiz: Quiz }) {
       </div>
 
       <div className="flex items-center gap-2">
-        <Button variant="outline" onClick={() => aiMutation.mutate()} disabled={aiMutation.isPending}>
-          {aiMutation.isPending ? "Starting..." : "Generate with AI"}
-        </Button>
         <Button onClick={() => publishMutation.mutate()} disabled={!canPublish || publishMutation.isPending}>
           {publishMutation.isPending ? "Publishing..." : publishLabel}
         </Button>
