@@ -1,3 +1,5 @@
+import os
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import model_validator
 
@@ -71,6 +73,11 @@ class Settings(BaseSettings):
     LLM_API_KEY: str
     OPENROUTER_BASE_URL: str | None = None
     QUIZ_STREAM_TIMEOUT_SECONDS: int = 300
+    LANGSMITH_TRACING: bool = False
+    LANGSMITH_ENDPOINT: str | None = None
+    LANGSMITH_API_KEY: str | None = None
+    LANGSMITH_PROJECT: str | None = None
+    LANGCHAIN_TRACING_V2: bool = False
 
     # ----------------------
     # Storage
@@ -106,6 +113,17 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_runtime_settings(self):
+        if self.LANGSMITH_TRACING:
+            os.environ["LANGSMITH_TRACING"] = "true"
+        if self.LANGSMITH_ENDPOINT:
+            os.environ["LANGSMITH_ENDPOINT"] = self.LANGSMITH_ENDPOINT
+        if self.LANGSMITH_API_KEY:
+            os.environ["LANGSMITH_API_KEY"] = self.LANGSMITH_API_KEY
+        if self.LANGSMITH_PROJECT:
+            os.environ["LANGSMITH_PROJECT"] = self.LANGSMITH_PROJECT
+        if self.LANGCHAIN_TRACING_V2:
+            os.environ["LANGCHAIN_TRACING_V2"] = "true"
+
         if self.is_local:
             self.APP_URL = (self.APP_URL or "http://localhost:8000").rstrip("/")
             self.FRONTEND_URL = (self.FRONTEND_URL or "http://localhost:3000").rstrip("/")
