@@ -6,7 +6,6 @@ from backend.workers.task_db import get_task_sessionmaker
 from backend.workers.celery_app import celery_app
 from backend.models.document import Document
 from backend.services.document_service import extract_text_from_file
-from backend.ai.agents.summarization_agent import summarize_document
 
 
 logger = logging.getLogger(__name__)
@@ -70,18 +69,6 @@ def process_document(document_id: str):
                     len(extracted_text),
                 )
 
-                # -----------------------------------
-                # Summarize using AI agent
-                # -----------------------------------
-                logger.info(f"Summarizing document {document_id}")
-                summary_started_at = time.perf_counter()
-                summary_data = await summarize_document(extracted_text)
-                summary_time = time.perf_counter() - summary_started_at
-                logger.info(
-                    "document_processing_timing document_id=%s stage=topic_detection elapsed_s=%.3f",
-                    document_id,
-                    summary_time,
-                )
 
                 # -----------------------------------
                 # Store structured metadata
@@ -89,13 +76,10 @@ def process_document(document_id: str):
                 db_started_at = time.perf_counter()
                 doc.extracted_metadata = {
                     "extracted_text": extracted_text,
-                    "summary": summary_data.summary,
-                    "key_topics": summary_data.key_topics,
-                    "difficulty_level": summary_data.difficulty_level,
+                    "summary": None,
                     "text_length": len(extracted_text),
                     "timings": {
                         "parsing": round(parsing_time, 3),
-                        "topic_detection": round(summary_time, 3),
                     },
                 }
 
@@ -143,3 +127,5 @@ def process_document(document_id: str):
         except Exception:
             logger.exception(f"Could not mark document {document_id} as failed")
         raise
+
+
