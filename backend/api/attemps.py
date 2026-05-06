@@ -56,6 +56,7 @@ async def _load_runtime_settings(db: AsyncSession, quiz: Quiz) -> dict:
         )
         settings_record = result.scalar_one_or_none()
     except SQLAlchemyError:
+        await db.rollback()
         return defaults
 
     if not settings_record:

@@ -10,9 +10,9 @@ from types import SimpleNamespace
 from sqlalchemy import delete, insert, select
 
 from backend.workers.celery_app import celery_app
-from backend.ai.agents.answer_key_agent import generate_missing_answers
 from backend.workers.task_db import get_task_sessionmaker
 from backend.services.question_quality import sanitize_question_candidate, normalize_question_type as normalize_question_type_shared, map_marks_to_question_type
+from backend.ai.agents.generation_prompt_builder import build_generation_prompt
 
 from backend.models.quiz import Quiz
 from backend.models.quiz_section import QuizSection
@@ -28,7 +28,8 @@ if sys.platform.startswith("win"):
 
 
 SOURCE_EXTRACTION_LIMIT = 32000
-GENERATION_SOURCE_LIMIT = 18000
+GENERATION_SOURCE_LIMIT = 6000
+LLM_SOURCE_LIMIT = 6000
 QUESTION_SIGNAL_LIMIT = 12
 
 
@@ -83,6 +84,148 @@ def _build_question_signals(source_questions: list[SimpleNamespace], limit: int 
             }
         )
     return signals
+
+
+def detect_content_type(extracted_text: str) -> str:
+    text = (extracted_text or "").strip()
+    if not text:
+        return "notes"
+
+    question_hits = len(re.findall(r"(?im)(?:^|\n)\s*(?:q(?:uestion)?\s*\d+|[0-9]{1,3}[.)])", text))
+    option_hits = len(re.findall(r"(?im)(?:^|\n)\s*(?:\(?[a-d]\)|[a-d][.)]|[1-4][.)])\s+\S+", text))
+    answer_hits = len(re.findall(r"(?im)\b(?:answer|correct\s*answer|correct)\s*[:\-]", text))
+    qmark_hits = text.count("?")
+
+    qa_score = question_hits * 3 + option_hits * 2 + answer_hits * 3 + min(qmark_hits, 20)
+    notes_score = len(re.findall(r"(?im)\b(?:introduction|overview|chapter|definition|concept|theory|example)\b", text))
+
+    has_qa = question_hits > 0 or (option_hits >= 2 and answer_hits > 0) or qa_score >= 12
+    has_notes = notes_score >= 4 or (len(text) > 2500 and question_hits <= 1 and answer_hits == 0)
+
+    if has_qa and has_notes:
+        return "mixed"
+    if has_qa:
+        return "question_bank"
+    return "notes"
+
+
+def extract_qa_payload(extracted_text: str) -> dict:
+    parsed = parse_questions_from_source(extracted_text)
+    questions = []
+    for q in parsed:
+        qtype = normalize_question_type(getattr(q, "question_type", None))
+        options = getattr(q, "options", None)
+        answer = str(getattr(q, "correct_answer", "") or "").strip()
+        if qtype == "TRUE_FALSE":
+            options = ["True", "False"]
+            lowered = answer.lower()
+            if lowered in {"t", "1"}:
+                answer = "True"
+            elif lowered in {"f", "0"}:
+                answer = "False"
+        elif qtype in {"SHORT_ANSWER", "LONG_ANSWER"}:
+            options = None
+        elif qtype == "MCQ" and not options:
+            continue
+
+        question_text = str(getattr(q, "question_text", "") or "").strip()
+        if not question_text:
+            continue
+        questions.append(
+            {
+                "question": question_text,
+                "options": options,
+                "answer": answer,
+            }
+        )
+    return {"questions": questions}
+
+
+def _keyword_set(text: str) -> set[str]:
+    return {token for token in re.findall(r"[a-z0-9]{3,}", (text or "").lower())}
+
+
+def _score_chunk(chunk: str, keywords: set[str]) -> int:
+    tokens = _keyword_set(chunk)
+    overlap = len(tokens & keywords)
+    signal_bonus = 3 if re.search(r"(?i)\b(question|answer|option|define|explain|true|false)\b", chunk) else 0
+    return overlap * 5 + signal_bonus + min(len(chunk), 800) // 120
+
+
+def _chunk_text(extracted_text: str, chunk_size: int = 1200) -> list[str]:
+    normalized = (extracted_text or "").replace("\r\n", "\n").strip()
+    if not normalized:
+        return []
+    paragraphs = [p.strip() for p in re.split(r"\n\s*\n+", normalized) if p.strip()]
+    if not paragraphs:
+        paragraphs = [line.strip() for line in normalized.splitlines() if line.strip()]
+
+    chunks: list[str] = []
+    current = ""
+    for para in paragraphs:
+        candidate = f"{current}\n\n{para}".strip() if current else para
+        if len(candidate) <= chunk_size:
+            current = candidate
+            continue
+        if current:
+            chunks.append(current)
+        current = para[:chunk_size]
+    if current:
+        chunks.append(current)
+    return chunks
+
+
+def build_filtered_content(
+    extracted_text: str,
+    blueprint_sections: list[dict],
+    professor_note: str | None,
+    *,
+    max_chars: int = LLM_SOURCE_LIMIT,
+) -> tuple[str, str, dict]:
+    content_type = detect_content_type(extracted_text)
+    qa_payload = extract_qa_payload(extracted_text)
+    qa_questions = qa_payload.get("questions", [])
+
+    if content_type == "question_bank" and qa_questions:
+        compact = json.dumps(qa_payload, ensure_ascii=True, separators=(",", ":"))
+        return content_type, compact[:max_chars], qa_payload
+
+    keywords = _keyword_set(
+        " ".join(
+            [
+                professor_note or "",
+                json.dumps(_serialize_blueprint_sections(blueprint_sections), ensure_ascii=True, separators=(",", ":")),
+            ]
+        )
+    )
+    chunks = _chunk_text(extracted_text)
+    scored = sorted(
+        [(_score_chunk(chunk, keywords), idx, chunk) for idx, chunk in enumerate(chunks)],
+        key=lambda x: (-x[0], x[1]),
+    )
+
+    picked: list[str] = []
+    used = 0
+    for _, _, chunk in scored:
+        fingerprint = re.sub(r"\W+", "", chunk.lower())[:160]
+        if any(fingerprint and fingerprint in re.sub(r"\W+", "", p.lower()) for p in picked):
+            continue
+        if used >= max_chars:
+            break
+        room = max_chars - used
+        part = chunk if len(chunk) <= room else chunk[:room]
+        if not part.strip():
+            continue
+        picked.append(part.strip())
+        used += len(part) + 2
+
+    notes_content = "\n\n".join(picked).strip()[:max_chars]
+    if content_type == "mixed" and qa_questions:
+        qa_compact = json.dumps({"questions": qa_questions[:20]}, ensure_ascii=True, separators=(",", ":"))
+        merged = f"EXTRACTED_QA:\n{qa_compact}\n\nTHEORY_CONTEXT:\n{notes_content}".strip()
+        return content_type, merged[:max_chars], qa_payload
+
+    return content_type, notes_content, qa_payload
 
 
 def _serialize_blueprint_sections(blueprint_sections: list[dict]) -> list[dict]:
@@ -617,62 +760,13 @@ async def ensure_quiz_sections(db, quiz, blueprint_sections: list[dict]) -> list
 
 
 async def extract_questions_verbatim_with_llm(extracted_text: str, blueprint_sections: list[dict]) -> list:
-    total_required = sum(section["number_of_questions"] for section in blueprint_sections)
-    constraints = _serialize_blueprint_sections(blueprint_sections)
-
-    prompt = f"""
-You are a strict question extractor.
-
-Goal:
-Extract questions and answers that ALREADY EXIST in the source text.
-Do NOT create new questions. Do NOT paraphrase heavily.
-
-Rules:
-1. Use only source text content.
-2. Preserve wording as close as possible.
-3. For MCQ/TRUE_FALSE include options and correct_answer.
-4. If answer is present as option letter (A/B/C/D), map to actual option text.
-5. Follow blueprint counts/types/marks exactly when possible.
-6. If source has fewer than requested for any type, return only what is available for that type.
-7. Output strict JSON matching schema.
-
-Blueprint constraints:
-{json.dumps(constraints, ensure_ascii=True)}
-
-Required total target:
-{total_required}
-
-SOURCE TEXT:
-{_truncate_source_text(extracted_text, SOURCE_EXTRACTION_LIMIT)}
-"""
-
-    result = await structured_llm_call(prompt, QuizGenerationOutput)
-    return result.questions
+    source_questions = parse_questions_from_source(extracted_text)
+    selected = pick_from_source(source_questions, blueprint_sections)
+    return [q for _, q in selected]
 
 
 async def extract_all_questions_with_llm(extracted_text: str) -> list:
-    prompt = f"""
-You are a strict question extractor.
-
-Goal:
-Extract ALL questions that exist in the source text.
-Do NOT create new questions and do NOT skip mid/late questions.
-
-Rules:
-1. Preserve original wording as closely as possible.
-2. Include question_type as one of: MCQ, TRUE_FALSE, SHORT_ANSWER, LONG_ANSWER.
-3. Include options for MCQ/TRUE_FALSE when present.
-4. Include correct_answer only if it is explicitly present in source.
-5. Include marks when explicitly present, otherwise use 1.
-6. Return as many valid questions as present in source text.
-7. Output strict JSON matching schema.
-
-SOURCE TEXT:
-{_truncate_source_text(extracted_text, SOURCE_EXTRACTION_LIMIT)}
-"""
-
-    result = await structured_llm_call(prompt, QuizGenerationOutput)
-    return result.questions
+    return parse_questions_from_source(extracted_text)
 
 
 async def generate_quiz_questions_batched(
@@ -682,44 +776,37 @@ async def generate_quiz_questions_batched(
     source_questions: list[SimpleNamespace],
     retry_feedback: str = "",
 ) -> list:
-    blueprint_payload = json.dumps(_serialize_blueprint_sections(blueprint_sections), ensure_ascii=True)
-    source_signals = json.dumps(_build_question_signals(source_questions), ensure_ascii=True)
-    source_excerpt = _truncate_source_text(extracted_text, GENERATION_SOURCE_LIMIT)
-
-    prompt = f"""
-You are a controlled quiz generation engine.
-
-Generate the full quiz in one response as strict JSON matching the schema.
-
-Rules:
-1. Return exactly the requested number of questions across all sections.
-2. Stay strictly within the source content and professor note.
-3. Do not include explanations, reasoning, markdown, or extra fields.
-4. For MCQ include options and correct_answer.
-5. For TRUE_FALSE use options ["True","False"] and include correct_answer.
-6. For SHORT_ANSWER and LONG_ANSWER keep options as null and include a concise correct_answer when determinable.
-7. Respect question_type and marks_per_question exactly for every section.
-8. Keep wording concise and exam-ready.
-9. Avoid duplicates.
-
-Blueprint sections:
-{blueprint_payload}
-
-Professor note:
-{professor_note or "None"}
-
-Parsed source signals:
-{source_signals}
-
-Retry feedback:
-{retry_feedback or "None"}
-
-Source excerpt:
-{source_excerpt}
-"""
-
+    answer_strictness_note = "You MUST include correct_answer for every question. Never leave it blank."
+    resolved_professor_note = (
+        f"{professor_note.strip()} {answer_strictness_note}".strip()
+        if professor_note and professor_note.strip()
+        else answer_strictness_note
+    )
+    content_type, filtered_content, _qa_payload = build_filtered_content(
+        extracted_text=extracted_text,
+        blueprint_sections=blueprint_sections,
+        professor_note=resolved_professor_note,
+        max_chars=LLM_SOURCE_LIMIT,
+    )
+    summary_or_filtered_content = filtered_content
+    if retry_feedback:
+        summary_or_filtered_content = f"{filtered_content}\n\nRETRY_HINT:{retry_feedback[:300]}"
+    prompt = build_generation_prompt(
+        summary_or_filtered_content=summary_or_filtered_content,
+        blueprint=blueprint_sections,
+        professor_note=resolved_professor_note,
+    )
     result = await structured_llm_call(prompt, QuizGenerationOutput)
-    return result.questions
+    questions = result.questions
+    if not questions:
+        retry_prompt = build_generation_prompt(
+            summary_or_filtered_content=summary_or_filtered_content[: max(1000, LLM_SOURCE_LIMIT // 2)],
+            blueprint=blueprint_sections,
+            professor_note=f"{resolved_professor_note} content_type={content_type}",
+        )
+        retry = await structured_llm_call(retry_prompt, QuizGenerationOutput)
+        questions = retry.questions
+    return questions
 
 
 @celery_app.task(name="create_quiz_ai")
@@ -784,20 +871,6 @@ def create_quiz_ai(
                 parse_started_at = time.perf_counter()
                 source_questions = await asyncio.to_thread(parse_questions_from_source, extracted_text)
 
-                # Fallback: PDFs with noisy OCR often parse only top few questions via regex.
-                # In auto mode, use an LLM extraction pass to recover full source question set.
-                if auto_detect_structure and (len(source_questions) <= 5 or default_5_mcq):
-                    llm_extract_started_at = time.perf_counter()
-                    llm_all = await extract_all_questions_with_llm(extracted_text)
-                    stage_timings["topic_detection_llm"] = _log_stage_timing(
-                        job_id,
-                        quiz_id,
-                        "topic_detection_llm",
-                        llm_extract_started_at,
-                    )
-                    if llm_all:
-                        source_questions = _dedupe_questions_by_text([*source_questions, *llm_all])
-
                 stage_timings["parsing"] = _log_stage_timing(job_id, quiz_id, "parsing", parse_started_at)
                 await _set_job_stage(job, db, stage="topic_detection", progress=25, timings=stage_timings)
 
@@ -830,52 +903,23 @@ def create_quiz_ai(
                 question_generation_started_at = time.perf_counter()
                 await _set_job_stage(job, db, stage="question_generation", progress=35, timings=stage_timings)
 
-                prefetch_verbatim_task = None
-                prefetch_generated_task = None
-                prefetch_verbatim_started_at = None
-                prefetch_generated_started_at = None
-                if pending_source_completion:
-                    prefetch_verbatim_started_at = time.perf_counter()
-                    prefetch_verbatim_task = asyncio.create_task(
-                        extract_questions_verbatim_with_llm(extracted_text, blueprint_sections)
-                    )
-                    prefetch_generated_started_at = time.perf_counter()
-                    prefetch_generated_task = asyncio.create_task(
-                        generate_quiz_questions_batched(
-                            extracted_text=extracted_text,
-                            blueprint_sections=blueprint_sections,
-                            professor_note=retry_note,
-                            source_questions=source_questions,
-                            retry_feedback=last_feedback,
-                        )
-                    )
-
                 if from_source and len(from_source) == counts_needed:
                     selected_pairs = from_source
                 else:
-                    generated_questions_cache = None
-                    for attempt in range(3):
+                    for attempt in range(2):
                         if selected_pairs:
                             break
 
-                        llm_generated_started_at = (
-                            prefetch_generated_started_at
-                            if attempt == 0 and prefetch_generated_started_at is not None
-                            else time.perf_counter()
-                        )
-                        if attempt == 0 and prefetch_generated_task is not None:
-                            generated_questions_cache = await prefetch_generated_task
-                            cleaned_questions = sanitize_generated_questions(generated_questions_cache)
-                        else:
-                            cleaned_questions = sanitize_generated_questions(
-                                await generate_quiz_questions_batched(
-                                    extracted_text=extracted_text,
-                                    blueprint_sections=blueprint_sections,
-                                    professor_note=retry_note,
-                                    source_questions=source_questions,
-                                    retry_feedback=last_feedback,
-                                )
+                        llm_generated_started_at = time.perf_counter()
+                        cleaned_questions = sanitize_generated_questions(
+                            await generate_quiz_questions_batched(
+                                extracted_text=extracted_text,
+                                blueprint_sections=blueprint_sections,
+                                professor_note=retry_note,
+                                source_questions=source_questions,
+                                retry_feedback=last_feedback,
                             )
+                        )
                         stage_timings[f"question_generation_attempt_{attempt + 1}"] = _log_stage_timing(
                             job_id,
                             quiz_id,
@@ -884,23 +928,7 @@ def create_quiz_ai(
                         )
 
                         if pending_source_completion:
-                            llm_source_started_at = (
-                                prefetch_verbatim_started_at
-                                if attempt == 0 and prefetch_verbatim_started_at is not None
-                                else time.perf_counter()
-                            )
-                            if attempt == 0 and prefetch_verbatim_task is not None:
-                                llm_extracted = await prefetch_verbatim_task
-                            else:
-                                llm_extracted = await extract_questions_verbatim_with_llm(extracted_text, blueprint_sections)
-                            stage_timings[f"source_alignment_attempt_{attempt + 1}"] = _log_stage_timing(
-                                job_id,
-                                quiz_id,
-                                f"source_alignment_attempt_{attempt + 1}",
-                                llm_source_started_at,
-                            )
-                            merged_source = _dedupe_questions_by_text([*source_questions, *llm_extracted])
-                            from_source = pick_from_source(merged_source, blueprint_sections)
+                            from_source = pick_from_source(source_questions, blueprint_sections)
                             pending_source_completion = len(from_source) < counts_needed
 
                         if from_source:
@@ -917,11 +945,6 @@ def create_quiz_ai(
                             ).strip()
                             continue
 
-                        missing = missing_answers_count(selected_pairs)
-                        if missing > 0:
-                            last_feedback = f"{missing} questions missing correct_answer."
-                            break
-
                         break
 
                 stage_timings["question_generation"] = _log_stage_timing(
@@ -931,18 +954,6 @@ def create_quiz_ai(
                     question_generation_started_at,
                 )
                 await _set_job_stage(job, db, stage="question_generation", progress=60, timings=stage_timings)
-
-                if selected_pairs and missing_answers_count(selected_pairs) > 0:
-                    answer_generation_started_at = time.perf_counter()
-                    await _set_job_stage(job, db, stage="answer_generation", progress=75, timings=stage_timings)
-                    selected_pairs = await enrich_missing_answers(selected_pairs)
-                    stage_timings["answer_generation"] = _log_stage_timing(
-                        job_id,
-                        quiz_id,
-                        "answer_generation",
-                        answer_generation_started_at,
-                    )
-                    await _set_job_stage(job, db, stage="answer_generation", progress=85, timings=stage_timings)
 
                 if not selected_pairs:
                     if strict_source_alignment:
@@ -1054,3 +1065,4 @@ def create_quiz_ai(
         except Exception:
             logger.exception(f"Could not mark job {job_id} as failed")
         raise
+

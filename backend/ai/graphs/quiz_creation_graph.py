@@ -1,93 +1,69 @@
-from langgraph.graph import StateGraph, START, END
-from typing import TypedDict, Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional, TypedDict
 
-from backend.ai.agents.summarization_agent import summarize_document
-from backend.ai.agents.prompt_enchancer_agent import enhance_prompt
-from backend.ai.agents.quiz_generator_agent import generate_quiz
+from langgraph.graph import END, START, StateGraph
+
+from backend.workers.quiz_creation_task import (
+    generate_quiz_questions_batched,
+    get_blueprint_sections,
+    parse_questions_from_source,
+    sanitize_generated_questions,
+)
 
 
 class QuizGraphState(TypedDict):
     extracted_text: str
-    summary: Optional[Any]          # Pydantic model stored directly
-    enhanced_prompt: Optional[str]
+    summary: Optional[Any]
+    generation_prompt: Optional[str]
     questions: Optional[List[Any]]
-    blueprint: Dict[str, Any]
+    blueprint: Dict[str, Any] | List[Dict[str, Any]]
     professor_note: Optional[str]
 
 
-# -------------------------
-# Nodes
-# -------------------------
-
-async def summarize_node(state: QuizGraphState):
-
-    if not state.get("extracted_text"):
+async def generate_batched_node(state: QuizGraphState):
+    extracted_text = (state.get("extracted_text") or "").strip()
+    if not extracted_text:
         raise ValueError("No extracted_text provided")
 
-    summary_obj = await summarize_document(state["extracted_text"])
-
-    return {
-        "summary": summary_obj  # Store model directly
-    }
-
-
-async def enhance_node(state: QuizGraphState):
-
-    summary_obj = state.get("summary")
-
-    if not summary_obj:
-        raise ValueError("Summary missing in state")
-
-    if not state.get("blueprint"):
+    blueprint = state.get("blueprint")
+    if not blueprint:
         raise ValueError("Blueprint missing in state")
 
-    enhanced = await enhance_prompt(
-        summary=summary_obj.summary,  # Access attribute directly
-        source_excerpt=state["extracted_text"][:12000],
-        blueprint=state["blueprint"],
-        professor_note=state.get("professor_note"),
+    blueprint_sections = get_blueprint_sections(blueprint)
+    if not blueprint_sections:
+        blueprint_sections = [
+            {
+                "index": 0,
+                "title": "Section 1: MCQ",
+                "number_of_questions": 5,
+                "question_type": "MCQ",
+                "marks_per_question": 1,
+            }
+        ]
+
+    source_questions = parse_questions_from_source(extracted_text)
+    questions = sanitize_generated_questions(
+        await generate_quiz_questions_batched(
+            extracted_text=extracted_text,
+            blueprint_sections=blueprint_sections,
+            professor_note=state.get("professor_note"),
+            source_questions=source_questions,
+            retry_feedback="compat_graph",
+        )
     )
 
-    if enhanced is None or not getattr(enhanced, "enhanced_prompt", None):
-        raise ValueError("Enhance prompt agent failed")
-
-    return {
-        "enhanced_prompt": enhanced.enhanced_prompt
-    }
-
-
-async def generate_node(state: QuizGraphState):
-
-    if not state.get("enhanced_prompt"):
-        raise ValueError("Enhanced prompt missing before quiz generation")
-
-    output = await generate_quiz(state["enhanced_prompt"])
-
-    if output is None or not getattr(output, "questions", None):
+    if not questions:
         raise ValueError("Quiz generator failed to produce questions")
 
     return {
-        "questions": output.questions
+        "summary": None,
+        "generation_prompt": None,
+        "questions": questions,
     }
 
 
-# -------------------------
-# Graph Builder
-# -------------------------
-
 def build_quiz_creation_graph():
-
     graph = StateGraph(QuizGraphState)
-
-    # Nodes
-    graph.add_node("summarize", summarize_node)
-    graph.add_node("enhance", enhance_node)
-    graph.add_node("generate", generate_node)
-
-    # Flow
-    graph.add_edge(START, "summarize")
-    graph.add_edge("summarize", "enhance")
-    graph.add_edge("enhance", "generate")
-    graph.add_edge("generate", END)
-
+    graph.add_node("generate_batched", generate_batched_node)
+    graph.add_edge(START, "generate_batched")
+    graph.add_edge("generate_batched", END)
     return graph.compile()

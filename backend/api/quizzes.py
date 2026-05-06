@@ -25,14 +25,11 @@ from backend.workers.quiz_creation_task import (
     parse_questions_from_source,
     infer_blueprint_sections_from_source,
     pick_from_source,
-    extract_questions_verbatim_with_llm,
-    extract_all_questions_with_llm,
-    enrich_missing_answers,
+    generate_quiz_questions_batched,
+    sanitize_generated_questions,
+    detect_content_type,
     should_replace_blueprint_with_inferred_sections,
 )
-from backend.ai.agents.summarization_agent import summarize_document
-from backend.ai.agents.prompt_enchancer_agent import enhance_prompt
-from backend.ai.agents.quiz_generator_agent import generate_single_question
 from backend.core.config import settings
 from backend.core.redis import cache_delete
 from backend.services.question_quality import sanitize_question_candidate
@@ -943,20 +940,12 @@ async def stream_ai_quiz_generation(
 
         try:
             source_questions = parse_questions_from_source(extracted_text)
+            content_type = detect_content_type(extracted_text)
             default_5_mcq = (
                 len(blueprint_sections) == 1
                 and blueprint_sections[0]["number_of_questions"] == 5
                 and blueprint_sections[0]["question_type"] == "MCQ"
             )
-            if auto_detect_structure and (len(source_questions) <= 5 or default_5_mcq):
-                llm_all = await extract_all_questions_with_llm(extracted_text)
-                if llm_all:
-                    dedup_all_by_text: dict[str, object] = {}
-                    for q in [*source_questions, *llm_all]:
-                        key = " ".join(str(getattr(q, "question_text", "")).lower().strip().split())
-                        if key and key not in dedup_all_by_text:
-                            dedup_all_by_text[key] = q
-                    source_questions = list(dedup_all_by_text.values())
 
             if auto_detect_structure and source_questions:
                 inferred_sections = infer_blueprint_sections_from_source(source_questions)
@@ -987,24 +976,11 @@ async def stream_ai_quiz_generation(
                 counts_needed = sum(section["number_of_questions"] for section in blueprint_sections)
 
                 if strict_source_alignment and len(selected_pairs) < counts_needed:
-                    llm_extracted = await extract_questions_verbatim_with_llm(extracted_text, blueprint_sections)
-                    dedup_by_text: dict[str, object] = {}
-                    for q in [*source_questions, *llm_extracted]:
-                        key = " ".join(str(getattr(q, "question_text", "")).lower().strip().split())
-                        if key and key not in dedup_by_text:
-                            dedup_by_text[key] = q
-                    selected_pairs = pick_from_source(list(dedup_by_text.values()), blueprint_sections)
-
-                if selected_pairs:
-                    selected_pairs = await enrich_missing_answers(selected_pairs)
-
-                if strict_source_alignment and len(selected_pairs) < counts_needed:
                     raise ValueError("Strict source alignment is ON and source did not satisfy required counts.")
 
                 remaining_total = max(0, counts_needed - len(selected_pairs))
-                enhanced = None
+                generated_remaining: list[object] = []
                 if remaining_total > 0:
-                    summary = await summarize_document(extracted_text)
                     if await request.is_disconnected():
                         disconnected = True
                         raise asyncio.CancelledError()
@@ -1021,13 +997,23 @@ async def stream_ai_quiz_generation(
                     )
                     if progress_chunk:
                         yield progress_chunk
-
-                    enhanced = await enhance_prompt(
-                        summary=summary.summary,
-                        source_excerpt=extracted_text[:12000],
-                        blueprint=blueprint,
-                        professor_note=professor_note,
+                    generated_remaining = sanitize_generated_questions(
+                        await generate_quiz_questions_batched(
+                            extracted_text=extracted_text,
+                            blueprint_sections=blueprint_sections,
+                            professor_note=(professor_note or "") + f" content_type={content_type}",
+                            source_questions=source_questions,
+                            retry_feedback="streaming_generation",
+                        )
                     )
+                    if generated_remaining:
+                        ai_pairs, _feedback = pick_from_source(generated_remaining, blueprint_sections), None
+                        if selected_pairs:
+                            needed = counts_needed - len(selected_pairs)
+                            if needed > 0:
+                                selected_pairs.extend(ai_pairs[:needed])
+                        else:
+                            selected_pairs = ai_pairs[:counts_needed]
                     if await request.is_disconnected():
                         disconnected = True
                         raise asyncio.CancelledError()
@@ -1055,7 +1041,6 @@ async def stream_ai_quiz_generation(
                     db_sections = section_result.scalars().all()
 
                 generated_per_section: dict[int, int] = {section["index"]: 0 for section in blueprint_sections}
-                slot_number = 0
 
                 # Stream source-aligned questions first.
                 for section_spec, source_q in selected_pairs:
@@ -1105,7 +1090,6 @@ async def stream_ai_quiz_generation(
 
                     generated_count += 1
                     generated_per_section[section_index] += 1
-                    slot_number += 1
                     percent = min(99, 20 + int((generated_count / max(total_required, 1)) * 75))
 
                     question_chunk = safe_emit(
@@ -1142,109 +1126,8 @@ async def stream_ai_quiz_generation(
                     if per_question_progress:
                         yield per_question_progress
 
-                # Fill remaining slots with AI generation only when needed.
-                for section in blueprint_sections:
-                    section_index = section["index"]
-                    target_section = db_sections[section_index]
-                    q_type = section["question_type"]
-                    marks = section["marks_per_question"]
-                    remaining = max(0, section["number_of_questions"] - generated_per_section.get(section_index, 0))
-                    for _ in range(remaining):
-                        if await request.is_disconnected():
-                            disconnected = True
-                            raise asyncio.CancelledError()
-
-                        slot_number += 1
-                        if enhanced is None:
-                            raise ValueError("Prompt enhancer output missing for fallback generation.")
-                        sanitized = None
-                        for _attempt in range(3):
-                            generated = await generate_single_question(
-                                enhanced_prompt=enhanced.enhanced_prompt,
-                                question_type=q_type,
-                                marks=marks,
-                                section_title=section["title"],
-                                question_number=slot_number,
-                                total_questions=total_required,
-                            )
-                            sanitized = sanitize_question_candidate(
-                                question_text=generated.question_text,
-                                question_type=q_type,
-                                options=generated.options,
-                                correct_answer=generated.correct_answer,
-                                marks=marks,
-                            )
-                            if sanitized:
-                                break
-                        if not sanitized:
-                            raise ValueError(f"Failed to generate a valid {q_type} question for section '{section['title']}'.")
-
-                        options = sanitized.options
-                        correct_answer = (sanitized.correct_answer or "").strip()
-                        if q_type == "TRUE_FALSE":
-                            options = ["True", "False"]
-                            lowered = correct_answer.lower()
-                            if lowered in {"true", "t", "1"}:
-                                correct_answer = "True"
-                            elif lowered in {"false", "f", "0"}:
-                                correct_answer = "False"
-                            else:
-                                correct_answer = "answer_unavailable"
-                        elif q_type in {"SHORT_ANSWER", "LONG_ANSWER"}:
-                            options = None
-                        elif q_type == "MCQ" and not correct_answer:
-                            correct_answer = "answer_unavailable"
-
-                        question = Question(
-                            quiz_id=quiz_id,
-                            section_id=target_section.id,
-                            question_text=sanitized.question_text,
-                            question_type=q_type,
-                            options=options,
-                            correct_answer=correct_answer or None,
-                            marks=marks,
-                            status="DRAFT",
-                        )
-                        db.add(question)
-                        await db.commit()
-                        await db.refresh(question)
-
-                        generated_count += 1
-                        percent = min(99, 20 + int((generated_count / max(total_required, 1)) * 75))
-
-                        question_chunk = safe_emit(
-                            "question",
-                            {
-                                "request_id": request_id,
-                                "generated_count": generated_count,
-                                "target_count": total_required,
-                                "question": {
-                                    "id": str(question.id),
-                                    "section_id": str(question.section_id),
-                                    "question_text": question.question_text,
-                                    "question_type": question.question_type,
-                                    "difficulty": question.difficulty,
-                                    "options": question.options,
-                                    "correct_answer": question.correct_answer,
-                                    "marks": question.marks,
-                                    "status": question.status,
-                                },
-                            },
-                        )
-                        if question_chunk:
-                            yield question_chunk
-                        per_question_progress = safe_emit(
-                            "progress",
-                            {
-                                "request_id": request_id,
-                                "status": "generating_questions",
-                                "generated_count": generated_count,
-                                "target_count": total_required,
-                                "percent": percent,
-                            },
-                        )
-                        if per_question_progress:
-                            yield per_question_progress
+                if generated_count < counts_needed:
+                    raise ValueError("Generated questions did not satisfy blueprint counts.")
 
                 quiz.ai_generation_status = "GENERATED"
                 job.status = "COMPLETED"
